@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "name": "notify-attention",
+            "type": "command",
+            "command": "./.gemini/hooks/notify.py",
+            "timeout": 2000
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "name": "notify-finished",
+            "type": "command",
+            "command": "./.gemini/hooks/notify.py",
+            "timeout": 2000
+          }
+        ]
+      }
+    ]
+  }
+}

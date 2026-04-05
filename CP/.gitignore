@@ -1,0 +1,10 @@
+build
+mx.scratch
+!.settings
+
+# Claude Code local settings (contains machine-specific absolute paths)
+.claude/settings.local.json
+
+# Windows alternate data stream metadata files
+*:Zone.Identifier
+

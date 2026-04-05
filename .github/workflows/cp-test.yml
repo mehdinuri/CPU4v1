@@ -1,0 +1,55 @@
+name: CP — Host Unit Tests
+
+on:
+  push:
+    paths: ['CP/**']
+  pull_request:
+    paths: ['CP/**']
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  test:
+    name: Unit & Integration Tests (x86-64)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: CP
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc cmake ninja-build gcovr python3 libasan8 libubsan1
+
+      - name: Configure
+        run: cmake --preset Host-Test
+
+      - name: Build
+        run: cmake --build --preset Host-Test
+
+      - name: Run tests
+        run: |
+          cd build/Host-Test
+          ctest --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          mkdir -p build/coverage
+          gcovr \
+            --root . \
+            --xml build/coverage/coverage.xml \
+            --html-details build/coverage/index.html \
+            build/Host-Test
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cp-coverage-${{ github.sha }}
+          path: CP/build/coverage/
+          retention-days: 7
