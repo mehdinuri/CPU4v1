@@ -77,8 +77,8 @@ jobs:
             - `CP.bin` — Raw binary for direct flash programming
             - `CP.map` — Linker map (memory layout)
           files: |
-            CP/build/STM32-Release/CP.elf
-            CP/build/STM32-Release/CP.bin
-            CP/build/STM32-Release/CP.map
+            CPM/CPbuild/STM32-Release/CP.elf
+            CPM/CPbuild/STM32-Release/CP.bin
+            CPM/CPbuild/STM32-Release/CP.map
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}

@@ -1,0 +1,58 @@
+services:
+  # Build STM32 firmware (arm-none-eabi-gcc)
+  build-arm:
+    build:
+      context: ../..
+      dockerfile: Tools/Docker/Dockerfile.arm
+    volumes:
+      - ../..:/workspace:z
+    working_dir: /workspace
+    command: >
+      bash -c "
+        rm -rf build/Docker-STM32-Release &&
+        cmake --preset Docker-STM32-Release &&
+        cmake --build --preset Docker-STM32-Release
+      "
+
+  # Run host unit + integration tests with coverage
+  build-test:
+    build:
+      context: ../..
+      dockerfile: Tools/Docker/Dockerfile.test
+    volumes:
+      - ../..:/workspace:z
+      - /workspace/build/Host-Test
+    working_dir: /workspace
+    command: >
+      bash -c "
+        cmake --preset Docker-Host-Test &&
+        cmake --build --preset Docker-Host-Test &&
+        cd /tmp/docker-host-test &&
+        find . -name '*.gcda' -delete &&
+        ctest --output-on-failure &&
+        mkdir -p /workspace/build/coverage/full /workspace/build/coverage/tasks &&
+        gcovr --root /workspace --html-details /workspace/build/coverage/full/index.html --print-summary . &&
+        gcovr --root /workspace --filter /workspace/Tasks/ --fail-under-line ${MIN_LINE_COVERAGE:-0} --html-details /workspace/build/coverage/tasks/index.html --xml /workspace/build/coverage/tasks/coverage.xml --print-summary .
+      "
+
+  # Interactive development shell with ARM toolchain
+  shell-arm:
+    build:
+      context: ../..
+      dockerfile: Tools/Docker/Dockerfile.arm
+    volumes:
+      - ../..:/workspace:z
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  # Interactive development shell for host testing
+  shell-test:
+    build:
+      context: ../..
+      dockerfile: Tools/Docker/Dockerfile.test
+    volumes:
+      - ../..:/workspace:z
+    working_dir: /workspace
+    stdin_open: true
+    tty: true

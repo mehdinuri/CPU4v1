@@ -55,5 +55,7 @@ dkms.conf
 *.dwo
 
 # Build directories
-CP/build
-MP/build
+CPM/CP/build
+CPM/MP/build
+SSM/build
+PSM/build

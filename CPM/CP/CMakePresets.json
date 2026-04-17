@@ -1,0 +1,97 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}"
+        },
+        {
+            "name": "STM32-Debug",
+            "displayName": "STM32 Debug",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TARGET": "STM32"
+            }
+        },
+        {
+            "name": "STM32-Release",
+            "displayName": "STM32 Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_TARGET": "STM32"
+            }
+        },
+        {
+            "name": "Host-Test",
+            "displayName": "Host Unit Tests (x86-64)",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/cmake/host-gcc.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_TARGET": "Host"
+            }
+        },
+        {
+            "name": "Docker-STM32-Release",
+            "displayName": "STM32 Release (Docker /workspace)",
+            "inherits": "STM32-Release",
+            "binaryDir": "/workspace/build/Docker-STM32-Release"
+        },
+        {
+            "name": "Docker-Host-Test",
+            "displayName": "Host Tests (Docker /workspace)",
+            "inherits": "Host-Test",
+            "binaryDir": "/tmp/docker-host-test"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "STM32-Debug",
+            "configurePreset": "STM32-Debug"
+        },
+        {
+            "name": "STM32-Release",
+            "configurePreset": "STM32-Release"
+        },
+        {
+            "name": "Host-Test",
+            "configurePreset": "Host-Test"
+        },
+        {
+            "name": "Docker-STM32-Release",
+            "configurePreset": "Docker-STM32-Release"
+        },
+        {
+            "name": "Docker-Host-Test",
+            "configurePreset": "Docker-Host-Test"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "Host-Test",
+            "configurePreset": "Host-Test",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "stopOnFailure": false
+            }
+        },
+        {
+            "name": "Docker-Host-Test",
+            "configurePreset": "Docker-Host-Test",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "stopOnFailure": false
+            }
+        }
+    ]
+}

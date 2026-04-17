@@ -1,0 +1,38 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    xz-utils \
+    cmake \
+    ninja-build \
+    git \
+    python3 \
+    ca-certificates \
+    uncrustify \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download ARM GNU Toolchain 13.2.Rel1.
+# The extracted directory name varies slightly by release; we use find + symlink
+# so the ENV PATH entry is stable regardless of the exact tarball layout.
+RUN wget -q -L \
+    "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz" \
+    -O /tmp/arm-toolchain.tar.xz \
+    && echo "=== Extracting ===" \
+    && tar -xf /tmp/arm-toolchain.tar.xz -C /opt/ \
+    && rm /tmp/arm-toolchain.tar.xz \
+    && echo "=== /opt contents ===" \
+    && ls /opt/ \
+    && echo "=== Locating arm-none-eabi-gcc ===" \
+    && find /opt -name "arm-none-eabi-gcc" -type f \
+    && TOOLCHAIN_BIN=$(find /opt -name "arm-none-eabi-gcc" -type f -exec dirname {} \; | head -1) \
+    && echo "Toolchain bin dir: ${TOOLCHAIN_BIN}" \
+    && ln -s "${TOOLCHAIN_BIN}" /usr/local/arm-toolchain-bin
+
+ENV PATH="/usr/local/arm-toolchain-bin:${PATH}"
+
+RUN arm-none-eabi-gcc --version && cmake --version && ninja --version
+
+WORKDIR /workspace
+CMD ["bash"]

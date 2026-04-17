@@ -1,0 +1,624 @@
+/* App/Domain/Intersection/IntersectionConfig.h
+ *
+ * Canonical persisted intersection configuration for the new NEMA/NTCIP
+ * controller stack.
+ */
+#ifndef INTERSECTION_CONFIG_H
+#define INTERSECTION_CONFIG_H
+
+#include <stdint.h>
+
+#include "Ports/IUnitClockPort.h"
+
+#define INTERSECTION_PHASE_COUNT_MAX 8U
+#define INTERSECTION_RING_COUNT_MAX 2U
+#define INTERSECTION_BARRIER_COUNT_MAX 2U
+#define INTERSECTION_RING_PHASE_COUNT_MAX 4U
+#define INTERSECTION_CHANNEL_COUNT_MAX 16U
+#define INTERSECTION_OVERLAP_COUNT_MAX 16U
+#define INTERSECTION_PATTERN_COUNT_MAX 8U
+#define INTERSECTION_SPLIT_COUNT_MAX 4U
+#define INTERSECTION_TIMEBASE_ACTION_COUNT_MAX 48U
+#define INTERSECTION_PREEMPT_COUNT_MAX 8U
+#define INTERSECTION_PED_INPUT_COUNT_MAX 8U
+#define INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX 16U
+#define INTERSECTION_PREEMPT_GATE_COUNT_MAX 8U
+#define INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX 255U
+#define INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX 8U
+#define INTERSECTION_USER_DEFINED_BACKUP_OID_COMPONENT_COUNT_MAX 32U
+#define INTERSECTION_USER_DEFINED_BACKUP_DESCRIPTION_MAX 64U
+#define INTERSECTION_UNIT_ELEVATION_OFFSET_UNKNOWN 31U
+
+typedef enum
+{
+  INTERSECTION_CHANNEL_CONTROL_TYPE_OTHER = 1,
+  INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE = 2,
+  INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_PEDESTRIAN = 3,
+  INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP = 4,
+  INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP = 5,
+  INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP = 6
+} IntersectionChannelControlType_t;
+
+typedef enum
+{
+  INTERSECTION_CHANNEL_GREEN_TYPE_OTHER = 1,
+  INTERSECTION_CHANNEL_GREEN_TYPE_PROTECTED = 2,
+  INTERSECTION_CHANNEL_GREEN_TYPE_PERMISSIVE = 3,
+  INTERSECTION_CHANNEL_GREEN_TYPE_FLASH_YELLOW = 4,
+  INTERSECTION_CHANNEL_GREEN_TYPE_FLASH_RED = 5
+} IntersectionChannelGreenType_t;
+
+typedef enum
+{
+  INTERSECTION_OVERLAP_TYPE_OTHER = 1,
+  INTERSECTION_OVERLAP_TYPE_NORMAL = 2,
+  INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW = 3,
+  INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL = 4,
+  INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION = 5,
+  INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION = 6,
+  INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION = 7,
+  INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION = 8,
+  INTERSECTION_OVERLAP_TYPE_TRANSIT_2 = 9,
+  INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE = 10
+} IntersectionOverlapType_t;
+
+typedef enum
+{
+  INTERSECTION_COORD_CORRECTION_MODE_OTHER = 1,
+  INTERSECTION_COORD_CORRECTION_MODE_DWELL = 2,
+  INTERSECTION_COORD_CORRECTION_MODE_SHORTWAY = 3,
+  INTERSECTION_COORD_CORRECTION_MODE_ADD_ONLY = 4,
+  INTERSECTION_COORD_CORRECTION_MODE_SUBTRACT_ONLY = 5
+} IntersectionCoordCorrectionMode_t;
+
+typedef enum
+{
+  INTERSECTION_COORD_MAXIMUM_MODE_OTHER = 1,
+  INTERSECTION_COORD_MAXIMUM_MODE_MAXIMUM1 = 2,
+  INTERSECTION_COORD_MAXIMUM_MODE_MAXIMUM2 = 3,
+  INTERSECTION_COORD_MAXIMUM_MODE_MAX_INHIBIT = 4,
+  INTERSECTION_COORD_MAXIMUM_MODE_MAXIMUM3 = 5
+} IntersectionCoordMaximumMode_t;
+
+typedef enum
+{
+  INTERSECTION_COORD_FORCE_MODE_OTHER = 1,
+  INTERSECTION_COORD_FORCE_MODE_FLOATING = 2,
+  INTERSECTION_COORD_FORCE_MODE_FIXED = 3
+} IntersectionCoordForceMode_t;
+
+typedef enum
+{
+  INTERSECTION_COORD_SYNC_POINT_OTHER = 1,
+  INTERSECTION_COORD_SYNC_POINT_UNIT = 2,
+  INTERSECTION_COORD_SYNC_POINT_FIRST_COORD_GREEN_BEGIN = 3,
+  INTERSECTION_COORD_SYNC_POINT_LAST_COORD_GREEN_BEGIN = 4,
+  INTERSECTION_COORD_SYNC_POINT_FIRST_COORD_GREEN_END = 5,
+  INTERSECTION_COORD_SYNC_POINT_LAST_COORD_GREEN_END = 6,
+  INTERSECTION_COORD_SYNC_POINT_FIRST_COORD_YELLOW_END = 7,
+  INTERSECTION_COORD_SYNC_POINT_LAST_COORD_YELLOW_END = 8
+} IntersectionCoordPatternSyncPoint_t;
+
+typedef enum
+{
+  INTERSECTION_UNIT_COORD_SYNC_POINT_OTHER = 1,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_FIRST_PHASE_GREEN_BEGIN = 2,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_LAST_PHASE_GREEN_BEGIN = 3,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_FIRST_PHASE_GREEN_END = 4,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_LAST_PHASE_GREEN_END = 5,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_FIRST_PHASE_YELLOW_END = 6,
+  INTERSECTION_UNIT_COORD_SYNC_POINT_LAST_PHASE_YELLOW_END = 7
+} IntersectionUnitCoordSyncPoint_t;
+
+typedef enum
+{
+  INTERSECTION_PATTERN_OPTIONS_OTHER = 1,
+  INTERSECTION_PATTERN_OPTIONS_COORD_MAXIMUM_MODE = 2,
+  INTERSECTION_PATTERN_OPTIONS_MAX_INHIBIT = 3,
+  INTERSECTION_PATTERN_OPTIONS_MAXIMUM1 = 4,
+  INTERSECTION_PATTERN_OPTIONS_MAXIMUM2 = 5,
+  INTERSECTION_PATTERN_OPTIONS_MAXIMUM3 = 6
+} IntersectionPatternOptions_t;
+
+typedef enum
+{
+  INTERSECTION_SPLIT_MODE_OTHER = 1,
+  INTERSECTION_SPLIT_MODE_NONE = 2,
+  INTERSECTION_SPLIT_MODE_MINIMUM_VEHICLE_RECALL = 3,
+  INTERSECTION_SPLIT_MODE_MAXIMUM_VEHICLE_RECALL = 4,
+  INTERSECTION_SPLIT_MODE_PEDESTRIAN_RECALL = 5,
+  INTERSECTION_SPLIT_MODE_MAXIMUM_VEHICLE_AND_PEDESTRIAN_RECALL = 6,
+  INTERSECTION_SPLIT_MODE_PHASE_OMITTED = 7,
+  INTERSECTION_SPLIT_MODE_NON_ACTUATED = 8
+} IntersectionSplitMode_t;
+
+typedef enum
+{
+  INTERSECTION_UNIT_AUTO_PEDESTRIAN_CLEAR_DISABLE = 1,
+  INTERSECTION_UNIT_AUTO_PEDESTRIAN_CLEAR_ENABLE = 2
+} IntersectionUnitAutoPedestrianClear_t;
+
+typedef enum
+{
+  INTERSECTION_UNIT_STARTUP_FLASH_MODE_AUTO_FLASH = 1,
+  INTERSECTION_UNIT_STARTUP_FLASH_MODE_ALL_RED_FLASH_OVERRIDE = 2,
+  INTERSECTION_UNIT_STARTUP_FLASH_MODE_ALL_RED_CONTROLLER_FLASH = 3
+} IntersectionUnitStartUpFlashMode_t;
+
+typedef enum
+{
+  INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES = 1,
+  INTERSECTION_PREEMPT_EXIT_TYPE_QUEUE_DELAY_RECOVERY = 2,
+  INTERSECTION_PREEMPT_EXIT_TYPE_SHORT_SERVICE = 3,
+  INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_COORD = 4
+} IntersectionPreemptExitType_t;
+
+typedef struct
+{
+  uint8_t length;
+  uint8_t values[INTERSECTION_PHASE_COUNT_MAX];
+} IntersectionPhaseReferenceList_t;
+
+typedef struct
+{
+  uint8_t length;
+  uint8_t values[INTERSECTION_CHANNEL_COUNT_MAX];
+} IntersectionChannelReferenceList_t;
+
+typedef struct
+{
+  uint8_t length;
+  uint8_t values[INTERSECTION_OVERLAP_COUNT_MAX];
+} IntersectionOverlapReferenceList_t;
+
+/* NTCIP 1202 phaseOptions bitmask (phaseEntry.21, INTEGER 0..65535). */
+#define PHASE_OPTIONS_ENABLED           0x0001U
+#define PHASE_OPTIONS_AUTO_FLASH_ENTRY  0x0002U
+#define PHASE_OPTIONS_AUTO_FLASH_EXIT   0x0004U
+#define PHASE_OPTIONS_NON_ACTUATED_1    0x0008U
+#define PHASE_OPTIONS_NON_ACTUATED_2    0x0010U
+#define PHASE_OPTIONS_NON_LOCK_DET_MEM  0x0020U
+#define PHASE_OPTIONS_MIN_RECALL        0x0040U
+#define PHASE_OPTIONS_MAX_RECALL        0x0080U
+#define PHASE_OPTIONS_PED_RECALL        0x0100U
+#define PHASE_OPTIONS_SOFT_RECALL       0x0200U
+#define PHASE_OPTIONS_DUAL_ENTRY        0x0400U
+#define PHASE_OPTIONS_SIMUL_GAP_DISABLE 0x0800U
+#define PHASE_OPTIONS_GUARANTEED_PASS   0x1000U
+#define PHASE_OPTIONS_REST_IN_WALK      0x2000U
+#define PHASE_OPTIONS_COND_SERVICE      0x4000U
+#define PHASE_OPTIONS_ADDED_INIT_CALC   0x8000U
+
+#define INTERSECTION_TIMEBASE_AUX_FUNCTION_1      0x01U
+#define INTERSECTION_TIMEBASE_AUX_FUNCTION_2      0x02U
+#define INTERSECTION_TIMEBASE_AUX_FUNCTION_3      0x04U
+#define INTERSECTION_TIMEBASE_AUX_FUNCTION_DIMMING 0x08U
+
+/* NTCIP 1202 vehicleDetectorOptions bitmask (vehicleDetectorEntry.2). */
+#define VEHICLE_DETECTOR_OPTIONS_VOLUME          0x01U
+#define VEHICLE_DETECTOR_OPTIONS_OCCUPANCY       0x02U
+#define VEHICLE_DETECTOR_OPTIONS_YELLOW_LOCK     0x04U
+#define VEHICLE_DETECTOR_OPTIONS_RED_LOCK        0x08U
+#define VEHICLE_DETECTOR_OPTIONS_PASSAGE         0x10U
+#define VEHICLE_DETECTOR_OPTIONS_ADDED_INITIAL   0x20U
+#define VEHICLE_DETECTOR_OPTIONS_QUEUE           0x40U
+#define VEHICLE_DETECTOR_OPTIONS_CALL            0x80U
+
+/* NTCIP 1202 vehicleDetectorOptions2 bitmask (vehicleDetectorEntry.16). */
+#define VEHICLE_DETECTOR_OPTIONS2_SPEED_ENABLED  0x01U
+#define VEHICLE_DETECTOR_OPTIONS2_PLACEMENT_LEAD 0x02U
+#define VEHICLE_DETECTOR_OPTIONS2_SPEED_NTCIP    0x04U
+
+/* NTCIP 1202 pedestrianDetectorOptions bitmask (pedestrianDetectorEntry.9). */
+#define PED_DETECTOR_OPTIONS_PRESENCE            0x01U
+#define PED_DETECTOR_OPTIONS_ALT_TIMING          0x02U
+#define PED_DETECTOR_OPTIONS_NON_LOCKING         0x04U
+
+typedef enum
+{
+  INTERSECTION_PHASE_STARTUP_OTHER = 1,
+  INTERSECTION_PHASE_STARTUP_PHASE_NOT_ON = 2,
+  INTERSECTION_PHASE_STARTUP_GREEN_WALK = 3,
+  INTERSECTION_PHASE_STARTUP_GREEN_NO_WALK = 4,
+  INTERSECTION_PHASE_STARTUP_YELLOW_CHANGE = 5,
+  INTERSECTION_PHASE_STARTUP_RED_CLEAR = 6
+} IntersectionPhaseStartup_t;
+
+typedef struct
+{
+  uint16_t phaseOptions;
+  uint8_t ring;
+  uint8_t startup;
+  uint16_t walkSeconds;
+  uint16_t pedClearSeconds;
+  uint16_t minGreenDs;
+  uint16_t phaseMaximum2Ds;
+  uint16_t maxGreenDs;
+  uint16_t phaseMaximum3Ds;
+  uint16_t passageDs;
+  uint16_t maxInitialDs;
+  uint16_t yellowChangeDs;
+  uint16_t redClearDs;
+  uint8_t redRevertDs;
+  uint8_t addedInitialDs;
+  uint8_t timeBeforeReductionSec;
+  uint8_t carsBeforeReduction;
+  uint8_t timeToReduceSec;
+  uint8_t reduceByDs;
+  uint8_t minimumGapDs;
+  uint8_t dynamicMaxLimitSeconds;
+  uint8_t dynamicMaxStepDs;
+  IntersectionPhaseReferenceList_t concurrency;
+  uint8_t yellowRedBeforeEndPedClearDs;
+  uint8_t pedWalkService;
+  uint8_t dontWalkRevertDs;
+  uint16_t pedAlternateClearSeconds;
+  uint16_t pedAlternateWalkSeconds;
+  uint16_t pedAdvanceWalkDs;
+  uint16_t pedDelayDs;
+  uint8_t advWarnGrnStartTimeDs;
+  uint8_t advWarnRedStartTimeDs;
+  uint8_t altMinTimeTransitionSeconds;
+  uint8_t reserved;
+} IntersectionPhaseConfig_t;
+
+typedef struct
+{
+  uint8_t options;
+  uint8_t callPhase;
+  uint8_t switchPhase;
+  uint16_t delayDs;
+  uint8_t extendDs;
+  uint8_t queueLimitSeconds;
+  uint8_t noActivityMinutes;
+  uint8_t maxPresenceMinutes;
+  uint8_t erraticCountsPerMinute;
+  uint8_t failTimeSeconds;
+  uint8_t options2;
+  uint8_t pairedDetector;
+  uint16_t pairedDetectorSpacingCm;
+  uint16_t avgVehicleLengthCm;
+  uint16_t detectorLengthCm;
+  uint8_t travelMode;
+} IntersectionVehicleDetectorConfig_t;
+
+typedef struct
+{
+  uint8_t callPhase;
+  uint8_t noActivityMinutes;
+  uint8_t maxPresenceMinutes;
+  uint8_t erraticCountsPerMinute;
+  uint8_t apsMinimumActuationDs;
+  uint8_t options;
+} IntersectionPedestrianDetectorConfig_t;
+
+typedef struct
+{
+  uint8_t volumeOccupancyPeriodSeconds;
+  uint16_t volumeOccupancyPeriodV3Seconds;
+  uint16_t pedestrianDetectorPeriodSeconds;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint8_t reserved2;
+} IntersectionDetectorReportConfig_t;
+
+typedef struct
+{
+  uint8_t phaseCount;
+  uint8_t barrierPhaseCount;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint8_t phaseOrder[INTERSECTION_RING_PHASE_COUNT_MAX];
+} IntersectionRingPlan_t;
+
+typedef struct
+{
+  uint8_t controlSource;
+  uint8_t controlType;
+  uint8_t flashMask;
+  uint8_t dimMask;
+  uint8_t greenType;
+  IntersectionChannelReferenceList_t greenIncluded;
+  uint16_t intersectionId;
+} IntersectionChannelConfig_t;
+
+typedef struct
+{
+  uint8_t type;
+  IntersectionPhaseReferenceList_t includedPhases;
+  IntersectionPhaseReferenceList_t modifierPhases;
+  uint16_t trailGreenDs;
+  uint16_t trailYellowDs;
+  uint16_t trailRedDs;
+  uint16_t walkSeconds;
+  uint16_t pedClearSeconds;
+  IntersectionPhaseReferenceList_t conflictingPedPhases;
+} IntersectionOverlapConfig_t;
+
+typedef struct
+{
+  uint8_t cycleTimeSeconds;
+  uint8_t offsetTimeSeconds;
+  uint8_t splitNumber;
+  uint8_t sequenceNumber;
+  uint8_t coordSyncPoint;
+  uint8_t options;
+  uint8_t reserved0;
+  uint8_t reserved1;
+} IntersectionPatternConfig_t;
+
+typedef struct
+{
+  uint8_t timeSeconds;
+  uint8_t mode;
+  uint8_t coordPhase;
+  uint8_t options;
+} IntersectionSplitPhaseConfig_t;
+
+typedef struct
+{
+  uint8_t pattern;
+  uint8_t auxiliaryFunction;
+  uint8_t specialFunction;
+  uint8_t enabledLane;
+} IntersectionTimebaseActionConfig_t;
+
+typedef struct
+{
+  uint16_t patternSyncMinutes;
+  IntersectionTimebaseActionConfig_t actions[
+    INTERSECTION_TIMEBASE_ACTION_COUNT_MAX];
+} IntersectionTimebaseConfig_t;
+
+typedef struct
+{
+  uint8_t startUpFlashSeconds;
+  uint8_t autoPedestrianClear;
+  uint16_t backupTimeSeconds;
+  uint32_t userDefinedBackupTimeSeconds;
+  uint8_t redRevertDs;
+  uint8_t startUpFlashMode;
+  uint8_t timeSourceCommanded;
+  uint8_t elevationOffsetMeters;
+} IntersectionUnitConfig_t;
+
+typedef struct
+{
+  uint8_t oidLength;
+  uint8_t descriptionLength;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint32_t oid[INTERSECTION_USER_DEFINED_BACKUP_OID_COMPONENT_COUNT_MAX];
+  uint8_t description[INTERSECTION_USER_DEFINED_BACKUP_DESCRIPTION_MAX];
+} IntersectionUserDefinedBackupContentConfig_t;
+
+typedef struct
+{
+  uint8_t operationalMode;
+  uint8_t correctionMode;
+  uint8_t maximumMode;
+  uint8_t forceMode;
+  uint8_t unitCoordSyncPoint;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint8_t reserved2;
+  IntersectionPatternConfig_t patterns[INTERSECTION_PATTERN_COUNT_MAX];
+  IntersectionSplitPhaseConfig_t splits[INTERSECTION_SPLIT_COUNT_MAX][
+    INTERSECTION_PHASE_COUNT_MAX];
+} IntersectionCoordinationConfig_t;
+
+typedef struct
+{
+  uint8_t control;
+  uint8_t link;
+  uint16_t delaySeconds;
+  uint16_t minimumDurationSeconds;
+  uint8_t minimumGreenSeconds;
+  uint8_t minimumWalkSeconds;
+  uint8_t enterPedClearSeconds;
+  uint8_t trackGreenSeconds;
+  uint8_t dwellGreenSeconds;
+  uint16_t maximumPresenceSeconds;
+  IntersectionPhaseReferenceList_t trackPhases;
+  IntersectionPhaseReferenceList_t dwellPhases;
+  IntersectionPhaseReferenceList_t dwellPeds;
+  IntersectionPhaseReferenceList_t exitPhases;
+  IntersectionOverlapReferenceList_t trackOverlaps;
+  IntersectionOverlapReferenceList_t dwellOverlaps;
+  IntersectionPhaseReferenceList_t cyclingPhases;
+  IntersectionPhaseReferenceList_t cyclingPeds;
+  IntersectionOverlapReferenceList_t cyclingOverlaps;
+  uint8_t enterYellowChangeDs;
+  uint8_t enterRedClearDs;
+  uint8_t trackYellowChangeDs;
+  uint8_t trackRedClearDs;
+  uint8_t sequenceNumber;
+  uint8_t exitType;
+} IntersectionPreemptConfig_t;
+
+typedef struct
+{
+  uint8_t descriptionLength;
+  uint8_t description[INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX];
+} IntersectionPreemptGateConfig_t;
+
+typedef struct
+{
+  uint8_t phaseDetectors[INTERSECTION_PHASE_COUNT_MAX];
+  uint8_t phasePedInputs[INTERSECTION_PHASE_COUNT_MAX];
+  uint8_t preemptInputs[INTERSECTION_PREEMPT_COUNT_MAX];
+  uint8_t preemptControls[INTERSECTION_PREEMPT_COUNT_MAX];
+} IntersectionInputMappingConfig_t;
+
+typedef struct
+{
+  uint8_t phaseCount;
+  uint8_t ringCount;
+  uint8_t barrierCount;
+  uint8_t reserved;
+  IntersectionPhaseConfig_t phases[INTERSECTION_PHASE_COUNT_MAX];
+  IntersectionRingPlan_t rings[INTERSECTION_RING_COUNT_MAX];
+  IntersectionCoordinationConfig_t coordination;
+  IntersectionTimebaseConfig_t timebase;
+  IntersectionUnitConfig_t unit;
+  IntersectionPreemptConfig_t preempts[INTERSECTION_PREEMPT_COUNT_MAX];
+  IntersectionVehicleDetectorConfig_t vehicleDetectors[
+    INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX];
+  IntersectionPedestrianDetectorConfig_t pedestrianDetectors[
+    INTERSECTION_PED_INPUT_COUNT_MAX];
+  IntersectionDetectorReportConfig_t detectorReports;
+  uint16_t preemptQueueDelayWeights[INTERSECTION_PREEMPT_COUNT_MAX][
+    INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX];
+  IntersectionPreemptGateConfig_t preemptGates[
+    INTERSECTION_PREEMPT_GATE_COUNT_MAX];
+  IntersectionUserDefinedBackupContentConfig_t userDefinedBackupContents[
+    INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX];
+  IntersectionInputMappingConfig_t inputMapping;
+  IntersectionChannelConfig_t channels[INTERSECTION_CHANNEL_COUNT_MAX];
+  IntersectionOverlapConfig_t overlaps[INTERSECTION_OVERLAP_COUNT_MAX];
+} IntersectionConfig_t;
+
+typedef enum
+{
+  INTERSECTION_CONFIG_ERROR_NONE = 0,
+  INTERSECTION_CONFIG_ERROR_TRANSACTION_STATE,
+  INTERSECTION_CONFIG_ERROR_STORAGE,
+  INTERSECTION_CONFIG_ERROR_PHASE_COUNT,
+  INTERSECTION_CONFIG_ERROR_RING_COUNT,
+  INTERSECTION_CONFIG_ERROR_BARRIER_COUNT,
+  INTERSECTION_CONFIG_ERROR_PHASE_ENABLE,
+  INTERSECTION_CONFIG_ERROR_PHASE_RING,
+  INTERSECTION_CONFIG_ERROR_MIN_GREEN,
+  INTERSECTION_CONFIG_ERROR_MAX_GREEN,
+  INTERSECTION_CONFIG_ERROR_YELLOW_CHANGE,
+  INTERSECTION_CONFIG_ERROR_RED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_WALK,
+  INTERSECTION_CONFIG_ERROR_PED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_PASSAGE,
+  INTERSECTION_CONFIG_ERROR_MAX_INITIAL,
+  INTERSECTION_CONFIG_ERROR_PED_ADVANCE_WALK,
+  INTERSECTION_CONFIG_ERROR_PED_DELAY,
+  INTERSECTION_CONFIG_ERROR_PHASE_OPTIONS,
+  INTERSECTION_CONFIG_ERROR_PHASE_STARTUP,
+  INTERSECTION_CONFIG_ERROR_PHASE_MAXIMUM2,
+  INTERSECTION_CONFIG_ERROR_PHASE_MAXIMUM3,
+  INTERSECTION_CONFIG_ERROR_MINIMUM_GAP,
+  INTERSECTION_CONFIG_ERROR_PHASE_CONCURRENCY,
+  INTERSECTION_CONFIG_ERROR_PHASE_ALT_MIN_TIME_TRANSITION,
+  INTERSECTION_CONFIG_ERROR_RING_PHASE_COUNT,
+  INTERSECTION_CONFIG_ERROR_RING_BARRIER_POSITION,
+  INTERSECTION_CONFIG_ERROR_RING_PHASE_ORDER,
+  INTERSECTION_CONFIG_ERROR_PHASE_ASSIGNMENT,
+  INTERSECTION_CONFIG_ERROR_COORD_OPERATIONAL_MODE,
+  INTERSECTION_CONFIG_ERROR_COORD_CORRECTION_MODE,
+  INTERSECTION_CONFIG_ERROR_COORD_MAXIMUM_MODE,
+  INTERSECTION_CONFIG_ERROR_COORD_FORCE_MODE,
+  INTERSECTION_CONFIG_ERROR_COORD_UNIT_SYNC_POINT,
+  INTERSECTION_CONFIG_ERROR_PATTERN_CYCLE_TIME,
+  INTERSECTION_CONFIG_ERROR_PATTERN_OFFSET_TIME,
+  INTERSECTION_CONFIG_ERROR_PATTERN_SPLIT_NUMBER,
+  INTERSECTION_CONFIG_ERROR_PATTERN_SEQUENCE_NUMBER,
+  INTERSECTION_CONFIG_ERROR_PATTERN_SYNC_POINT,
+  INTERSECTION_CONFIG_ERROR_PATTERN_OPTIONS,
+  INTERSECTION_CONFIG_ERROR_TIMEBASE_PATTERN_SYNC,
+  INTERSECTION_CONFIG_ERROR_TIMEBASE_ACTION_PATTERN,
+  INTERSECTION_CONFIG_ERROR_TIMEBASE_ACTION_AUXILIARY_FUNCTION,
+  INTERSECTION_CONFIG_ERROR_UNIT_AUTO_PEDESTRIAN_CLEAR,
+  INTERSECTION_CONFIG_ERROR_UNIT_STARTUP_FLASH_MODE,
+  INTERSECTION_CONFIG_ERROR_UNIT_TIME_SOURCE,
+  INTERSECTION_CONFIG_ERROR_UNIT_ELEVATION_OFFSET,
+  INTERSECTION_CONFIG_ERROR_UNIT_USER_DEFINED_BACKUP_TIME,
+  INTERSECTION_CONFIG_ERROR_UNIT_USER_DEFINED_BACKUP_OID,
+  INTERSECTION_CONFIG_ERROR_UNIT_USER_DEFINED_BACKUP_DESCRIPTION,
+  INTERSECTION_CONFIG_ERROR_SPLIT_TIME,
+  INTERSECTION_CONFIG_ERROR_SPLIT_MODE,
+  INTERSECTION_CONFIG_ERROR_SPLIT_COORD_PHASE,
+  INTERSECTION_CONFIG_ERROR_SPLIT_OPTIONS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_CONTROL,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_LINK,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_DELAY,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_MINIMUM_DURATION,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_MINIMUM_GREEN,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_MINIMUM_WALK,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_ENTER_PED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_TRACK_GREEN,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_DWELL_GREEN,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_MAXIMUM_PRESENCE,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_TRACK_PHASES,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_DWELL_PHASES,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_DWELL_PEDS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_EXIT_PHASES,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_TRACK_OVERLAPS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_DWELL_OVERLAPS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_CYCLING_PHASES,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_CYCLING_PEDS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_CYCLING_OVERLAPS,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_ENTER_YELLOW_CHANGE,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_ENTER_RED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_TRACK_YELLOW_CHANGE,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_TRACK_RED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_SEQUENCE_NUMBER,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_EXIT_TYPE,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_OPTIONS,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_CALL_PHASE,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_SWITCH_PHASE,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_DELAY,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_EXTEND,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_QUEUE_LIMIT,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_FAIL_TIME,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_OPTIONS2,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_PAIRED,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_DETECTOR_TRAVEL_MODE,
+  INTERSECTION_CONFIG_ERROR_PED_DETECTOR_CALL_PHASE,
+  INTERSECTION_CONFIG_ERROR_PED_DETECTOR_APS_MINIMUM,
+  INTERSECTION_CONFIG_ERROR_PED_DETECTOR_OPTIONS,
+  INTERSECTION_CONFIG_ERROR_VEHICLE_REPORT_PERIOD_V3,
+  INTERSECTION_CONFIG_ERROR_PED_REPORT_PERIOD,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_QUEUE_DELAY_WEIGHT,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_GATE_DESCRIPTION,
+  INTERSECTION_CONFIG_ERROR_PHASE_DETECTOR_INPUT,
+  INTERSECTION_CONFIG_ERROR_PHASE_PED_INPUT,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_INPUT_SOURCE,
+  INTERSECTION_CONFIG_ERROR_PREEMPT_CONTROL_SOURCE,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_CONTROL_SOURCE,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_CONTROL_TYPE,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_FLASH_MASK,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_DIM_MASK,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_GREEN_TYPE,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_GREEN_INCLUDED,
+  INTERSECTION_CONFIG_ERROR_CHANNEL_INTERSECTION_ID,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_INCLUDED_PHASES,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_MODIFIER_PHASES,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_TRAIL_GREEN,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_TRAIL_YELLOW,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_TRAIL_RED,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_WALK,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_PED_CLEAR,
+  INTERSECTION_CONFIG_ERROR_OVERLAP_CONFLICTING_PED_PHASES
+} IntersectionConfigError_t;
+
+typedef struct
+{
+  IntersectionConfigError_t type;
+  uint16_t objectIndex;
+} IntersectionConfigErrorInfo_t;
+
+static inline uint8_t IntersectionPhaseOptionsEnabled(uint16_t phaseOptions)
+{
+  return (uint8_t) ((phaseOptions & PHASE_OPTIONS_ENABLED) != 0U);
+}
+
+static inline uint8_t IntersectionPhaseOptionsHasVehicleRecall(
+  uint16_t phaseOptions)
+{
+  return (uint8_t) ((phaseOptions
+                     & (PHASE_OPTIONS_MIN_RECALL | PHASE_OPTIONS_MAX_RECALL))
+                    != 0U);
+}
+
+void IntersectionConfigInitDefaults(IntersectionConfig_t *config);
+uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
+                                   IntersectionConfigErrorInfo_t *errorInfo);
+
+#endif /* INTERSECTION_CONFIG_H */

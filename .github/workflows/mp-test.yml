@@ -1,0 +1,79 @@
+name: MP — Host Unit Tests
+
+on:
+  push:
+    paths: ['CPM/MP**']
+  pull_request:
+    paths: ['CPM/MP**']
+  workflow_dispatch:
+    inputs:
+      min_line_coverage:
+        description: 'Minimum line coverage % to enforce (overrides gcovr.cfg)'
+        required: false
+        default: '0'
+  workflow_call:
+    inputs:
+      min_line_coverage:
+        description: 'Minimum line coverage % to enforce'
+        required: false
+        default: '0'
+        type: string
+
+jobs:
+  test:
+    name: Unit & Integration Tests (x86-64)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: MP
+
+    env:
+      # Raise this value as Tasks/ coverage accumulates.
+      # Can also be overridden by workflow_dispatch input or workflow_call input.
+      MIN_LINE_COVERAGE: ${{ inputs.min_line_coverage || '0' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc cmake ninja-build gcovr python3 libasan8 libubsan1
+
+      - name: Configure
+        run: cmake --preset Host-Test
+
+      - name: Build
+        run: cmake --build --preset Host-Test
+
+      - name: Run tests
+        run: |
+          cd build/Host-Test
+          ctest --output-on-failure
+
+      - name: Generate coverage reports
+        run: |
+          mkdir -p build/coverage/full build/coverage/tasks
+          gcovr \
+            --root . \
+            --html-details build/coverage/full/index.html \
+            --print-summary \
+            build/Host-Test
+          gcovr \
+            --root . \
+            --filter Tasks/ \
+            --fail-under-line "$MIN_LINE_COVERAGE" \
+            --xml build/coverage/tasks/coverage.xml \
+            --html-details build/coverage/tasks/index.html \
+            --print-summary \
+            build/Host-Test
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mp-coverage-${{ github.sha }}
+          path: CPM/MPbuild/coverage/
+          retention-days: 7

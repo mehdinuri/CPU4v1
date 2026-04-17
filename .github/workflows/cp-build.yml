@@ -3,10 +3,10 @@ name: CP — STM32 Firmware Build
 on:
   push:
     branches: [main]
-    paths: ['CP/**']
+    paths: ['CPM/CP**']
   pull_request:
     branches: [main]
-    paths: ['CP/**']
+    paths: ['CPM/CP**']
   workflow_dispatch:
   workflow_call:
 
@@ -49,6 +49,6 @@ jobs:
         with:
           name: cp-firmware-${{ github.sha }}
           path: |
-            CP/build/STM32-Release/CP.elf
-            CP/build/STM32-Release/CP.map
+            CPM/CPbuild/STM32-Release/CP.elf
+            CPM/CPbuild/STM32-Release/CP.map
           retention-days: 30

@@ -1,0 +1,84 @@
+name: MP — Release
+
+on:
+  push:
+    tags:
+      - 'mp-v*.*.*'
+
+jobs:
+  build-and-test:
+    name: Build MP firmware
+    uses: ./.github/workflows/mp-build.yml
+
+  test:
+    name: Run MP host tests
+    uses: ./.github/workflows/mp-test.yml
+
+  release:
+    name: Create GitHub Release
+    needs: [build-and-test, test]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: MP
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi binutils-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            cmake ninja-build
+
+      - name: Build Release firmware
+        run: |
+          cmake --preset STM32-Release
+          cmake --build --preset STM32-Release
+
+      - name: Generate .bin from .elf
+        run: |
+          arm-none-eabi-objcopy -O binary \
+            build/STM32-Release/MP.elf \
+            build/STM32-Release/MP.bin
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            LOG=$(git log "${PREV_TAG}..HEAD" --oneline --no-merges)
+          else
+            LOG=$(git log --oneline --no-merges | head -20)
+          fi
+          echo "CHANGELOG<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$LOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            ## Maestro Platform (MP) ${{ github.ref_name }}
+
+            ### Changes
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ### Artifacts
+            - `MP.elf` — ELF with debug symbols (for OpenOCD/STM32CubeProgrammer)
+            - `MP.bin` — Raw binary for direct flash programming
+            - `MP.map` — Linker map (memory layout)
+          files: |
+            CPM/MPbuild/STM32-Release/MP.elf
+            CPM/MPbuild/STM32-Release/MP.bin
+            CPM/MPbuild/STM32-Release/MP.map
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}

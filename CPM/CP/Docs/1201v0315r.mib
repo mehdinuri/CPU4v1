@@ -1,0 +1,1170 @@
+--Copyright 2010 by the American Association of State Highway and
+--Transportation Officials (AASHTO), the Institute of Transportation Engineers
+--(ITE), and the National Electrical Manufacturers Association (NEMA). All
+--intellectual property rights, including, but not limited to, the rights of
+--reproduction in whole or in part in any form, translation into other
+--languages and display are reserved by the copyright owners under the laws of
+--the United States of America, the Universal Copyright Convention, the Berne
+--Convention, and the International and Pan American Copyright Conventions.
+--Except for the MIB, Do not copy without written permission of either AASHTO,
+--ITE, or NEMA.
+--
+-- Joint NEMA, AASHTO, and ITE
+-- NTCIP Management Information Base
+-- DISTRIBUTION NOTICE
+--
+--To the extent and in the limited event these materials are distributed by
+--AASHTO/ITE/NEMA in the form of a Management Information Base ("MIB"),
+--AASHTO/ITE/NEMA extends the following permissions:
+--
+-- (i) you may make and/or distribute unlimited copies (including derivative
+--works) of the MIB, including copies for commercial distribution, provided
+--that (a) each copy you make and/or distribute contains this Notice and (b)
+--each derivative work of the MIB uses the same module name followed by "-",
+--followed by your Internet Assigned Number Authority (IANA)-assigned
+--enterprise number;
+--(ii) use of the MIB is restricted in that the syntax field may be modified
+--only to reflect a more restrictive sub-range or enumerated values;
+--(iii) the description field may be modified but only to the extent that:
+--(a) only those bit values or enumerated values that are supported are
+--listed; and (b) the more restrictive subrange is expressed.
+--
+--These materials are delivered "AS IS" without any warranties as to their use
+--or performance.
+--
+--AASHTO/ITE/NEMA AND THEIR SUPPLIERS DO NOT WARRANT THE PERFORMANCE OR
+--RESULTS YOU MAY OBTAIN BY USING THESE MATERIALS. AASHTO/ITE/NEMA AND THEIR
+--SUPPLIERS MAKE NO WARRANTIES, EXPRESS OR IMPLIED, AS TO NONINFRINGEMENT OF
+--THIRD PARTY RIGHTS, MERCHANTABILITY, OR FITNESS FOR ANY PARTICULAR PURPOSE.
+--IN NO EVENT WILL AASHTO, ITE OR NEMA OR THEIR SUPPLIERS BE LIABLE TO YOU OR
+--ANY THIRD PARTY FOR ANY CLAIM OR FOR ANY CONSEQUENTIAL, INCIDENTAL OR
+--SPECIAL DAMAGES, INCLUDING ANY LOST PROFITS OR LOST SAVINGS, ARISING FROM
+--YOUR REPRODUCTION OR USE OF THESE MATERIALS, EVEN IF AN AASHTO, ITE, OR NEMA
+--REPRESENTATIVE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. Some
+--states or jurisdictions do not allow the exclusion or limitation of
+--incidental, consequential or special damages, or the exclusion of implied
+--warranties, so the above limitations may not apply to you.
+--
+--Use of these materials does not constitute an endorsement or affiliation by
+--or between AASHTO, ITE, or NEMA and you, your company, or your products and
+--services.
+--
+--NTCIP is a trademark of AASHTO/ITE/NEMA.
+--**************************************************************************** 
+
+
+ 
+--NTCIP OBJECTS
+NTCIP1201-v03 DEFINITIONS ::= BEGIN
+-- NTCIP 8004 v02 Header
+--
+--For the purpose of this section, the following OBJECT IDENTIFIERS are used:
+IMPORTS
+ OBJECT-TYPE
+ FROM RFC-1212
+ DisplayString
+ FROM RFC1213-MIB
+ devices, protocols, profiles, global
+ FROM NTCIP8004v02
+ Opaque, Counter, Gauge, null
+ FROM RFC1155-SMI;
+-- global OBJECT IDENTIFIER ::= { devices 6 } 1.3.6.1.4.1.1206.4.2.6 
+
+--2.2 GLOBAL CONFIGURATION NODE
+globalConfiguration OBJECT IDENTIFIER ::= { global 1 }
+-- This node is an identifier used to group all objects for support of
+-- configuration functions that are common to most device types.
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1
+
+--2.2.1 Global Set ID Parameter
+globalSetIDParameter OBJECT-TYPE
+SYNTAX INTEGER (0..65535)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition> Specifies a relatively unique ID (e.g., this could be a counter, a check-sum, etc.) for all user-changeable parameters of the particular device-type currently implemented in the device. Often this ID is calculated using a CRC algorithm.
+This value shall be calculated when a change of any static database object has occurred. The value reported by this object shall not change unless there has been a change in the static data since the last request. If the actual objects, which are to be included to create this object value, are not defined in the actual device-level standard such as 1202 or 1203, then the general guidance is to include all configuration objects that are stored in a type of memory that survives power outages.
+A management station can use this object to detect any change in the static database objects by monitoring this value after it has established a baseline. 
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.1"
+::= { globalConfiguration 1}
+
+--2.2.2 Maximum Modules Parameter
+globalMaxModules OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The number of rows that are listed in the globalModuleTable.
+<Unit>module
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.2"
+::= { globalConfiguration 2}
+
+--2.2.3 Module Table
+globalModuleTable OBJECT-TYPE
+SYNTAX SEQUENCE OF ModuleTableEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>A table containing information regarding manufacturer of software and hardware and the associated module models and version numbers as well as an indicator if the module is hardware or software related. The number of rows in this table shall equal the value of the globalMaxModules object.
+<TableType> static
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3"
+::= { globalConfiguration 3 }
+
+moduleTableEntry OBJECT-TYPE
+SYNTAX ModuleTableEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object defines an entry in the module table.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1"
+INDEX { moduleNumber }
+::= { globalModuleTable 1 }
+
+
+ModuleTableEntry ::= SEQUENCE {
+	moduleNumber 		INTEGER,
+	moduleDeviceNode 	OBJECT IDENTIFIER,
+	moduleMake 			OCTET STRING,
+	moduleModel 		OCTET STRING,
+	moduleVersion 		OCTET STRING,
+	moduleType 			INTEGER } 
+	
+--2.2.3.1 Module Number Parameter
+moduleNumber OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object contains the row number (1..255) within this table for the associated module.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.1"
+::= { moduleTableEntry 1 } 
+
+--2.2.3.2 Module Device Node Parameter
+moduleDeviceNode OBJECT-TYPE
+SYNTAX OBJECT IDENTIFIER
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object contains the device node number of the device-type, e.g., an ASC signal controller would have an OID of 1.3.6.1.4.1.1206.4.2.1.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.2"
+::= { moduleTableEntry 2 }
+
+--2.2.3.3 Module Make Parameter
+moduleMake OBJECT-TYPE
+SYNTAX OCTET STRING
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object specifies the manufacturer of the associated module. A null-string shall be transmitted if this object has no entry.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.3"
+::= { moduleTableEntry 3 }
+
+--2.2.3.4 Module Model Parameter
+moduleModel OBJECT-TYPE
+SYNTAX OCTET STRING
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object specifies the model number (hardware) or firmware reference (software) of the associated module. A nullstring shall be transmitted if this object has no entry.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.4"
+::= { moduleTableEntry 4 }
+
+--2.2.3.5 Module Version Parameter
+moduleVersion OBJECT-TYPE
+SYNTAX OCTET STRING
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object specifies the version of the associated module. If the moduleType has a value of software, the value of this object shall include the date on which the software was released as a string in the form of YYYYMMDD, it shall be followed by a space, a hyphen, another space, the lower-case letter 'v', followed by a version or configuration number. Preceding zeros shall be required for the date. For example, version 7.03.02 of the software released on July 5, 2002 would be presented as 20020705 - v7.03.02
+A null-string shall be transmitted if this object has no entry.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.5"
+::= { moduleTableEntry 5 } 
+
+--2.2.3.6 Module Type Parameter
+moduleType OBJECT-TYPE
+SYNTAX INTEGER {
+	other (1),
+	hardware (2),
+	software (3) }
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object specifies whether the associated module is a hardware or software module.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.3.1.6"
+::= { moduleTableEntry 6 }
+
+--2.2.4 Base Standards Parameter
+controllerBaseStandards OBJECT-TYPE
+SYNTAX OCTET STRING (SIZE (0..256))
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>For use in this object, an ASCII string that shall identify all of the standard document numbers that define or reference MIBs upon which the device is based. Where applicable, profiles shall be referenced rather than the base standards. The version string shall be constructed as follows: The acronym of the standards development organization (or other body) that developed and approved the standard; a space; the standards document number; a colon; and the documents version number as designated by the
+standards development organization (or other body). Separate entries in the list of standards shall be separated by a carriage return (0x0d) and line feed (0x0a).
+In the case of NTCIP documents prior to formal approval, the version number shall be the version number in the form of lower case 'v' followed by the major version followed by a period followed by the minor revision. In the case of approved NTCIP standards, the publication year shall precede the version number. In the case of amended NTCIP standards, the version number shall be replaced by the four digit year of publication of the published
+standard followed by the upper case letter 'A', followed by the amendment number.
+
+For example, a message sign may have the following value for this
+object:
+	NTCIP 1201:v02.19
+	NTCIP 1203:1997A1
+	NTCIP 2101:2001 v01.19
+	NTCIP 2103:v01.13
+	NTCIP 2201:v01.14
+	NTCIP 2301:2001 v01.08
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.1.4"
+::= { globalConfiguration 4 } 
+
+--2.3 GLOBAL DATABASE MANAGEMENT NODE
+globalDBManagement OBJECT IDENTIFIER ::= { global 2 }
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2 
+-- This node is an identifier used to group those objects used to manage a
+-- transaction.
+-- A transaction is a SET of one or more database parameters that have inter-
+-- relationships with other database parameters, as such a SET for any one of
+-- these objects must be validated against a set of consistency checks and may
+-- potentially require the setting of a large number of objects
+-- simultaneously. Thus, the mode described by these objects allow for such a
+-- large database download.
+-- Any device standard that allows this feature shall define which objects are
+-- database parameters versus status or control objects. 
+
+-- 2.3.1 Database Creation Transaction
+dbCreateTransaction   OBJECT-TYPE
+SYNTAX	INTEGER {	
+	normal (1),
+	transaction (2),
+	verify (3),
+	done (6)}
+ACCESS	read-write
+STATUS	mandatory
+
+DESCRIPTION 
+"<Definition>This object provides transaction control for device configuration.  The transaction mode changes the behavior of the agent to force buffering of database objects until all related database objects have been modified.  In the normal mode, SET operations to any database object shall either be stored in a device's database immediately with no regard to whether other changes will be made or be rejected (as defined in the device-specific Information Profile).  In the transaction mode, SET operations to any database object shall be buffered until a verify state performs a consistency check.  When the consistency check completes, the device automatically transitions to the done state where a normal or transaction command may be issued.  
+A database object is a user provided piece of setup information (or it may be defined in an information profile) that is necessary for the proper operation of a device.  It is static in nature in that the agent would never change it without direction from the management station.  For example, a parameter that defines a default mode of operation would be a database object.  A parameter that indicates the current state of the device would not be a database object.
+
+The states and commands are defined as:
+NORMAL:  SET operations behave as normal SETs and shall have an immediate effect on the value of any database objects used by the device if none of the objects contained in the operation require the use of the transaction mode (as defined in the device-specific Information Profile).  A SET operation containing any database object that requires the use of transaction mode shall result in a genErr.  This is the default state of this object.  
+The only command that may be written to dbCreateTransaction while in this state is TRANSACTION.  Any other values written to this object in this state shall result in an error response of 'badValue'.
+
+TRANSACTION: A SET operation of one or more database objects that use the same community name as used in the request for the TRANSACTION state are buffered by the agent device for later consistency checks and a normal response is returned.  A SET operation of one or more database objects using different community names shall result in a genErr with the index set to zero.  A SET operation without a community name field (e.g., an STMP operation) shall be buffered by the agent device for later consistency checks and a normal response is returned.  Standard SYNTAX checking shall take place at the time of the SET operation.  A transaction may consist of multiple SET operations over multiple frames. 
+ 
+A SET operation for one or more non-database objects shall be processed as normal even if it uses another community name, except for this (i.e., the dbCreateTransaction) object.  
+
+A SET operation containing both database and non-database objects shall be processed in full according to these two rules.  Thus, if it contains the same community name as used in the request for the TRANSACTION state, the non-database objects shall be stored immediately while the database objects shall be buffered.  If it uses a different community name, the entire request will be rejected and a genErr with an index of zero shall be returned.
+
+GET operations on any object shall return the values of the data stored in the controller and shall ignore any values contained in the buffer.
+  
+Any valid community name may read this (dbCreateTransaction) object when in this state, but only the community name used to command the object to the transaction mode and the administrator community name can set this object. A set from any other community name shall result in a genErr with an index of zero. The only commands that can be written to dbCreateTransaction while in this state are VERIFY and NORMAL.  A VERIFY command will change the state to VERIFY.  If a NORMAL command is received, all buffered data is discarded and the state is returned to NORMAL.  Any other values written to this object when in this state shall result in an error response of 'badValue'.
+
+VERIFY: Specific database objects are checked for consistency.  When consistency checks are complete the device will automatically advance to the DONE state.
+The state of dbCreateTransaction cannot be changed when in the VERIFY state.  Any values written to this object in this state shall result in an error response of 'badValue'.
+
+The consistency check analyzes certain critical objects 'in context' and treats them as an interrelated whole rather than separate non-related data items.   The consistency check rules are not defined in this standard.  They are device and implementation specific.  Where applicable, the consistency check rules are defined in application specific object definition standards.   A specific implementation may add additional checks beyond those defined in the standards. 
+
+A SET operation containing any database objects while in the VERIFY state shall result in a genErr with the index set to zero. 
+DONE:  This state is entered automatically once consistency checks have completed in the VERIFY mode.  The value of dbVerifyStatus and dbVerifyError indicate whether the consistency check found any errors.  
+
+A SET operation containing any database objects while in the DONE state shall result in a genErr with the index set to zero.
+Any valid community name may read this (dbCreateTransaction) object when in this state, but only the community name used to command the object to the transaction mode and the administrator community name can set this object. A set from any other community name shall result in a genErr with an index of zero. The only commands that can be written to dbCreateTransaction while in this state are NORMAL and TRANSACTION.  Any other values written to this object in this state shall result in an error response of 'badValue'.
+
+If a NORMAL command is issued and dbVerifyStatus indicates doneWithNoError, the buffered data is transferred to the device memory and the state is returned to NORMAL.  If a NORMAL command is issued and dbVerifyStatus indicates something other than doneWithNoError then the buffered data is discarded and the state is returned to NORMAL.
+If a TRANSACTION command is issued, regardless of dbVerifyStatus, no action takes place (the buffered data is not changed) and the TRANSACTION state is re-entered.
+
+
+COMMANDED STATE (9)
+
+
+transaction
+verify
+normal
+done
+CURRENT
+STATE
+normal
+transaction (1)
+normal (2)
+normal (2)
+normal (2)
+
+transaction
+transaction (2)
+verify (3)
+normal (4)
+transaction (2)
+
+verify (7)
+verify (2)
+verify(2)
+verify (2)
+verify (2)
+
+done (8)
+transaction (5)
+done(2)
+normal (6)
+
+done (2)Operational procedures and error responses:
+(1)  Once a copy of all database objects is placed in a buffer the state is changed to transaction and error response indicates noError.  If the operation fails, the state remains the same and error response indicates genErr.
+(2)  No action takes place, the state remains the same, but response indicates badValue.
+(3)  The state is changed to verify, a consistency check is started, and response indicates noError.  Once the consistency check is completed, the state automatically changes to done.
+(4).  The buffered copy of all database objects is discarded, the state is changed to normal, and response indicates noError. 
+(5)  The buffered copy of all database objects is not changed or reloaded, the state is changed to transaction, and response indicates noError.
+(6)  If dbVerifyStatus indicates doneWithNoError, then the copy of all database objects is transferred to memory, the state is changed to normal and response indicates noError.  If dbVerifyStatus indicates doneWithError then the buffered data is discarded, the state is changed to NORMAL, and response indicates noError.
+(7)  The state will automatically change to done when the consistency check completes.
+(8)  dbVerifyStatus and dbVerifyError are only valid in this state. 
+
+(9) All SET operations on this (dbCreateTransaction) parameter shall be made using a protocol that uses a community name, or equivalent field (e.g., SNMP).
+<DescriptiveName>Transaction.mode:code
+<DataConceptType>Data Element"
+DEFVAL	{normal}
+::= { globalDBManagement 1 }
+
+-- 2.3.2 Database Error Type Parameter
+-- This object has been deprecated.  See Clause B.1 for more information.
+dbErrorType OBJECT-TYPE
+SYNTAX INTEGER { 
+	tooBig (1),
+	noSuchName (2),
+	badValue (3),
+	readOnly (4),
+	genError (5),
+	updateError (6),
+	noError (7)}
+ACCESS read-only
+STATUS deprecated
+DESCRIPTION
+"This object returns the current error status of the transaction. The value of this object is only valid when the dbCreateTransaction object is in the Done or sError state.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.2"
+::= { globalDBManagement 2 } 
+
+--2.3.3 Database Error ID Parameter
+-- This object has been deprecated. See Annex D.1.8 for more information.
+dbErrorID OBJECT-TYPE
+SYNTAX OBJECT IDENTIFIER
+ACCESS read-only
+STATUS deprecated
+DESCRIPTION
+"This object contains the object identifier of the first object in the transaction buffer that caused an error while dbCreateTransaction object was in the Verifying or Updating state. The value of this object is only valid when the dbCreateTransaction object is in the Error state. It is undefined when the dbCreateTransaction object is in other states.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.3"
+::= { globalDBManagement 3 } 
+
+--2.3.4 Database Transaction ID Parameter
+-- This object has been deprecated. See Annex D.1.8 for more information.
+dbTransactionID OBJECT-TYPE
+SYNTAX INTEGER (0..255)
+ACCESS read-write
+STATUS deprecated
+DESCRIPTION
+"This object contains the transaction ID value that is to be contained in all SET operation writes while the dbCreateTransaction object is not in the Normal state. During transaction operations every SET command shall begin with a write to this object with the current value of this object. If a SET operation is performed without writing to this object, or with a value that does not match the current value, then an error response of 'genError' shall be returned. This mechanism is used to determine that the same management station that started the transaction is performing the SET operations that are being buffered or modifying the state of dbCreateTransaction.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.4"
+::= { globalDBManagement 4 }
+
+--2.3.5 Database Make ID Parameter
+-- This object has been deprecated. See Annex D.1.8 for more information.
+
+dbMakeID OBJECT-TYPE
+SYNTAX INTEGER (0..255)
+ACCESS read-only
+STATUS deprecated
+DESCRIPTION
+"This object is used to create unique transaction ID's for management stations to use when starting transactions using the dbCreateTransaction object. This object will be incremented by one every time it is read, so that different values will be returned for each read. Management stations wishing to start a transaction should first read the dbCreateTransaction object to verify that it is in the Normal state. If so then the management shall GET dbMakeID to obtain a transaction ID to use, then SET dbCreateTransaction to startCmd and dbTransactionID to the value just received. If the response to the SET operation is 'noError' then the management station has started a transaction. If the response to the SET operation is 'genError' then the management station should read the dbCreateTransaction and dbTransactionID objects to ensure that
+the error was not due to a communications retry. If the dbCreateTransaction is in the Transaction state, and the dbTransactionID is the same value returned by the read of this object, then the management station is the owner of the transaction. If the dbTransactionID does not match the value originally returned by this object, then the management station is not the owner of the transaction and must wait until the dbCreateTransaction object returns to the Normal state before attempting to start the transaction.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.5"
+::= { globalDBManagement 5 } 
+
+--2.3.6 Database Verify Status Parameter
+dbVerifyStatus OBJECT-TYPE
+SYNTAX INTEGER { 
+	notDone (1),
+	doneWithError (2),
+	doneWithNoError (3) }
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object indicates the current status of verify (consistency checking) processing. The value of this object is only meaningful when the dbCreateTransaction object is in the Verify or Done state.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.6"
+::= { globalDBManagement 6 } 
+
+--2.3.7 Database Verify Error Parameter
+dbVerifyError OBJECT-TYPE
+SYNTAX OCTET STRING (SIZE (0..255))
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION 
+"<Definition>This object contains a textual description of or a reference to an error that was found by the verify (consistency checking) processing. The value of this object is only meaningful when the dbCreateTransaction object is in the Done state and the dbVerifyStatus object is in the doneWithError state.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.2.7"
+::= { globalDBManagement 7 } 
+
+--2.4 GLOBAL TIME MANAGEMENT NODE
+globalTimeManagement OBJECT IDENTIFIER
+::= { global 3 }
+--<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3
+-- This node is an identifier used to organize all objects for support of
+-- time-related functions that are common to most device types.
+
+--2.4.1 Global Time Parameter
+globalTime OBJECT-TYPE
+SYNTAX Counter
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The number of seconds since the epoch of 00:00:00 (midnight) January 1, 1970 UTC (a.k.a. Zulu or GMT).
+<Unit>second <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.1"
+DEFVAL { 0 }
+::= { globalTimeManagement 1}
+
+--2.4.2 Global Daylight Saving Parameter
+-- This object has been modified with additional information on the operation
+-- of 'enableUSDST' and the inclusion of one new value:
+-- “enableDaylightSavingNode”.
+-- See dstBeginMonth object for additional information.
+
+globalDaylightSaving OBJECT-TYPE
+SYNTAX INTEGER { 
+	other (1),
+	disableDST (2),
+	enableUSDST (3),
+	enableEuropeDST (4),
+	enableAustraliaDST (5),
+	enableTasmaniaDST (6),
+	enableEgyptDST (7),
+	enableNamibiaDST (8),
+	enableIraqDST (9),
+	enableMangoliaDST (10),
+	enableIranDST (11),
+	enableFijiDST (12),
+	enableNewZealandDST (13),
+	enableTongaDST (14),
+	enableCubaDST (15),
+	enableBrazilDST (16),
+	enableChileDST (17),
+	enableFalklandsDST (18),
+	enableParaguayDST (19),
+	enableDaylightSavingNode (20) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+ "<Definition>This object specifies whether the daylight saving time (DST)
+ is enabled, disabled or some other form of DST is active.
+ other - DST adjustments by a mechanism not defined within this standard.
+ disableDST - DST clock adjustments shall NOT occur.
+ enableUSDST - DST shall begin the first Sunday in April and shall end the last Sunday of October. All changes of time occur at 2:00 AM. (This is the pre-2007 DST settings for the USA.)
+ enableEuropeDST - DST shall start the last Sunday of March at 2:00 AM and ends the last Sunday of October at 3:00 AM.
+ enableAustraliaDST - DST shall start the last Sunday in October at 2:00 AM and ends the last Sunday in March at 2:00 AM.
+ enableTasmaniaDST - DST shall start the first Sunday in October at 2 a.m. and ends the last Sunday in March at 3 a.m.
+ enableEgyptDST - DST shall start the last Friday in April and end the last Thursday in September.
+ enableNamibiaDST - DST shall start the first Sunday in September and end the first Sunday in April.
+ enableIraqDST - DST shall start on April 1 and end on October 1.
+ enableMongoliaDST - DST shall start the last Sunday in March and end the last Sunday in September.
+ enableIranDST - DST shall start the first day of Farvardin and end the first day of Mehr
+ enableFijiDST - DST shall start the first Sunday in November and end the last Sunday in February.
+ enableNewZealandDST - DST shall start the first Sunday in October and end the first Sunday on or after March 5th.
+ enableTongaDST - DST shall start the first Saturday in October and end the first Saturday on or after April 15th.
+ enableCubaDST - DST shall start April 1st and end last Sunday in October.
+ enableBrazilDST - DST shall start the first Sunday in October and end the last Sunday in February.
+ enableChileDST - DST shall start the first Sunday on or after October 9th and end the first Sunday on or after March 9th.
+ enableFalklandsDST - DST shall start the first Sunday on or after September 8th and end the first Sunday on or after April 8th.
+ enableParaguayDST - DST shall start the first Sunday in October and end the last Saturday in February.
+ enableDaylightSavingNode - DST operation is controlled by objects located under the daylightSavingNode.
+<Informative> This object is maintained for backward compatibility and it is
+envisioned that only the following values are supported with all other values
+being 'retired':
+ - other (1),
+ - disableDST (2),
+ - enableDaylightSavingNode (20)
+NOTE: Users should ensure that the values of globalDaylightSaving and the
+entries in the new DST Table are coordinated. The globalDaylightSaving object
+is intended to be used to enable and disable DST and should not be set to the
+value '20', enableDaylightSavingNode until after the dstTable entries have
+been fully configured. Further, the globalDaylightSaving object
+supersedes the settings in the DST Table.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.2"
+REFERENCE
+"NEMA TS 2 Clause 3.8.2;
+http://fatty.law.cornell.edu/uscode/15/260a.html;
+http://webexhibits.org/daylightsaving/g.html "
+DEFVAL { enableDaylightSavingNode } 
+::= { globalTimeManagement 2 } 
+
+--2.4.3 TimeBase Event Scheduler Node
+timebase OBJECT IDENTIFIER ::= { globalTimeManagement 3 }
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3
+-- This node is an identifier used to organize the main objects for event
+-- scheduling. Device type-specific objects (tables) pointed to are defined
+-- within the appropriate MIB.
+
+--2.4.3.1 Maximum Number of Time Base Schedule Entries Parameter
+maxTimeBaseScheduleEntries OBJECT-TYPE
+SYNTAX INTEGER (1..65535)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The value of this object specifies the maximum number of different entries supported by the device as shown by the number of rows in the timeBaseScheduleTable.
+<Unit>TimeBaseScheduleEntry
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.1"
+::= { timebase 1 }
+
+--2.4.3.2 Time Base Schedule Table
+timeBaseScheduleTable OBJECT-TYPE
+SYNTAX SEQUENCE OF TimeBaseScheduleEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>A table containing the time base schedule parameters for the device. The number of rows in this table shall be equal to the maxTimeBaseScheduleEntries object. The table references the appropriate day plan for the device. The plan is determined by comparing the current month (MONTH), day of week (DOW) and date of month (DOM) to the appropriate fields. The settings for MONTH, DOW and DOM are connected with a logical AND. To determine which timebased event to select, determine the event which has the most
+specific date specified. Select the more specific event based on their MONTH settings; if the same, select the most specific DOM; if that is still the same, select the most specific DOW; if still the same, the first occurrence within the time base event table shall be selected. 'More specific' means the least number of bits set within an object. All entries in Time Base Schedule Table are expressed in local time and date. A row in the table may be deactivated by setting the Month, Day, Date, or DayPlan parameters to zero (0).
+<TableType> static
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2"
+::= { timebase 2 }
+
+timeBaseScheduleEntry OBJECT-TYPE
+SYNTAX TimeBaseScheduleEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>Event Parameters for the time based schedule programming of the device.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1"
+INDEX { timeBaseScheduleNumber } 
+::= { timeBaseScheduleTable 1 }
+
+TimeBaseScheduleEntry ::= SEQUENCE {
+	timeBaseScheduleNumber 	INTEGER,
+	timeBaseScheduleMonth 	INTEGER,
+	timeBaseScheduleDay 	INTEGER,
+	timeBaseScheduleDate 	INTEGER,
+	timeBaseScheduleDayPlan INTEGER } 
+
+--2.4.3.2.1 Time Base Schedule Number Parameter
+timeBaseScheduleNumber OBJECT-TYPE
+SYNTAX INTEGER (1..65535 )
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The time base schedule number for objects in this row. The value of this object shall not exceed the value of the maxTimeBaseScheduleEntries object. The activation of a scheduled entry shall occur whenever allowed by all other objects within this table.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1.1"
+::= { timeBaseScheduleEntry 1 }
+
+--2.4.3.2.2 Time Base Schedule Month of Year Parameter
+timeBaseScheduleMonth OBJECT-TYPE
+SYNTAX INTEGER (0..65535)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The Month(s) Of the Year that the schedule entry shall be allowed. Each bit represents a specific month. If the bit is set to one (1), then the scheduled entry shall be allowed during the associated month. If the bit is set to zero (0), then the scheduled entry shall not be allowed during the associated month. The bits are defined as:
+Bit Month of Year
+0 Reserved
+1 January
+2 February
+3 March
+4 April
+5 May
+6 June
+7 July
+8 August
+9 September
+10 October
+11 November
+12 December
+13 - 15 Reserved
+Thus, a value of six (6) would indicate that the entry would only be allowed during the months of January and February. A value of zero (0) shall indicate that this row has been disabled.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1.2"
+::= { timeBaseScheduleEntry 2 } 
+
+--2.4.3.2.3 Time Base Schedule Day of Week Parameter
+timeBaseScheduleDay OBJECT-TYPE
+SYNTAX INTEGER (0..255)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The Day(s) Of Week that the schedule entry shall be allowed. Each bit represents a specific day of the week. If the bit is set to one (1), then the scheduled entry shall be allowed during the associated DOW. If the bit is set to zero (0), then the scheduled entry shall not be allowed during the associated DOW. The bits are defined as:
+Bit Day of Week
+0 Reserved ('Holiday', not defined by this standard)
+1 Sunday
+2 Monday
+3 Tuesday
+4 Wednesday
+5 Thursday
+6 Friday
+7 Saturday
+Thus, a value of six (6) would indicate that the entry would only be allowed on Sundays and Mondays. A value of zero (0) shall indicate that this row has been disabled.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1.3"
+::= { timeBaseScheduleEntry 3 } 
+
+--2.4.3.2.4 Time Base Schedule Date Parameter
+timeBaseScheduleDate OBJECT-TYPE
+SYNTAX INTEGER (0..4294967295)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The Day(s) Of a Month that the schedule entry shall be allowed. Each bit represents a specific date of the month. If the bit is set to one (1), then the scheduled entry shall be allowed during the associated date. If the bit is set to zero (0), then the scheduled entry shall not be allowed during the associated date. The bits are defined as:
+Bit Day Number
+0 Reserved
+1 Day 1
+2 Day 2
+||
+31 Day 31
+Thus, a value of six (6) would indicate that the entry would only be allowed on the first and second of the allowed months. A value of zero (0) shall indicate that this row has been disabled.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1.4"
+::= { timeBaseScheduleEntry 4 } 
+
+--2.4.3.2.5 Time Base Schedule Day Plan Parameter
+timeBaseScheduleDayPlan OBJECT-TYPE
+SYNTAX INTEGER (0..255)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION 
+"<Definition>This object specifies what Plan number shall be associated with this timeBaseScheduleDayPlan object. The value of this object cannot exceed the value of the maxDayPlans object. A value of zero (0) shall indicate that this row has been disabled.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.2.1.5"
+::= { timeBaseScheduleEntry 5 } 
+
+--2.4.4 Day Plan Parameters
+--2.4.4.1 Maximum Number of Day Plans—Parameter
+maxDayPlans OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The value of this object specifies the maximum, fixed number of different timebased Day Plans supported by the device. The value of this object represents the number of day plans (primary key into the table) available in the timeBaseDayPlanTable.
+<Unit>DayPlan
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.3"
+::= { timebase 3 }
+
+--2.4.4.2 Maximum Number of Day Plan Events—Parameter
+maxDayPlanEvents OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The value of this object specifies the fixed number of different timebased Day Plan Events within each Day Plan supported by the device. The value of this object represents the number of rows (secondary key into the table) available within each of the day plans that are available in the timeBaseDayPlanTable. All day plans shall have the same number of day plan events available for use.
+<Unit>DayPlanEvent
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.4"
+::= { timebase 4 }
+
+--2.4.4.3 Day Plan Table
+timeBaseDayPlanTable OBJECT-TYPE
+SYNTAX SEQUENCE OF TimeBaseDayPlanEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>A table containing day plan numbers, the times when to implement them and the associated actions. The number of rows in this table shall be equal to the product of the maxDayPlans object and the maxDayPlanEvents object. The dayPlanNumbers within this table shall begin with day plan number 1 and increment by one to the maxDayPlans. The dayPlanEventNumbers within this table shall begin with day plan event number 1 and increment by one to the maxDayPlanEvents.
+
+This table is always used in association with device-type specific objects specifying device-type specific actions such as activating a message on a VMS sign or initiating a pattern for a signal controller. A device MIB that defines an action table should define the relative priority of the action table as compared to the priority of system and other commands. The device-type specific action is only initiated when (1) the specific DayPlan has been activated, (2) the scheduler has sufficient priority to override the current operation of the device, and (3) at the indicated time.
+
+After a power recovery, or after a change to any object that affects controlerLocalTime, the operational mode called for by the scheduler shall be per the last event that would have been called for by the currently defined schedule; the logic searches for all events that may have occurred for at least the previous 24 hours.
+<TableType> static
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5"
+::= { timebase 5 } 
+
+timeBaseDayPlanEntry OBJECT-TYPE
+SYNTAX TimeBaseDayPlanEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition>Day plan parameters for the time based schedule programming of a device.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1"
+INDEX { dayPlanNumber, dayPlanEventNumber}
+::= { timeBaseDayPlanTable 1 }
+
+TimeBaseDayPlanEntry ::= SEQUENCE {
+	dayPlanNumber INTEGER,
+	dayPlanEventNumber INTEGER,
+	dayPlanHour INTEGER,
+	dayPlanMinute INTEGER,
+	dayPlanActionNumberOID OBJECT IDENTIFIER } 
+	
+--2.4.4.3.1 Day Plan Number
+dayPlanNumber OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object specifies the day plan number for objects in this row. The value shall not exceed the value of the maxDayPlans object. Day plan numbers are used in the TimeBase Event Table to specify day plan numbers to be implemented on specific days of the year or as part of the week plans.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1.1"
+::= { timeBaseDayPlanEntry 1 } 
+
+--2.4.4.3.2 Day Plan Event Number
+dayPlanEventNumber OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object identifies day plan event number(s) to be scheduled on a specific day plan number. Several different events can be scheduled to take place during a day, and each of these events is one entry or row within a specified day plan number. The total number of events for one day plan shall not exceed the value of the maxDayPlanEvents object. If multiple non-conflicting events are scheduled to occur at the same time, they shall be logically executed in order of their dayPlanEventNumber with the lowest number occurring first. An implementation shall omit lower number actions that are in conflict with higher number actions at the same time.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1.2"
+::= { timeBaseDayPlanEntry 2 } 
+
+--2.4.4.3.3 Day Plan Hour Parameter
+dayPlanHour OBJECT-TYPE
+SYNTAX INTEGER (0..23)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The Hour of day, as measured by the controllerLocalTime object, that the associated event shall become active.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1.3"
+DEFVAL {0}
+::= { timeBaseDayPlanEntry 3 }
+
+--2.4.4.3.4 Day Plan Minute Parameter
+dayPlanMinute OBJECT-TYPE
+SYNTAX INTEGER (0..59)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>The Minute of the hour (defined in the dayPlanHour), as measured by the controllerLocalTime object, that the associated event shall become active.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1.4"
+DEFVAL {0}
+::= { timeBaseDayPlanEntry 4 }
+
+--2.4.4.3.5 Day Plan Action Number OID Parameter
+dayPlanActionNumberOID OBJECT-TYPE
+SYNTAX OBJECT IDENTIFIER
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object provides a reference to the device-type specific action that shall be executed. The object shall reference the action by its associated object identifier, including its instance (i.e., the full OID of the scalar or columnar object). Only objects whose description field explicitly states that they may be called by the action table may be referenced. If a management system attempts to set this value to any other object identifier, the device shall respond with a genErr.
+Any object allowing the action table to reference it shall define precisely what action takes place when it is activated, and whether the action is transitionary or continuous until deactivated. The object shall also define what, if any, restrictions may be placed on other operations the device may be able to perform. 
+If the action to be performed is defined by a row of a table, one of the index columns should be identified as the explicit object that is referenced.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.5.1.5"
+DEFVAL {null}
+::= { timeBaseDayPlanEntry 5 } 
+
+--2.4.4.4 Day Plan Status Parameter
+dayPlanStatus OBJECT-TYPE
+SYNTAX INTEGER (0..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object indicates the current value of the active dayPlanNumber-object. A value of zero (0) indicates that there is no dayPlanNumber that is currently active.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.6"
+::= { timebase 6 }
+
+--2.4.4.5 Schedule Status Parameter
+timeBaseScheduleTableStatus OBJECT-TYPE
+SYNTAX INTEGER (0..65535)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>This object indicates the number of the TimeBaseSchedule which is currently selected by the scheduling logic; the device may or may not be using the selected schedule. The value of zero (0) indicates that there is no timeBaseScheduleNumber that is currently selected.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.3.7"
+::={timebase 7}
+
+--2.4.5 Global Local Time Differential Parameter
+-- This object has been deprecated. See Annexes D.2.1 and D.2.2 for more information.
+globalLocalTimeDifferential OBJECT-TYPE
+SYNTAX INTEGER (-43200..43200)
+ACCESS read-write
+STATUS deprecated
+DESCRIPTION
+"<Definition>Indicates the number of seconds offset between local time and GMT. Positive values indicate local times in the Eastern Hemisphere up to the International Date Line and negative values indicate local times in the Western Hemisphere back to the International Date Line. If one of the daylight saving times is activated, this value will change automatically at the referenced time. For example, Central Standard Time (CST) is -21600 and Central Daylight Time (CDT) is -18000.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.4"
+::= { globalTimeManagement 4 }
+
+--2.4.6 Standard Time Zone Parameter
+controllerStandardTimeZone OBJECT-TYPE
+SYNTAX INTEGER (-43200..43200)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>Indicates the number of seconds offset between local Standard Time and GMT. Positive values indicate local times in the Eastern Hemisphere up to the International Date Line and negative values indicate local times in the Western Hemisphere back to the International Date Line. This value does not change in response to a DST event.
+<Unit>second
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.5"
+DEFVAL {0}
+::= { globalTimeManagement 5 } 
+
+--2.4.7 Local Time Parameter
+controllerLocalTime OBJECT-TYPE
+SYNTAX Counter
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition> The current local time expressed in seconds since 00:00:00 (midnight) January 1, 1970 of the same time offset. This value changes by 3600 seconds in response to a DST event.
+<Unit>second
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.6"
+::= { globalTimeManagement 6 }
+
+--2.4.8 Daylight Saving Time (DST) Node
+daylightSavingNode OBJECT IDENTIFIER
+::= { globalTimeManagement 7 }
+--<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7
+-- This node is an identifier used to organize all objects for support of
+-- defining DST. This function is common to most device
+-- types. The objects under this node only affect device operation when
+-- globalDaylightSaving = enableDaylightSavingNode (20). See Annex A.2.2 for
+-- examples.
+
+--2.4.8.1 Maximum Daylight Saving Time (DST) Table Entries Parameter
+maxDaylightSavingEntries OBJECT-TYPE
+SYNTAX INTEGER (1..100)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition> The maximum number of entries (begin and end date pairs) that the DST Table can contain within the device.
+
+As of July 2007, devices used within the United States only require 1 entry when using the generic begin and end date method.
+
+<informative>It is expected that, for devices using the absolute date method, the device would need to support at least 1 entry per year programmed.
+
+For multi-step DST transitions, a minimum of 2 rows are required (see Annex
+A.2.1 Figure 6).
+More than one row may be required if absolute date method (see Section
+2.4.8.2.2) is used for more than one year, or if more than one time change is
+implemented in a given year.
+
+ <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.1"
+::= { daylightSavingNode 1 } 
+
+--2.4.8.2 Daylight Saving Time (DST) Table Parameter
+dstTable OBJECT-TYPE
+SYNTAX SEQUENCE OF DstEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition> A table containing DST Begin and End dates. The table is useful for agencies with multiple daylight saving time incremental steps per year. The number of rows in this table is equal to the maxDaylightSavingEntries object.
+ <TableType> static
+ <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2"
+::= { daylightSavingNode 2 }
+
+dstEntry OBJECT-TYPE
+SYNTAX DstEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition> The DST Begin and End dates parameters.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1"
+ INDEX { dstEntryNumber }
+::= { dstTable 1 }
+
+DstEntry ::= SEQUENCE {
+	dstEntryNumber 				INTEGER,
+	dstBeginMonth 				INTEGER,
+	dstBeginOccurrences 		INTEGER,
+	dstBeginDayOfWeek			INTEGER,
+	dstBeginDayOfMonth 			INTEGER,
+	dstBeginSecondsToTransition INTEGER,
+	dstEndMonth 				INTEGER,
+	dstEndOccurrences 			INTEGER,
+	dstEndDayOfWeek 			INTEGER,
+	dstEndDayOfMonth 			INTEGER,
+	dstEndSecondsToTransition 	INTEGER,
+	dstSecondsToAdjust			INTEGER }
+ 
+--2.4.8.2.1 Daylight Saving Time (DST) Entry Number Parameter
+dstEntryNumber OBJECT-TYPE
+ SYNTAX INTEGER (1..100)
+ ACCESS read-only
+ STATUS mandatory
+ DESCRIPTION
+"<Definition> The entry number for the DST objects in this row. This value shall not exceed the maxDaylightSavingEntries object value.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.1
+<Unit> dstEntry"
+::= { dstEntry 1 } 
+
+--2.4.8.2.2 Daylight Saving Time (DST) Beginning Month Parameter
+dstBeginMonth OBJECT-TYPE
+SYNTAX INTEGER { 
+	january (1),
+	february (2),
+	march (3),
+	april (4), 
+	may (5),
+	june (6),
+	july (7),
+	august (8),
+	september (9),
+	october (10),
+	november (11),
+	december (12),
+	absolute (13),
+	disabled (14)}
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> The month during which daylight saving time (DST) begins. An entry of 'absolute' means that dstBeginSecondsToTransition defines an absolute time to begin DST relative to midnight January 1, 1970. In this case, any value indicated in the dstEndMonth, dstBeginOccurences, dstBeginDayOfWeek, dstBeginDayOfMonth, dstEndOccurances, dstEndDayOfWeek, and dstEndDayOfMonth objects are irrelevant, and the dstEndSecondsToTransition object defines an absolute time to end DST relative to midnight January 1,
+1970.
+If the daylightSavingNode is enabled (i.e. globalDaylightSaving =  enableDaylightSavingNode), and the value of this object is disabled(14), then the values in the remaining objects in this row of the dstTable are irrelevant and therefore ignored by the device.
+<Unit>
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.2"
+ DEFVAL { march }
+::= { dstEntry 2 } 
+
+--2.4.8.2.3 Daylight Saving Time (DST) Beginning Occurrence Parameter
+dstBeginOccurrences OBJECT-TYPE
+SYNTAX INTEGER { 
+	first (1),
+	second (2),
+	third (3),
+	fourth (4),
+	last (5),
+	secondLast (6),
+	thirdLast (7),
+	fourthLast (8),
+	specificDayOfMonth (9) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>For values of 1-4, the number of occurrences of the specific day of week that shall occur on or after dstBeginDayOfMonth until the daylight saving transition shall take place.
+
+For values of 5-8, the number of occurrences of the specific day of week that shall occur on or before dstBeginDayOfMonth until the daylight saving transition shall take place.
+
+For value = 9, dstBeginDayOfMonth defines the specific day of the month that the DST transition occurs regardless of value in dstBeginDayOfWeek object. 
+
+NOTE: To specify the last occurrence of a specified day of the month, simply specify the last occurrence of the specified day of the week on or before the last day of the month (e.g., 31).
+<Unit>
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.3"
+ DEFVAL { second }
+::= { dstEntry 3 } 
+
+--2.4.8.2.4 Daylight Saving Time (DST) Beginning Day of Week Parameter
+dstBeginDayOfWeek OBJECT-TYPE
+SYNTAX INTEGER { 
+	sunday (1),
+	monday (2),
+	tuesday (3),
+	wednesday (4),
+	thursday (5),
+	friday (6),
+	saturday (7) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> The Day of the week on which daylight saving time (DST) begins. This object shall only apply if dstBeginOccurrences = 1-8.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.4"
+ DEFVAL { sunday }
+::= { dstEntry 4 }
+
+--2.4.8.2.5 Daylight Saving Time (DST) Beginning Day of Month Parameter
+dstBeginDayOfMonth OBJECT-TYPE
+SYNTAX INTEGER (1..31)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> If dstBeginOccurrences = 1-8: The day of the month from which to begin counting occurrences of a specific day of the week (forward for values 1-4, and backwards for values 5-8).
+
+If dstBeginOccurrences = 9: The specific day of the month on which the transition occurs.
+<Unit> day of month
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.5"
+ DEFVAL { 1 }
+::= { dstEntry 5 }
+
+--2.4.8.2.6 Daylight Saving Time (DST) Beginning Seconds to Transition Parameter
+dstBeginSecondsToTransition OBJECT-TYPE
+SYNTAX INTEGER (0..4294967295)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> If dstBeginMonth = absolute, then this object defines when DST begins based on the seconds from midnight January 1, 1970 (UTC/GMT).
+
+If dstBeginMonth = 1-12 (January to December), then this object defines the time when DST begins in seconds past midnight relative to local time (see the controllerLocalTime object). 
+
+NOTE: a set of parameters that causes a day transition that crosses the midnight boundary may result in unexpected behavior.
+<Unit>seconds
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.6"
+ DEFVAL { 7200 }
+::= { dstEntry 6 } 
+
+--2.4.8.2.7 Daylight Saving Time (DST) Ending Month Parameter
+dstEndMonth OBJECT-TYPE
+SYNTAX INTEGER { 
+	january (1),
+	february (2),
+	march (3),
+	april (4),
+	may (5),
+	june (6),
+	july (7),
+	august (8),
+	september (9),
+	october (10),
+	november (11),
+	december (12) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> The month during which daylight saving time (DST) ends. If the value of dstBeginMonth object = 'absolute' or 'disabled',  then the agent shall ignore the value of this object. Otherwise, the value of this object is valid. 
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.7"
+ DEFVAL { november }
+::= { dstEntry 7 }
+
+--2.4.8.2.8 Daylight Saving Time (DST) Ending Occurrences Parameter
+dstEndOccurrences OBJECT-TYPE
+SYNTAX INTEGER { 
+	first (1),
+	second (2),
+	third (3),
+	fourth (4),
+	last (5),
+	secondLast (6),
+	thirdLast (7),
+	fourthLast (8),
+	specificDayOfMonth (9) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>For values of 1-4, the number of occurrences of the specific day of week that shall occur on or after dstEndDayOfMonth until the daylight saving transition shall take place.
+
+For values of 5-8, the number of occurrences of the specific day of week that shall occur on or before dstEndDayOfMonth until the daylight saving transition shall take place.
+
+For value = 9, dstEndDayOfMonth defines the specific day of the month that the DST transition occurs regardless of value in dstEndDayOfWeek object.
+
+NOTE: To specify the last occurrence of a specified day of the month, simply specify the last occurrence of the specified day of the week on or before the last day of the month (e.g. 31).
+<Unit>
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.8"
+ DEFVAL { first }
+::= { dstEntry 8 } 
+
+--2.4.8.2.9 Daylight Saving Time (DST) Ending Day of Week Parameter
+dstEndDayOfWeek OBJECT-TYPE
+SYNTAX INTEGER { 
+	sunday (1),
+	monday (2),
+	tuesday (3),
+	wednesday (4),
+	thursday (5),
+	friday (6),
+	saturday (7) }
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> The Day of the week on which daylight saving time (DST)  ends. This object shall only apply if dstEndOccurrences = 1-8.
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.9"
+ DEFVAL { sunday }
+::= { dstEntry 9 } 
+
+--2.4.8.2.10 Daylight Saving Time (DST) Ending Day of Month Parameter
+dstEndDayOfMonth OBJECT-TYPE
+SYNTAX INTEGER (1..31)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> If dstEndOccurrences = 1-8: The day of the month from which to begin counting occurrences of a specific day of the week (forward for values 1-4, and backwards for values 5-8).
+
+If dstEndOccurrences = 9: The specific day of the month on which the transition occurs.
+<Unit> day of month
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.10"
+ DEFVAL { 1 }
+::= { dstEntry 10 }
+
+--2.4.8.2.11 Daylight Saving Time (DST) Ending Seconds to Transition Parameter
+dstEndSecondsToTransition OBJECT-TYPE
+SYNTAX INTEGER (0..4294967295)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> If dstBeginMonth = absolute, then this object defines  when DST ends based on the seconds from midnight January 1, 1970  (UTC/GMT).
+
+If dstBeginMonth = 1-12 (January to December), then this object defines the time when DST ends in seconds past midnight relative to local time (see the controllerLocalTime object). 
+
+NOTE: a set of parameters that causes a day transition that crosses the midnight boundary may result in unexpected behavior.
+<Unit> seconds
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.11"
+DEFVAL { 7200 }
+::= { dstEntry 11 }
+--NOTE: This object allows what may be considered an exception, in that it
+--is possible and allowed to configure an adjustment backward past midnight. 
+
+--2.4.8.2.12 Daylight Saving Time (DST) Seconds to Adjust Parameter
+dstSecondsToAdjust OBJECT-TYPE
+SYNTAX INTEGER (0..21600)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition> This is the absolute offset in seconds that will be added to the local time reference point to determine the local time when DST is in effect as specified by this row entry. Values of this object in adjacent rows, even if they overlap, are not cumulative. That is, the row with the latest dstBegin time, which has not terminated due to passing the dstEnd time, shall determine the setting of the local TOD clock; the dstSecondsToAdjust for the latest dstBegin governs the Local TOD clock settings. 
+The maximum offset to adjust is 21600 seconds, an equivalent of 6 hours.
+<Unit> seconds
+<Object Identifier> 1.3.6.1.4.1.1206.4.2.6.3.7.2.1.12"
+DEFVAL { 3600 }
+::= { dstEntry 12 } 
+
+--2.5 REPORT PARAMETER NODE
+-- NOTE—The objects originally under this node have been moved to NTCIP 1103 v02.
+
+--2.6 STMP OBJECT NODE
+-- NOTE—The objects originally under this node have been moved to NTCIP 1103 v02.
+
+--2.7 PMPP OBJECT NODE
+-- NOTE—PMPP objects may move to a future version of NTCIP 2101 v01 at some future point.
+
+profilesPMPP OBJECT IDENTIFIER
+::= { profiles 2 }
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3
+-- This node is an identifier used to group all objects for support of the
+-- PMPP function that are common to all device types. The objects under this
+-- node are placed under the Protocols\Profiles\PMPP subtree within the NEMA
+-- node, but they have been listed here due to the lack of a separate document  that lists these objects. 
+
+--2.7.1 Maximum HDLC Group Address Parameter
+maxGroupAddresses OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The maximum number of group addresses this device supports. This object indicates the maximum number of rows in the hdlcGroupAddressTable.
+<Unit>address
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.1"
+::= {profilesPMPP 1 }
+
+--2.7.2 HDLC Group Address Table
+hdlcGroupAddressTable OBJECT-TYPE
+SYNTAX SEQUENCE OF HdlcGroupAddressEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition> A table containing group addresses at which a device may receive frames.
+<TableType> static
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.2"
+::= { profilesPMPP 2 }
+
+hdlcGroupAddressEntry OBJECT-TYPE
+SYNTAX HdlcGroupAddressEntry
+ACCESS not-accessible
+STATUS mandatory
+DESCRIPTION
+"<Definition> An entry in the group address table that contains a device's data link layer group address at which it will accept frames.
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.2.1"
+INDEX { hdlcGroupAddressIndex }
+::= { hdlcGroupAddressTable 1 }
+
+HdlcGroupAddressEntry ::= SEQUENCE {
+	hdlcGroupAddressIndex 	INTEGER,
+	hdlcGroupAddress 		INTEGER, -- deprecated
+	hdlcGroupAddressNumber 	INTEGER }
+
+--2.7.2.1 HDLC Group Address Index Parameter
+hdlcGroupAddressIndex OBJECT-TYPE
+SYNTAX INTEGER (1..255)
+ACCESS read-only
+STATUS mandatory
+DESCRIPTION
+"<Definition>The index number for the group address in this row.
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.2.1.1"
+::= { hdlcGroupAddressEntry 1} 
+
+--2.7.2.2 HDLC Group Address Parameter
+-- This object has been deprecated. See Annex D.2.11 for more information.
+hdlcGroupAddress OBJECT-TYPE
+SYNTAX INTEGER
+ACCESS read-write 
+STATUS deprecated
+DESCRIPTION
+"A group address for the data link layer. For PMPP, the syntax is an 8 or 16 bit entry with the second low order bit set to a one indicating that this is a group address.
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.2.1.2"
+REFERENCE
+"NEMA TS 3.3 Clause 3.3.3.1"
+::= { hdlcGroupAddressEntry 2}
+
+--2.7.2.3 HDLC Group Address Number Parameter
+hdlcGroupAddressNumber OBJECT-TYPE
+SYNTAX INTEGER (0..62)
+ACCESS read-write
+STATUS mandatory
+DESCRIPTION
+"<Definition>A group address number prior to any encoding for the data link layer. The address of 63 is reserved for the all stations address. The value of zero (0) shall disable this row of the table.
+NOTE that in PMPP all group addresses are encoded in one byte.
+<Object Identifier> 1.3.6.1.4.1.1206.4.1.2.3.2.1.3"
+REFERENCE
+"NTCIP 2101"
+DEFVAL { 0 }
+::= { hdlcGroupAddressEntry 3} 
+
+--2.8 SECURITY NODE
+-- NOTE: The objects under this heading have been moved to NTCIP 1103 v02.
+END -- NTCIP1201-2008 DEFINITIONS 

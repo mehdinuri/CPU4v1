@@ -2,9 +2,9 @@ name: CP — Host Unit Tests
 
 on:
   push:
-    paths: ['CP/**']
+    paths: ['CPM/CP**']
   pull_request:
-    paths: ['CP/**']
+    paths: ['CPM/CP**']
   workflow_dispatch:
   workflow_call:
 
@@ -51,5 +51,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cp-coverage-${{ github.sha }}
-          path: CP/build/coverage/
+          path: CPM/CPbuild/coverage/
           retention-days: 7

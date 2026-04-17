@@ -1,0 +1,31 @@
+# Unit tests — pure Domain logic with mock adapters.
+# Tests are enabled here as each Domain module is ported and its types defined.
+
+# TODO: Uncomment as each domain module is implemented on this branch:
+# Add_Unity_Test(Test_Phase            Test_Phase.c)
+# Add_Unity_Test(Test_SignalGroup      Test_SignalGroup.c)
+# Add_Unity_Test(Test_Detector         Test_Detector.c)
+# Add_Unity_Test(Test_Conflict         Test_Conflict.c)
+# Add_Unity_Test(Test_TransitionRule   Test_TransitionRule.c)
+# Add_Unity_Test(Test_Sequence         Test_Sequence.c)
+# Add_Unity_Test(Test_NTCIP1201        Test_NTCIP1201.c)
+# Add_Unity_Test(Test_NTCIP1202        Test_NTCIP1202.c)
+
+Add_Unity_Test(Test_ConfigurationService  Test_ConfigurationService.c)
+Add_Unity_Test(Test_IntersectionActivationService Test_IntersectionActivationService.c)
+Add_Unity_Test(Test_DetectorReportService Test_DetectorReportService.c)
+Add_Unity_Test(Test_DetectorReportObjects Test_DetectorReportObjects.c)
+Add_Unity_Test(Test_IntersectionEngine Test_IntersectionEngine.c)
+Add_Unity_Test(Test_IntersectionController Test_IntersectionController.c)
+Add_Unity_Test(Test_IntersectionOutputDispatcher Test_IntersectionOutputDispatcher.c)
+Add_Unity_Test(Test_PhaseObjects Test_PhaseObjects.c)
+Add_Unity_Test(Test_ClockObjects Test_ClockObjects.c)
+Add_Unity_Test(Test_NtcipDbTransactionService Test_NtcipDbTransactionService.c)
+Add_Unity_Test(Test_NtcipObjectDirectory Test_NtcipObjectDirectory.c)
+Add_Unity_Test(Test_PersistencePort  Test_PersistencePort.c)
+Add_Unity_Test(Test_LogRepository    Test_LogRepository.c)
+Add_Unity_Test(Test_RTCPort          Test_RTCPort.c)
+Add_Unity_Test(Test_UnitAlarmPort    Test_UnitAlarmPort.c)
+Add_Unity_Test(Test_DisplayPort      Test_DisplayPort.c)
+Add_Unity_Test(Test_UserInputPort    Test_UserInputPort.c)
+Add_Unity_Test(Test_ModemPort        Test_ModemPort.c)
