@@ -256,7 +256,9 @@ static uint8_t RuntimeHasFlashingOutputs(const IntersectionRuntime_t *runtime)
     if ((runtime->outputIntentImage.channels[channelIndex]
          == INTERSECTION_OUTPUT_ASPECT_FLASH_RED)
         || (runtime->outputIntentImage.channels[channelIndex]
-            == INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW))
+            == INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW)
+        || (runtime->outputIntentImage.channels[channelIndex]
+            == INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN))
     {
       return 1U;
     }

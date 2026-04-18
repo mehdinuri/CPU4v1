@@ -78,7 +78,8 @@ void MeasurementService_PeriodApply(MeasurementServiceCtx_t *ctx,
     return;
   }
 
-  ctx->SRuntime.lFlashPeriod = (uint32_t) bPeriod * 10U;
+  /* bPeriod is in 200ms units. Default 5 = 1000ms (1Hz). */
+  ctx->SRuntime.lFlashPeriod = (uint32_t) bPeriod * 200U;
 }
 
 void MeasurementService_OffsetApply(MeasurementServiceCtx_t *ctx,
@@ -222,6 +223,9 @@ void MeasurementService_SendMeasurements(MeasurementServiceCtx_t *ctx)
   SFrame.b5V2Low         = GET_LSB(ctx->SRuntime.sRegVOut);
   SFrame.b5V2High        = GET_MSB(ctx->SRuntime.sRegVOut);
   SFrame.bIsolatedVoltage = SignalInput_GetState(ctx->pInputPort, SIGNAL_IN_COMMOK);
+  SFrame.bFlashActive     = ctx->SRuntime.bFlashState;
+  SFrame.bGridFault       = (Measurement_ACIsOK(ctx->SRuntime.sNetVoltage) == 0U) ? 1U : 0U;
+  SFrame.bCanOverflow     = (CANTx_GetOverflowCount(ctx->pCANPort) > 0U) ? 1U : 0U;
   SFrame.bFrequency      = ctx->SRuntime.bNetFrequency;
 
   CANTx_Send(ctx->pCANPort,
@@ -241,15 +245,20 @@ void MeasurementService_SendMeasurements(MeasurementServiceCtx_t *ctx)
   }
 }
 
-void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx)
+void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx, uint32_t lNowMs)
 {
-  ctx->SRuntime.sFlashStateCntr++;
-  if (ctx->SRuntime.sFlashStateCntr >= ctx->SRuntime.lFlashPeriod)
+  uint32_t lElapsed = lNowMs - ctx->SRuntime.lLastFlashTick;
+
+  /* Total period in ms */
+  uint32_t lPeriodMs = ctx->SRuntime.lFlashPeriod;
+
+  if (lElapsed >= lPeriodMs)
   {
-    ctx->SRuntime.sFlashStateCntr = 0U;
+    ctx->SRuntime.lLastFlashTick = lNowMs;
+    lElapsed = 0U;
   }
 
-  if (ctx->SRuntime.sFlashStateCntr == 0U)
+  if (lElapsed == 0U)
   {
     tSFlashSyncFrame SSyncFrameOn = {0};   /* bFlashSync = 0: "start of cycle" */
     CANTx_Send(ctx->pCANPort,
@@ -258,9 +267,10 @@ void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx)
                (uint8_t) sizeof(SSyncFrameOn));
     IndicatorLED_SetState(ctx->pLEDPort, LED_ID_COM, 1U);
   }
-  else if (ctx->SRuntime.sFlashStateCntr ==
-           (uint16_t)(ctx->SRuntime.lFlashPeriod / 2U))
+  else if ((lElapsed >= (lPeriodMs / 2U)) && (ctx->SRuntime.sFlashStateCntr == 0U))
   {
+    /* Use sFlashStateCntr as a 'mid-cycle-sent' latch in this new timing mode */
+    ctx->SRuntime.sFlashStateCntr = 1U;
     tSFlashSyncFrame SSyncFrameOff = {0};
     SSyncFrameOff.bFlashSync = 1U;         /* bFlashSync = 1: "mid-cycle" */
     CANTx_Send(ctx->pCANPort,
@@ -269,9 +279,13 @@ void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx)
                (uint8_t) sizeof(SSyncFrameOff));
     IndicatorLED_SetState(ctx->pLEDPort, LED_ID_COM, 0U);
   }
+  else if (lElapsed < (lPeriodMs / 2U))
+  {
+    ctx->SRuntime.sFlashStateCntr = 0U;
+  }
   else
   {
-    /* Mid-cycle — no action */
+    /* Mid-cycle already handled — no action */
   }
 }
 
@@ -316,9 +330,9 @@ void MeasurementService_PeriodSet(MeasurementServiceCtx_t *ctx,
     return;
   }
 
-  uint32_t lNewTicks = (uint32_t) bPeriod * 10U;
+  uint32_t lNewMs = (uint32_t) bPeriod * 200U;
 
-  if (ctx->SRuntime.lFlashPeriod != lNewTicks)
+  if (ctx->SRuntime.lFlashPeriod != lNewMs)
   {
     /* Write the raw (unmultiplied) value to EEPROM using a local buffer so
      * we never store the raw value in lFlashPeriod.  This keeps

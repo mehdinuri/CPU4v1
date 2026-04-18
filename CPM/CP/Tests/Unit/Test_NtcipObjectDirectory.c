@@ -568,6 +568,27 @@ typedef struct
 
 static FakeModuleBusCommandCtx_t s_moduleBusCommandCtx;
 
+static void ReplicateSequencePlansFromBase(IntersectionConfig_t *config)
+{
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (sequenceIndex = 1U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
+    }
+  }
+}
+
 static IntersectionConfig_t MakeTwoPhasePerRingConfig(void)
 {
   IntersectionConfig_t config;
@@ -594,6 +615,7 @@ static IntersectionConfig_t MakeTwoPhasePerRingConfig(void)
   config.rings[1].barrierPhaseCount = 1U;
   config.rings[1].phaseOrder[0] = 2U;
   config.rings[1].phaseOrder[1] = 3U;
+  ReplicateSequencePlansFromBase(&config);
 
   config.channels[0].controlSource = 1U;
   config.channels[0].controlType =
@@ -1281,7 +1303,7 @@ void test_ring_control_group_force_off_mask_drives_engine_runtime(void)
   TEST_ASSERT_EQUAL_UINT32(0x01U, value.data.unsigned32);
 }
 
-void test_sequence_table_reports_single_sequence_plan_and_commits_reordered_ring(
+void test_sequence_table_reports_supported_sequence_count_and_commits_reordered_ring(
   void)
 {
   NtcipRequestContext_t request = { 0x7272U, 0U, 0U };
@@ -1296,7 +1318,8 @@ void test_sequence_table_reports_single_sequence_plan_and_commits_reordered_ring
                                                 13U,
                                                 NULL,
                                                 &value));
-  TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
+  TEST_ASSERT_EQUAL_UINT32(INTERSECTION_SEQUENCE_COUNT_MAX,
+                           value.data.unsigned32);
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
@@ -3927,7 +3950,7 @@ int main(void)
   RUN_TEST(test_phase_control_group_objects_drive_runtime_controls_and_force_off_clear);
   RUN_TEST(test_ring_control_group_objects_route_runtime_masks_and_validate_range);
   RUN_TEST(test_ring_control_group_force_off_mask_drives_engine_runtime);
-  RUN_TEST(test_sequence_table_reports_single_sequence_plan_and_commits_reordered_ring);
+  RUN_TEST(test_sequence_table_reports_supported_sequence_count_and_commits_reordered_ring);
   RUN_TEST(
     test_detector_objects_route_transactional_call_phase_and_runtime_status);
   RUN_TEST(

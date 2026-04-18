@@ -252,6 +252,49 @@ void test_coordination_configuration_persists_across_reload(void)
                           coordination.splits[1][0].mode);
 } /* test_coordination_configuration_persists_across_reload */
 
+void test_global_time_management_configuration_persists_across_reload(void)
+{
+  ConfigurationService_t reloaded;
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceGetCandidateGlobalTimeManagementConfig(
+    &s_service,
+    &globalTimeManagement));
+  globalTimeManagement.globalDaylightSaving = 20U;
+  globalTimeManagement.controllerStandardTimeZoneSeconds = 10800;
+  globalTimeManagement.schedules[0].monthMask = (uint16_t) (1U << 4U);
+  globalTimeManagement.schedules[0].dayMask = (uint8_t) (1U << 7U);
+  globalTimeManagement.schedules[0].dateMask = (uint32_t) (1UL << 18U);
+  globalTimeManagement.schedules[0].dayPlanNumber = 1U;
+  globalTimeManagement.dayPlans[0][0].hour = 6U;
+  globalTimeManagement.dayPlans[0][0].minute = 45U;
+  globalTimeManagement.dayPlans[0][0].actionNumber = 2U;
+  globalTimeManagement.daylightSavingEntries[0].secondsToAdjust = 3600U;
+  TEST_ASSERT_TRUE(ConfigurationServiceSetGlobalTimeManagementConfig(
+    &s_service,
+    &globalTimeManagement));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceCommit(&s_service));
+
+  ConfigurationServiceInit(&reloaded, &s_repoPort);
+
+  TEST_ASSERT_TRUE(ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+    &reloaded,
+    &globalTimeManagement));
+  TEST_ASSERT_EQUAL_UINT8(20U, globalTimeManagement.globalDaylightSaving);
+  TEST_ASSERT_EQUAL_INT32(10800,
+                          globalTimeManagement.controllerStandardTimeZoneSeconds);
+  TEST_ASSERT_EQUAL_UINT16((uint16_t) (1U << 4U),
+                           globalTimeManagement.schedules[0].monthMask);
+  TEST_ASSERT_EQUAL_UINT8(1U, globalTimeManagement.schedules[0].dayPlanNumber);
+  TEST_ASSERT_EQUAL_UINT8(6U, globalTimeManagement.dayPlans[0][0].hour);
+  TEST_ASSERT_EQUAL_UINT8(45U, globalTimeManagement.dayPlans[0][0].minute);
+  TEST_ASSERT_EQUAL_UINT8(2U, globalTimeManagement.dayPlans[0][0].actionNumber);
+  TEST_ASSERT_EQUAL_UINT32(3600U,
+                           globalTimeManagement.daylightSavingEntries[0].secondsToAdjust);
+}
+
 void test_preempt_configuration_persists_across_reload(void)
 {
   ConfigurationService_t reloaded;
@@ -366,6 +409,7 @@ void test_ring_sequence_data_persists_across_reload(void)
 
   TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
   TEST_ASSERT_TRUE(ConfigurationServiceSetRingSequenceData(&s_service,
+                                                           2U,
                                                            0U,
                                                            reorderedSequence,
                                                            4U));
@@ -374,10 +418,12 @@ void test_ring_sequence_data_persists_across_reload(void)
 
   ConfigurationServiceInit(&reloaded, &s_repoPort);
 
-  TEST_ASSERT_EQUAL_UINT8(1U, ConfigurationServiceGetSequenceCount(&reloaded));
-  TEST_ASSERT_TRUE(ConfigurationServiceGetActiveRingPlan(&reloaded,
-                                                         0U,
-                                                         &ringPlan));
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_SEQUENCE_COUNT_MAX,
+                          ConfigurationServiceGetSequenceCount(&reloaded));
+  TEST_ASSERT_TRUE(ConfigurationServiceGetActiveSequenceRingPlan(&reloaded,
+                                                                 2U,
+                                                                 0U,
+                                                                 &ringPlan));
   TEST_ASSERT_EQUAL_UINT8(4U, ringPlan.phaseCount);
   TEST_ASSERT_EQUAL_UINT8(1U, ringPlan.phaseOrder[0]);
   TEST_ASSERT_EQUAL_UINT8(0U, ringPlan.phaseOrder[1]);
@@ -385,21 +431,30 @@ void test_ring_sequence_data_persists_across_reload(void)
   TEST_ASSERT_EQUAL_UINT8(3U, ringPlan.phaseOrder[3]);
 }
 
-void test_single_sequence_cap_rejects_pattern_and_preempt_sequence_numbers(void)
+void test_multi_sequence_support_accepts_pattern_and_preempt_sequence_numbers(
+  void)
 {
   TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
-  TEST_ASSERT_FALSE(ConfigurationServiceSetPatternSequenceNumber(&s_service,
-                                                                 0U,
-                                                                 2U));
-  TEST_ASSERT_FALSE(ConfigurationServiceSetPreemptSequenceNumber(&s_service,
-                                                                 0U,
-                                                                 2U));
   TEST_ASSERT_TRUE(ConfigurationServiceSetPatternSequenceNumber(&s_service,
                                                                 0U,
-                                                                1U));
+                                                                2U));
   TEST_ASSERT_TRUE(ConfigurationServiceSetPreemptSequenceNumber(&s_service,
                                                                 0U,
-                                                                1U));
+                                                                2U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetPatternSequenceNumber(&s_service,
+                                                                0U,
+                                                                INTERSECTION_SEQUENCE_COUNT_MAX));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetPreemptSequenceNumber(&s_service,
+                                                                0U,
+                                                                INTERSECTION_SEQUENCE_COUNT_MAX));
+  TEST_ASSERT_FALSE(ConfigurationServiceSetPatternSequenceNumber(
+    &s_service,
+    0U,
+    (uint8_t) (INTERSECTION_SEQUENCE_COUNT_MAX + 1U)));
+  TEST_ASSERT_FALSE(ConfigurationServiceSetPreemptSequenceNumber(
+    &s_service,
+    0U,
+    (uint8_t) (INTERSECTION_SEQUENCE_COUNT_MAX + 1U)));
 }
 
 void test_out_of_range_input_mapping_fails_verify(void)
@@ -417,7 +472,7 @@ void test_out_of_range_input_mapping_fails_verify(void)
   TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
 }
 
-void test_unsupported_channel_control_type_fails_runtime_support_verify(void)
+void test_invalid_channel_control_type_fails_verify(void)
 {
   IntersectionConfigErrorInfo_t errorInfo;
 
@@ -425,7 +480,7 @@ void test_unsupported_channel_control_type_fails_runtime_support_verify(void)
   TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlType(
                      &s_service,
                      0U,
-                     INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP));
+                     7U));
   TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlSource(&s_service, 0U,
                                                                1U));
   TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
@@ -434,6 +489,58 @@ void test_unsupported_channel_control_type_fails_runtime_support_verify(void)
   TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_CHANNEL_CONTROL_TYPE,
                         errorInfo.type);
   TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
+}
+
+void test_queue_jump_channel_and_transit_overlap_pass_runtime_support_verify(
+  void)
+{
+  const uint8_t includedPhases[] = { 1U };
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlSource(&s_service, 0U,
+                                                               1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_OVERLAP_TYPE_TRANSIT_2));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
+                                                                0U,
+                                                                includedPhases,
+                                                                1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
+}
+
+void test_ped_overlap_channel_and_pedestrian_overlap_pass_runtime_support_verify(
+  void)
+{
+  const uint8_t includedPhases[] = { 1U };
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetChannelControlSource(&s_service, 0U,
+                                                               1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
+                                                                0U,
+                                                                includedPhases,
+                                                                1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapWalkSeconds(&s_service,
+                                                             0U,
+                                                             1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapPedClearSeconds(&s_service,
+                                                                 0U,
+                                                                 1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
 }
 
 void test_supported_overlap_type_passes_runtime_support_verify(void)
@@ -478,7 +585,7 @@ void test_minus_green_yellow_alternate_passes_runtime_support_verify(void)
   TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
 }
 
-void test_unsupported_overlap_type_fails_runtime_support_verify(void)
+void test_invalid_overlap_type_fails_verify(void)
 {
   IntersectionConfigErrorInfo_t errorInfo;
   const uint8_t includedPhases[] = { 1U };
@@ -487,7 +594,7 @@ void test_unsupported_overlap_type_fails_runtime_support_verify(void)
   TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapType(
                      &s_service,
                      0U,
-                     INTERSECTION_OVERLAP_TYPE_TRANSIT_2));
+                     11U));
   TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
                                                                 0U,
                                                                 includedPhases,
@@ -1035,15 +1142,19 @@ int main(void)
   RUN_TEST(test_active_set_id_changes_after_committed_static_data_change);
   RUN_TEST(test_channel_and_overlap_configuration_persist_across_reload);
   RUN_TEST(test_coordination_configuration_persists_across_reload);
+  RUN_TEST(test_global_time_management_configuration_persists_across_reload);
   RUN_TEST(test_preempt_configuration_persists_across_reload);
   RUN_TEST(test_input_mapping_configuration_persists_across_reload);
   RUN_TEST(test_ring_sequence_data_persists_across_reload);
-  RUN_TEST(test_single_sequence_cap_rejects_pattern_and_preempt_sequence_numbers);
+  RUN_TEST(test_multi_sequence_support_accepts_pattern_and_preempt_sequence_numbers);
   RUN_TEST(test_out_of_range_input_mapping_fails_verify);
-  RUN_TEST(test_unsupported_channel_control_type_fails_runtime_support_verify);
+  RUN_TEST(test_invalid_channel_control_type_fails_verify);
+  RUN_TEST(
+    test_ped_overlap_channel_and_pedestrian_overlap_pass_runtime_support_verify);
+  RUN_TEST(test_queue_jump_channel_and_transit_overlap_pass_runtime_support_verify);
   RUN_TEST(test_supported_overlap_type_passes_runtime_support_verify);
   RUN_TEST(test_minus_green_yellow_alternate_passes_runtime_support_verify);
-  RUN_TEST(test_unsupported_overlap_type_fails_runtime_support_verify);
+  RUN_TEST(test_invalid_overlap_type_fails_verify);
   RUN_TEST(test_supported_preempt_exit_type_passes_runtime_support_verify);
   RUN_TEST(test_phase_maximum_initial_below_minimum_green_fails_verify);
   RUN_TEST(test_extended_phase_configuration_persists_across_reload);

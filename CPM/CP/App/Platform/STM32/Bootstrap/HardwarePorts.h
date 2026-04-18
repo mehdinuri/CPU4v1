@@ -12,6 +12,7 @@
 #define HARDWARE_PORTS_H
 
 #include "Ports/IHeaterPort.h"
+#include "Ports/IPowerMonitorPort.h"
 #include "Ports/IRelayPort.h"
 #include "Ports/IDoorSensorPort.h"
 #include "Ports/IStatusLEDPort.h"
@@ -30,6 +31,7 @@
 /* One instance per physical hardware resource — initialised in
  * MainApplication_Init() before the scheduler starts. */
 extern IHeaterPort_t g_heaterPort;
+extern IPowerMonitorPort_t g_powerMonitorPort;
 extern IRelayPort_t g_relayPort;
 extern IDoorSensorPort_t g_doorPort;
 extern IStatusLEDPort_t g_commLEDPort;

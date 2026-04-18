@@ -54,6 +54,27 @@ static IUnitInputPort_t s_unitInputPort;
 static IOutputDriverPort_t s_outputPort;
 static IMmuPort_t s_mmuPort;
 
+static void ReplicateSequencePlansFromBase(IntersectionConfig_t *config)
+{
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (sequenceIndex = 1U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
+    }
+  }
+}
+
 static uint8_t FakeModuleBusRead(void *ctx, ModuleBusSnapshot_t *snapshot)
 {
   FakeModuleBusCtx_t *moduleBusCtx = (FakeModuleBusCtx_t *) ctx;
@@ -208,6 +229,7 @@ static IntersectionConfig_t MakeControllerConfig(void)
   config.rings[1].barrierPhaseCount = 1U;
   config.rings[1].phaseOrder[0] = 2U;
   config.rings[1].phaseOrder[1] = 3U;
+  ReplicateSequencePlansFromBase(&config);
 
   config.vehicleDetectors[0].callPhase = 2U;
   config.vehicleDetectors[1].callPhase = 1U;
@@ -314,7 +336,7 @@ void test_activation_service_rejects_unsupported_runtime_config(void)
   IntersectionActivationStatus_t status;
 
   unsupportedConfig.channels[0].controlType =
-    INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP;
+    INTERSECTION_CHANNEL_CONTROL_TYPE_OTHER;
 
   TEST_ASSERT_FALSE(IntersectionActivationServiceStageCommittedConfig(
     &s_activationService,
@@ -337,6 +359,54 @@ void test_activation_service_accepts_preempt_sequence_number_within_max_sequence
   stagedConfig.preempts[0].sequenceNumber = 1U;
   stagedConfig.preempts[0].exitType =
     (uint8_t) INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_COORD;
+
+  TEST_ASSERT_TRUE(IntersectionActivationServiceStageCommittedConfig(
+    &s_activationService,
+    &stagedConfig,
+    2U));
+  TEST_ASSERT_TRUE(
+    IntersectionActivationServiceGetStatus(&s_activationService, &status));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_STATE_STAGED, status.state);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_ERROR_NONE, status.error);
+  TEST_ASSERT_EQUAL_UINT16(2U, status.pendingSetId);
+}
+
+void test_activation_service_accepts_ped_overlap_runtime_config(void)
+{
+  IntersectionConfig_t stagedConfig = MakeControllerConfig();
+  IntersectionActivationStatus_t status;
+
+  stagedConfig.channels[0].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP;
+  stagedConfig.channels[0].controlSource = 1U;
+  stagedConfig.overlaps[0].type = INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL;
+  stagedConfig.overlaps[0].includedPhases.length = 1U;
+  stagedConfig.overlaps[0].includedPhases.values[0] = 1U;
+  stagedConfig.overlaps[0].walkSeconds = 1U;
+  stagedConfig.overlaps[0].pedClearSeconds = 1U;
+
+  TEST_ASSERT_TRUE(IntersectionActivationServiceStageCommittedConfig(
+    &s_activationService,
+    &stagedConfig,
+    2U));
+  TEST_ASSERT_TRUE(
+    IntersectionActivationServiceGetStatus(&s_activationService, &status));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_STATE_STAGED, status.state);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_ERROR_NONE, status.error);
+  TEST_ASSERT_EQUAL_UINT16(2U, status.pendingSetId);
+}
+
+void test_activation_service_accepts_queue_jump_transit_runtime_config(void)
+{
+  IntersectionConfig_t stagedConfig = MakeControllerConfig();
+  IntersectionActivationStatus_t status;
+
+  stagedConfig.channels[0].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP;
+  stagedConfig.channels[0].controlSource = 1U;
+  stagedConfig.overlaps[0].type = INTERSECTION_OVERLAP_TYPE_TRANSIT_2;
+  stagedConfig.overlaps[0].includedPhases.length = 1U;
+  stagedConfig.overlaps[0].includedPhases.values[0] = 1U;
 
   TEST_ASSERT_TRUE(IntersectionActivationServiceStageCommittedConfig(
     &s_activationService,
@@ -412,6 +482,8 @@ int main(void)
   RUN_TEST(test_activation_service_rejects_unsupported_runtime_config);
   RUN_TEST(
     test_activation_service_accepts_preempt_sequence_number_within_max_sequences);
+  RUN_TEST(test_activation_service_accepts_ped_overlap_runtime_config);
+  RUN_TEST(test_activation_service_accepts_queue_jump_transit_runtime_config);
   RUN_TEST(test_controller_soft_reload_switches_live_plan_and_epochs);
 
   return UNITY_END();

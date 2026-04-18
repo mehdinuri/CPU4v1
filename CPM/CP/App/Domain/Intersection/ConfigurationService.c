@@ -101,8 +101,21 @@ typedef struct
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V13 13UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V14 14UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V15 15UL
-#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14 \
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16 16UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V17 17UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18 18UL
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18 \
         (CONFIGURATION_IMAGE_PAYLOAD_SIZE \
+         - CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE)
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17 \
+        (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18 \
+         - CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE)
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16 \
+        (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17 \
+         - ((INTERSECTION_SEQUENCE_COUNT_MAX - 1U) \
+            * INTERSECTION_RING_COUNT_MAX * 8U))
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14 \
+        (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16 \
          - 4U \
          - (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
             * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE))
@@ -138,11 +151,38 @@ static uint8_t GetCandidateDetectorReportConfig(
 static uint8_t GetCandidateTimebase(
   ConfigurationService_t *service,
   IntersectionTimebaseConfig_t *timebase);
+static uint8_t GetCandidateGlobalTimeManagement(
+  ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagement);
+static uint8_t GetCandidateCabinetEnvironment(
+  ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironment);
 static uint8_t GetCandidateUnit(ConfigurationService_t *service,
                                 IntersectionUnitConfig_t *unit);
 static uint8_t GetCandidateRingPlan(ConfigurationService_t *service,
                                     uint8_t ringIndex,
                                     IntersectionRingPlan_t *ringPlan);
+static uint8_t GetCandidateSequenceRingPlan(ConfigurationService_t *service,
+                                            uint8_t sequenceNumber,
+                                            uint8_t ringIndex,
+                                            IntersectionRingPlan_t *ringPlan);
+
+static uint8_t SequenceNumberToIndex(uint8_t sequenceNumber,
+                                     uint8_t *sequenceIndex)
+{
+  if ((sequenceNumber == 0U)
+      || (sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  if (sequenceIndex != NULL)
+  {
+    *sequenceIndex = (uint8_t) (sequenceNumber - 1U);
+  }
+
+  return 1U;
+}
 
 static uint8_t NormalizeVehicleDetectorOptions(uint8_t options)
 {
@@ -199,6 +239,27 @@ static void RebuildLegacyInputMapping(IntersectionConfig_t *config)
     {
       config->inputMapping.phasePedInputs[phaseNumber - 1U] =
         (uint8_t) (pedIndex + 1U);
+    }
+  }
+}
+
+static void ReplicateBaseSequencePlans(IntersectionConfig_t *config)
+{
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (sequenceIndex = 1U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
     }
   }
 }
@@ -334,6 +395,7 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
 {
   uint32_t offset = 0U;
   uint8_t phaseIndex;
+  uint8_t sequenceIndex;
   uint8_t ringIndex;
   uint8_t patternIndex;
   uint8_t splitIndex;
@@ -409,21 +471,27 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
     payload[offset++] = phase->altMinTimeTransitionSeconds;
   }
 
-  for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &config->rings[ringIndex];
-    uint8_t serviceIndex;
-
-    payload[offset++] = ringPlan->phaseCount;
-    payload[offset++] = ringPlan->barrierPhaseCount;
-    payload[offset++] = ringPlan->reserved0;
-    payload[offset++] = ringPlan->reserved1;
-
-    for (serviceIndex = 0U;
-         serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
-         serviceIndex++)
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
     {
-      payload[offset++] = ringPlan->phaseOrder[serviceIndex];
+      const IntersectionRingPlan_t *ringPlan =
+        &config->sequencePlans[sequenceIndex][ringIndex];
+      uint8_t serviceIndex;
+
+      payload[offset++] = ringPlan->phaseCount;
+      payload[offset++] = ringPlan->barrierPhaseCount;
+      payload[offset++] = ringPlan->reserved0;
+      payload[offset++] = ringPlan->reserved1;
+
+      for (serviceIndex = 0U;
+           serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
+           serviceIndex++)
+      {
+        payload[offset++] = ringPlan->phaseOrder[serviceIndex];
+      }
     }
   }
 
@@ -747,6 +815,66 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
     payload[offset++] = action->enabledLane;
   }
 
+  payload[offset++] = config->globalTimeManagement.globalDaylightSaving;
+  WriteLe32(&payload[offset],
+            (uint32_t)
+            config->globalTimeManagement.controllerStandardTimeZoneSeconds);
+  offset += 4U;
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX;
+       itemIndex++)
+  {
+    const IntersectionTimebaseScheduleEntryConfig_t *schedule =
+      &config->globalTimeManagement.schedules[itemIndex];
+
+    WriteLe16(&payload[offset], schedule->monthMask);
+    offset += 2U;
+    payload[offset++] = schedule->dayMask;
+    payload[offset++] = schedule->dayPlanNumber;
+    WriteLe32(&payload[offset], schedule->dateMask);
+    offset += 4U;
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_DAY_PLAN_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t eventIndex;
+
+    for (eventIndex = 0U; eventIndex < INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX;
+         eventIndex++)
+    {
+      const IntersectionDayPlanEventConfig_t *event =
+        &config->globalTimeManagement.dayPlans[itemIndex][eventIndex];
+
+      payload[offset++] = event->hour;
+      payload[offset++] = event->minute;
+      payload[offset++] = event->actionNumber;
+    }
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX;
+       itemIndex++)
+  {
+    const IntersectionDaylightSavingEntryConfig_t *entry =
+      &config->globalTimeManagement.daylightSavingEntries[itemIndex];
+
+    payload[offset++] = entry->beginMonth;
+    payload[offset++] = entry->beginOccurrences;
+    payload[offset++] = entry->beginDayOfWeek;
+    payload[offset++] = entry->beginDayOfMonth;
+    WriteLe32(&payload[offset], entry->beginSecondsToTransition);
+    offset += 4U;
+    payload[offset++] = entry->endMonth;
+    payload[offset++] = entry->endOccurrences;
+    payload[offset++] = entry->endDayOfWeek;
+    payload[offset++] = entry->endDayOfMonth;
+    WriteLe32(&payload[offset], entry->endSecondsToTransition);
+    offset += 4U;
+    WriteLe32(&payload[offset], entry->secondsToAdjust);
+    offset += 4U;
+  }
+
   payload[offset++] = config->unit.startUpFlashSeconds;
   payload[offset++] = config->unit.autoPedestrianClear;
   WriteLe16(&payload[offset], config->unit.backupTimeSeconds);
@@ -785,6 +913,63 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
     {
       payload[offset++] = content->description[descriptionIndex];
     }
+  }
+
+  payload[offset++] = config->cabinetEnvironment.atccLedMode;
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    const IntersectionCabinetEnvironmentDeviceConfig_t *device =
+      &config->cabinetEnvironment.devices[itemIndex];
+
+    payload[offset++] = device->type;
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      payload[offset++] = device->description[descriptionIndex];
+    }
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    const IntersectionCabinetTemperatureSensorConfig_t *sensor =
+      &config->cabinetEnvironment.temperatureSensors[itemIndex];
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      payload[offset++] = sensor->description[descriptionIndex];
+    }
+
+    payload[offset++] = (uint8_t) sensor->highThreshold;
+    payload[offset++] = (uint8_t) sensor->lowThreshold;
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    const IntersectionCabinetHumiditySensorConfig_t *sensor =
+      &config->cabinetEnvironment.humiditySensors[itemIndex];
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      payload[offset++] = sensor->description[descriptionIndex];
+    }
+
+    payload[offset++] = sensor->threshold;
   }
 } /* PayloadSerialize */
 
@@ -1308,6 +1493,7 @@ static void PayloadDeserialize(const uint8_t *payload,
 {
   uint32_t offset = 0U;
   uint8_t phaseIndex;
+  uint8_t sequenceIndex;
   uint8_t ringIndex;
   uint8_t patternIndex;
   uint8_t splitIndex;
@@ -1317,7 +1503,11 @@ static void PayloadDeserialize(const uint8_t *payload,
   uint8_t channelIndex;
   uint8_t overlapIndex;
   uint8_t itemIndex;
+  uint8_t currentLayout;
+  uint8_t currentOrLegacyV18Layout;
   uint8_t extendedPhaseLayout;
+  uint8_t currentOrLegacyV16Layout;
+  uint8_t multiSequenceLayout;
 
   if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2)
       && (payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE))
@@ -1352,8 +1542,19 @@ static void PayloadDeserialize(const uint8_t *payload,
   }
 
   IntersectionConfigInitDefaults(config);
-  extendedPhaseLayout = (uint8_t) ((payloadLength
-                                    == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  currentLayout = (uint8_t) (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE);
+  currentOrLegacyV18Layout = (uint8_t) ((currentLayout != 0U)
+                                        || (payloadLength
+                                            == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18));
+  currentOrLegacyV16Layout = (uint8_t) ((currentOrLegacyV18Layout != 0U)
+                                        || (payloadLength
+                                            == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17)
+                                        || (payloadLength
+                                            == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16));
+  multiSequenceLayout = (uint8_t) ((currentOrLegacyV18Layout != 0U)
+                                   || (payloadLength
+                                       == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17));
+  extendedPhaseLayout = (uint8_t) ((currentOrLegacyV16Layout != 0U)
                                    || (payloadLength
                                        == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
                                    || (payloadLength
@@ -1471,21 +1672,50 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+  if (multiSequenceLayout != 0U)
   {
-    IntersectionRingPlan_t *ringPlan = &config->rings[ringIndex];
-    uint8_t serviceIndex;
-
-    ringPlan->phaseCount = payload[offset++];
-    ringPlan->barrierPhaseCount = payload[offset++];
-    ringPlan->reserved0 = payload[offset++];
-    ringPlan->reserved1 = payload[offset++];
-
-    for (serviceIndex = 0U;
-         serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
-         serviceIndex++)
+    for (sequenceIndex = 0U;
+         sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+         sequenceIndex++)
     {
-      ringPlan->phaseOrder[serviceIndex] = payload[offset++];
+      for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+      {
+        IntersectionRingPlan_t *ringPlan =
+          &config->sequencePlans[sequenceIndex][ringIndex];
+        uint8_t serviceIndex;
+
+        ringPlan->phaseCount = payload[offset++];
+        ringPlan->barrierPhaseCount = payload[offset++];
+        ringPlan->reserved0 = payload[offset++];
+        ringPlan->reserved1 = payload[offset++];
+
+        for (serviceIndex = 0U;
+             serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
+             serviceIndex++)
+        {
+          ringPlan->phaseOrder[serviceIndex] = payload[offset++];
+        }
+      }
+    }
+  }
+  else
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      IntersectionRingPlan_t *ringPlan = &config->rings[ringIndex];
+      uint8_t serviceIndex;
+
+      ringPlan->phaseCount = payload[offset++];
+      ringPlan->barrierPhaseCount = payload[offset++];
+      ringPlan->reserved0 = payload[offset++];
+      ringPlan->reserved1 = payload[offset++];
+
+      for (serviceIndex = 0U;
+           serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
+           serviceIndex++)
+      {
+        ringPlan->phaseOrder[serviceIndex] = payload[offset++];
+      }
     }
   }
 
@@ -1627,7 +1857,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     preempt->exitType = payload[offset++];
   }
 
-  if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if ((currentOrLegacyV16Layout != 0U)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12)
@@ -1679,7 +1909,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if ((currentOrLegacyV16Layout != 0U)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12)
@@ -1697,7 +1927,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     config->detectorReports.reserved2 = payload[offset++];
   }
 
-  if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if ((currentOrLegacyV16Layout != 0U)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12)
@@ -1799,7 +2029,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if ((currentOrLegacyV16Layout != 0U)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12)
@@ -1856,7 +2086,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if ((currentOrLegacyV16Layout != 0U)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13)
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12))
@@ -1877,7 +2107,74 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  if (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if (currentOrLegacyV18Layout != 0U)
+  {
+    config->globalTimeManagement.globalDaylightSaving = payload[offset++];
+    config->globalTimeManagement.controllerStandardTimeZoneSeconds =
+      (int32_t) ReadLe32(&payload[offset]);
+    offset += 4U;
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX;
+         itemIndex++)
+    {
+      IntersectionTimebaseScheduleEntryConfig_t *schedule =
+        &config->globalTimeManagement.schedules[itemIndex];
+
+      schedule->monthMask = ReadLe16(&payload[offset]);
+      offset += 2U;
+      schedule->dayMask = payload[offset++];
+      schedule->dayPlanNumber = payload[offset++];
+      schedule->dateMask = ReadLe32(&payload[offset]);
+      offset += 4U;
+    }
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_DAY_PLAN_COUNT_MAX;
+         itemIndex++)
+    {
+      uint8_t eventIndex;
+
+      for (eventIndex = 0U; eventIndex < INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX;
+           eventIndex++)
+      {
+        IntersectionDayPlanEventConfig_t *event =
+          &config->globalTimeManagement.dayPlans[itemIndex][eventIndex];
+
+        event->hour = payload[offset++];
+        event->minute = payload[offset++];
+        event->actionNumber = payload[offset++];
+        event->reserved0 = 0U;
+      }
+    }
+
+    for (itemIndex = 0U;
+         itemIndex < INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX;
+         itemIndex++)
+    {
+      IntersectionDaylightSavingEntryConfig_t *entry =
+        &config->globalTimeManagement.daylightSavingEntries[itemIndex];
+
+      entry->beginMonth = payload[offset++];
+      entry->beginOccurrences = payload[offset++];
+      entry->beginDayOfWeek = payload[offset++];
+      entry->beginDayOfMonth = payload[offset++];
+      entry->beginSecondsToTransition = ReadLe32(&payload[offset]);
+      offset += 4U;
+      entry->endMonth = payload[offset++];
+      entry->endOccurrences = payload[offset++];
+      entry->endDayOfWeek = payload[offset++];
+      entry->endDayOfMonth = payload[offset++];
+      entry->endSecondsToTransition = ReadLe32(&payload[offset]);
+      offset += 4U;
+      entry->secondsToAdjust = ReadLe32(&payload[offset]);
+      offset += 4U;
+    }
+
+    config->globalTimeManagement.reserved0 = 0U;
+    config->globalTimeManagement.reserved1 = 0U;
+    config->globalTimeManagement.reserved2 = 0U;
+  }
+
+  if (currentOrLegacyV16Layout != 0U)
   {
     config->unit.startUpFlashSeconds = payload[offset++];
     config->unit.autoPedestrianClear = payload[offset++];
@@ -1938,7 +2235,67 @@ static void PayloadDeserialize(const uint8_t *payload,
     offset += 2U;
   }
 
-  if (payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  {
+    config->cabinetEnvironment.atccLedMode = payload[offset++];
+
+    for (itemIndex = 0U;
+         itemIndex < INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX;
+         itemIndex++)
+    {
+      uint8_t descriptionIndex;
+      IntersectionCabinetEnvironmentDeviceConfig_t *device =
+        &config->cabinetEnvironment.devices[itemIndex];
+
+      device->type = payload[offset++];
+
+      for (descriptionIndex = 0U;
+           descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+           descriptionIndex++)
+      {
+        device->description[descriptionIndex] = payload[offset++];
+      }
+    }
+
+    for (itemIndex = 0U;
+         itemIndex < INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX;
+         itemIndex++)
+    {
+      uint8_t descriptionIndex;
+      IntersectionCabinetTemperatureSensorConfig_t *sensor =
+        &config->cabinetEnvironment.temperatureSensors[itemIndex];
+
+      for (descriptionIndex = 0U;
+           descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+           descriptionIndex++)
+      {
+        sensor->description[descriptionIndex] = payload[offset++];
+      }
+
+      sensor->highThreshold = (int8_t) payload[offset++];
+      sensor->lowThreshold = (int8_t) payload[offset++];
+    }
+
+    for (itemIndex = 0U;
+         itemIndex < INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX;
+         itemIndex++)
+    {
+      uint8_t descriptionIndex;
+      IntersectionCabinetHumiditySensorConfig_t *sensor =
+        &config->cabinetEnvironment.humiditySensors[itemIndex];
+
+      for (descriptionIndex = 0U;
+           descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+           descriptionIndex++)
+      {
+        sensor->description[descriptionIndex] = payload[offset++];
+      }
+
+      sensor->threshold = payload[offset++];
+    }
+  }
+
+  if (multiSequenceLayout == 0U)
   {
     for (detectorIndex = 0U;
          detectorIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
@@ -1948,6 +2305,11 @@ static void PayloadDeserialize(const uint8_t *payload,
         NormalizeVehicleDetectorOptions(
           config->vehicleDetectors[detectorIndex].options);
     }
+  }
+
+  if (multiSequenceLayout == 0U)
+  {
+    ReplicateBaseSequencePlans(config);
   }
 
   RebuildLegacyInputMapping(config);
@@ -2060,6 +2422,7 @@ static uint8_t MaterializeCandidate(const ConfigurationService_t *service,
   uint8_t gateIndex;
   uint8_t contentIndex;
   uint8_t phaseIndex;
+  uint8_t sequenceIndex;
   uint8_t ringIndex;
   uint8_t preemptIndex;
   uint8_t channelIndex;
@@ -2095,6 +2458,16 @@ static uint8_t MaterializeCandidate(const ConfigurationService_t *service,
   if (service->candidate.timebaseValid != 0U)
   {
     config->timebase = service->candidate.timebase;
+  }
+
+  if (service->candidate.globalTimeManagementValid != 0U)
+  {
+    config->globalTimeManagement = service->candidate.globalTimeManagement;
+  }
+
+  if (service->candidate.cabinetEnvironmentValid != 0U)
+  {
+    config->cabinetEnvironment = service->candidate.cabinetEnvironment;
   }
 
   if (service->candidate.unitValid != 0U)
@@ -2189,11 +2562,17 @@ static uint8_t MaterializeCandidate(const ConfigurationService_t *service,
     }
   }
 
-  for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    if (service->candidate.ringValid[ringIndex] != 0U)
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
     {
-      config->rings[ringIndex] = service->candidate.rings[ringIndex];
+      if (service->candidate.sequencePlanValid[sequenceIndex][ringIndex] != 0U)
+      {
+        config->sequencePlans[sequenceIndex][ringIndex] =
+          service->candidate.sequencePlans[sequenceIndex][ringIndex];
+      }
     }
   }
 
@@ -2279,8 +2658,21 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
   if (!(((header.schemaVersion == CONFIGURATION_IMAGE_SCHEMA_VERSION)
          && (header.payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE))
         || ((header.schemaVersion
+             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18)
+            && (header.payloadLength
+                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18))
+        || ((header.schemaVersion
+             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V17)
+            && (header.payloadLength
+                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17))
+        || ((header.schemaVersion
+             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16)
+            && (header.payloadLength
+                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16))
+        || ((header.schemaVersion
              == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V15)
-            && (header.payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE))
+            && (header.payloadLength
+                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16))
         || ((header.schemaVersion
              == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V14)
             && (header.payloadLength
@@ -2353,7 +2745,7 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
 
   PayloadDeserialize(payloadBytes, header.payloadLength, &loadedSlot->config);
 
-  if (header.schemaVersion < CONFIGURATION_IMAGE_SCHEMA_VERSION)
+  if (header.schemaVersion < CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16)
   {
     loadedSlot->config.unit.elevationOffsetMeters =
       INTERSECTION_UNIT_ELEVATION_OFFSET_UNKNOWN;
@@ -2548,6 +2940,44 @@ static uint8_t UpdateTimebase(ConfigurationService_t *service,
   return 1U;
 }
 
+static uint8_t UpdateGlobalTimeManagement(
+  ConfigurationService_t *service,
+  const IntersectionGlobalTimeManagementConfig_t *globalTimeManagement)
+{
+  if ((service == NULL) || (globalTimeManagement == NULL)
+      || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  service->candidate.globalTimeManagementValid = 1U;
+  service->candidate.globalTimeManagement = *globalTimeManagement;
+  service->candidate.dirty = 1U;
+  service->verifyStatus = CONFIGURATION_VERIFY_STATUS_IDLE;
+  SetError(service, INTERSECTION_CONFIG_ERROR_NONE, 0U);
+
+  return 1U;
+}
+
+static uint8_t UpdateCabinetEnvironment(
+  ConfigurationService_t *service,
+  const IntersectionCabinetEnvironmentConfig_t *cabinetEnvironment)
+{
+  if ((service == NULL) || (cabinetEnvironment == NULL)
+      || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  service->candidate.cabinetEnvironmentValid = 1U;
+  service->candidate.cabinetEnvironment = *cabinetEnvironment;
+  service->candidate.dirty = 1U;
+  service->verifyStatus = CONFIGURATION_VERIFY_STATUS_IDLE;
+  SetError(service, INTERSECTION_CONFIG_ERROR_NONE, 0U);
+
+  return 1U;
+}
+
 static uint8_t UpdateUnit(ConfigurationService_t *service,
                           const IntersectionUnitConfig_t *unit)
 {
@@ -2669,18 +3099,22 @@ static uint8_t UpdatePreemptGate(ConfigurationService_t *service,
 }
 
 static uint8_t UpdateRingPlan(ConfigurationService_t *service,
+                              uint8_t sequenceNumber,
                               uint8_t ringIndex,
                               const IntersectionRingPlan_t *ringPlan)
 {
+  uint8_t sequenceIndex = 0U;
+
   if ((service == NULL) || (ringPlan == NULL)
       || (service->candidate.inUse == 0U)
-      || (ringIndex >= service->activeConfig.ringCount))
+      || (ringIndex >= service->activeConfig.ringCount)
+      || (SequenceNumberToIndex(sequenceNumber, &sequenceIndex) == 0U))
   {
     return 0U;
   }
 
-  service->candidate.ringValid[ringIndex] = 1U;
-  service->candidate.rings[ringIndex] = *ringPlan;
+  service->candidate.sequencePlanValid[sequenceIndex][ringIndex] = 1U;
+  service->candidate.sequencePlans[sequenceIndex][ringIndex] = *ringPlan;
   service->candidate.dirty = 1U;
   service->verifyStatus = CONFIGURATION_VERIFY_STATUS_IDLE;
   SetError(service, INTERSECTION_CONFIG_ERROR_NONE, 0U);
@@ -2782,6 +3216,8 @@ static uint8_t CommitPhaseMutation(ConfigurationService_t *service,
                                    uint8_t ringIndexA,
                                    uint8_t ringIndexB)
 {
+  uint8_t sequenceIndex;
+
   if ((service == NULL) || (candidateConfig == NULL))
   {
     return 0U;
@@ -2790,16 +3226,23 @@ static uint8_t CommitPhaseMutation(ConfigurationService_t *service,
   service->candidate.phaseValid[phaseIndex] = 1U;
   service->candidate.phases[phaseIndex] = candidateConfig->phases[phaseIndex];
 
-  if (ringIndexA < INTERSECTION_RING_COUNT_MAX)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    service->candidate.ringValid[ringIndexA] = 1U;
-    service->candidate.rings[ringIndexA] = candidateConfig->rings[ringIndexA];
-  }
+    if (ringIndexA < INTERSECTION_RING_COUNT_MAX)
+    {
+      service->candidate.sequencePlanValid[sequenceIndex][ringIndexA] = 1U;
+      service->candidate.sequencePlans[sequenceIndex][ringIndexA] =
+        candidateConfig->sequencePlans[sequenceIndex][ringIndexA];
+    }
 
-  if ((ringIndexB < INTERSECTION_RING_COUNT_MAX) && (ringIndexB != ringIndexA))
-  {
-    service->candidate.ringValid[ringIndexB] = 1U;
-    service->candidate.rings[ringIndexB] = candidateConfig->rings[ringIndexB];
+    if ((ringIndexB < INTERSECTION_RING_COUNT_MAX) && (ringIndexB != ringIndexA))
+    {
+      service->candidate.sequencePlanValid[sequenceIndex][ringIndexB] = 1U;
+      service->candidate.sequencePlans[sequenceIndex][ringIndexB] =
+        candidateConfig->sequencePlans[sequenceIndex][ringIndexB];
+    }
   }
 
   service->candidate.dirty = 1U;
@@ -2926,7 +3369,7 @@ uint8_t ConfigurationServiceGetSequenceCount(
 {
   (void) service;
 
-  return 1U;
+  return INTERSECTION_SEQUENCE_COUNT_MAX;
 }
 
 uint8_t ConfigurationServiceGetActiveRingPlan(
@@ -2934,13 +3377,28 @@ uint8_t ConfigurationServiceGetActiveRingPlan(
   uint8_t ringIndex,
   IntersectionRingPlan_t *ringPlan)
 {
+  return ConfigurationServiceGetActiveSequenceRingPlan(service,
+                                                       1U,
+                                                       ringIndex,
+                                                       ringPlan);
+}
+
+uint8_t ConfigurationServiceGetActiveSequenceRingPlan(
+  const ConfigurationService_t *service,
+  uint8_t sequenceNumber,
+  uint8_t ringIndex,
+  IntersectionRingPlan_t *ringPlan)
+{
+  uint8_t sequenceIndex = 0U;
+
   if ((service == NULL) || (ringPlan == NULL)
-      || (ringIndex >= service->activeConfig.ringCount))
+      || (ringIndex >= service->activeConfig.ringCount)
+      || (SequenceNumberToIndex(sequenceNumber, &sequenceIndex) == 0U))
   {
     return 0U;
   }
 
-  *ringPlan = service->activeConfig.rings[ringIndex];
+  *ringPlan = service->activeConfig.sequencePlans[sequenceIndex][ringIndex];
 
   return 1U;
 }
@@ -2951,6 +3409,32 @@ uint8_t ConfigurationServiceGetCandidateRingPlan(
   IntersectionRingPlan_t *ringPlan)
 {
   return GetCandidateRingPlan(service, ringIndex, ringPlan);
+}
+
+uint8_t ConfigurationServiceGetCandidateSequenceRingPlan(
+  ConfigurationService_t *service,
+  uint8_t sequenceNumber,
+  uint8_t ringIndex,
+  IntersectionRingPlan_t *ringPlan)
+{
+  return GetCandidateSequenceRingPlan(service,
+                                      sequenceNumber,
+                                      ringIndex,
+                                      ringPlan);
+}
+
+uint8_t ConfigurationServiceGetCandidateGlobalTimeManagementConfig(
+  ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig)
+{
+  return GetCandidateGlobalTimeManagement(service, globalTimeManagementConfig);
+}
+
+uint8_t ConfigurationServiceGetCandidateCabinetEnvironmentConfig(
+  ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig)
+{
+  return GetCandidateCabinetEnvironment(service, cabinetEnvironmentConfig);
 }
 
 uint8_t ConfigurationServiceGetActiveChannelConfig(
@@ -3028,6 +3512,34 @@ uint8_t ConfigurationServiceGetActiveTimebaseConfig(
   }
 
   *timebaseConfig = service->activeConfig.timebase;
+
+  return 1U;
+}
+
+uint8_t ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+  const ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig)
+{
+  if ((service == NULL) || (globalTimeManagementConfig == NULL))
+  {
+    return 0U;
+  }
+
+  *globalTimeManagementConfig = service->activeConfig.globalTimeManagement;
+
+  return 1U;
+}
+
+uint8_t ConfigurationServiceGetActiveCabinetEnvironmentConfig(
+  const ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig)
+{
+  if ((service == NULL) || (cabinetEnvironmentConfig == NULL))
+  {
+    return 0U;
+  }
+
+  *cabinetEnvironmentConfig = service->activeConfig.cabinetEnvironment;
 
   return 1U;
 }
@@ -3921,6 +4433,7 @@ uint8_t ConfigurationServiceSetPhaseOptions(ConfigurationService_t *service,
   uint8_t wasEnabled;
   uint8_t nowEnabled;
   uint8_t ringIndex;
+  uint8_t sequenceIndex;
 
   if ((service == NULL) || (service->candidate.inUse == 0U))
   {
@@ -3942,18 +4455,25 @@ uint8_t ConfigurationServiceSetPhaseOptions(ConfigurationService_t *service,
 
   if (wasEnabled != nowEnabled)
   {
-    if (nowEnabled == 0U)
+    for (sequenceIndex = 0U;
+         sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+         sequenceIndex++)
     {
-      if (RingPlanRemovePhase(&candidateConfig.rings[ringIndex],
-                              phaseIndex) == 0U)
+      if (nowEnabled == 0U)
+      {
+        if (RingPlanRemovePhase(&candidateConfig.sequencePlans[sequenceIndex][
+                                                             ringIndex],
+                                phaseIndex) == 0U)
+        {
+          return 0U;
+        }
+      }
+      else if (RingPlanAppendPhase(
+                 &candidateConfig.sequencePlans[sequenceIndex][ringIndex],
+                 phaseIndex) == 0U)
       {
         return 0U;
       }
-    }
-    else if (RingPlanAppendPhase(&candidateConfig.rings[ringIndex],
-                                 phaseIndex) == 0U)
-    {
-      return 0U;
     }
   }
 
@@ -4108,12 +4628,21 @@ uint8_t ConfigurationServiceSetPhaseRing(ConfigurationService_t *service,
   if ((IntersectionPhaseOptionsEnabled(phase.phaseOptions) != 0U)
       && (previousRingIndex != ringIndex))
   {
-    if ((RingPlanRemovePhase(&candidateConfig.rings[previousRingIndex],
-                             phaseIndex) == 0U)
-        || (RingPlanAppendPhase(&candidateConfig.rings[ringIndex],
-                                phaseIndex) == 0U))
+    uint8_t sequenceIndex;
+
+    for (sequenceIndex = 0U;
+         sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+         sequenceIndex++)
     {
-      return 0U;
+      if ((RingPlanRemovePhase(
+             &candidateConfig.sequencePlans[sequenceIndex][previousRingIndex],
+             phaseIndex) == 0U)
+          || (RingPlanAppendPhase(
+                &candidateConfig.sequencePlans[sequenceIndex][ringIndex],
+                phaseIndex) == 0U))
+      {
+        return 0U;
+      }
     }
   }
 
@@ -4125,6 +4654,7 @@ uint8_t ConfigurationServiceSetPhaseRing(ConfigurationService_t *service,
 }
 
 uint8_t ConfigurationServiceSetRingSequenceData(ConfigurationService_t *service,
+                                                uint8_t sequenceNumber,
                                                 uint8_t ringIndex,
                                                 const uint8_t *phaseNumbers,
                                                 uint8_t length)
@@ -4136,12 +4666,16 @@ uint8_t ConfigurationServiceSetRingSequenceData(ConfigurationService_t *service,
 
   if ((service == NULL) || (service->candidate.inUse == 0U)
       || (phaseNumbers == NULL) || (length == 0U)
+      || (SequenceNumberToIndex(sequenceNumber, NULL) == 0U)
       || (ringIndex >= service->activeConfig.ringCount))
   {
     return 0U;
   }
 
-  if (GetCandidateRingPlan(service, ringIndex, &ringPlan) == 0U)
+  if (GetCandidateSequenceRingPlan(service,
+                                   sequenceNumber,
+                                   ringIndex,
+                                   &ringPlan) == 0U)
   {
     return 0U;
   }
@@ -4181,7 +4715,7 @@ uint8_t ConfigurationServiceSetRingSequenceData(ConfigurationService_t *service,
     ringPlan.phaseOrder[position] = phaseIndex;
   }
 
-  return UpdateRingPlan(service, ringIndex, &ringPlan);
+  return UpdateRingPlan(service, sequenceNumber, ringIndex, &ringPlan);
 }
 
 uint8_t ConfigurationServiceSetPhaseEnabled(ConfigurationService_t *service,
@@ -4191,6 +4725,7 @@ uint8_t ConfigurationServiceSetPhaseEnabled(ConfigurationService_t *service,
   IntersectionConfig_t candidateConfig;
   IntersectionPhaseConfig_t phase;
   uint8_t ringIndex;
+  uint8_t sequenceIndex;
 
   if ((service == NULL) || (service->candidate.inUse == 0U))
   {
@@ -4216,18 +4751,22 @@ uint8_t ConfigurationServiceSetPhaseEnabled(ConfigurationService_t *service,
 
   candidateConfig.phases[phaseIndex] = phase;
 
-  if (enabled == 0U)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    if (RingPlanRemovePhase(&candidateConfig.rings[ringIndex],
-                            phaseIndex) == 0U)
+    if (enabled == 0U)
     {
-      return 0U;
+      if (RingPlanRemovePhase(&candidateConfig.sequencePlans[sequenceIndex][
+                                                           ringIndex],
+                              phaseIndex) == 0U)
+      {
+        return 0U;
+      }
     }
-  }
-  else
-  {
-    if (RingPlanAppendPhase(&candidateConfig.rings[ringIndex],
-                            phaseIndex) == 0U)
+    else if (RingPlanAppendPhase(&candidateConfig.sequencePlans[sequenceIndex][
+                                                              ringIndex],
+                                 phaseIndex) == 0U)
     {
       return 0U;
     }
@@ -4834,6 +5373,50 @@ static uint8_t GetCandidateTimebase(ConfigurationService_t *service,
   return 1U;
 }
 
+static uint8_t GetCandidateGlobalTimeManagement(
+  ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagement)
+{
+  IntersectionConfig_t candidateConfig;
+
+  if ((service == NULL) || (globalTimeManagement == NULL)
+      || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  if (MaterializeCandidate(service, &candidateConfig) == 0U)
+  {
+    return 0U;
+  }
+
+  *globalTimeManagement = candidateConfig.globalTimeManagement;
+
+  return 1U;
+}
+
+static uint8_t GetCandidateCabinetEnvironment(
+  ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironment)
+{
+  IntersectionConfig_t candidateConfig;
+
+  if ((service == NULL) || (cabinetEnvironment == NULL)
+      || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  if (MaterializeCandidate(service, &candidateConfig) == 0U)
+  {
+    return 0U;
+  }
+
+  *cabinetEnvironment = candidateConfig.cabinetEnvironment;
+
+  return 1U;
+}
+
 static uint8_t GetCandidateUnit(ConfigurationService_t *service,
                                 IntersectionUnitConfig_t *unit)
 {
@@ -4858,10 +5441,20 @@ static uint8_t GetCandidateRingPlan(ConfigurationService_t *service,
                                     uint8_t ringIndex,
                                     IntersectionRingPlan_t *ringPlan)
 {
+  return GetCandidateSequenceRingPlan(service, 1U, ringIndex, ringPlan);
+}
+
+static uint8_t GetCandidateSequenceRingPlan(ConfigurationService_t *service,
+                                            uint8_t sequenceNumber,
+                                            uint8_t ringIndex,
+                                            IntersectionRingPlan_t *ringPlan)
+{
   IntersectionConfig_t candidateConfig;
+  uint8_t sequenceIndex = 0U;
 
   if ((service == NULL) || (ringPlan == NULL) || (service->candidate.inUse == 0U)
-      || (ringIndex >= service->activeConfig.ringCount))
+      || (ringIndex >= service->activeConfig.ringCount)
+      || (SequenceNumberToIndex(sequenceNumber, &sequenceIndex) == 0U))
   {
     return 0U;
   }
@@ -4871,7 +5464,7 @@ static uint8_t GetCandidateRingPlan(ConfigurationService_t *service,
     return 0U;
   }
 
-  *ringPlan = candidateConfig.rings[ringIndex];
+  *ringPlan = candidateConfig.sequencePlans[sequenceIndex][ringIndex];
 
   return 1U;
 }
@@ -5620,6 +6213,30 @@ uint8_t ConfigurationServiceSetTimebaseActionEnabledLane(
   timebase.actions[actionIndex].enabledLane = enabledLane;
 
   return UpdateTimebase(service, &timebase);
+}
+
+uint8_t ConfigurationServiceSetGlobalTimeManagementConfig(
+  ConfigurationService_t *service,
+  const IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig)
+{
+  if (globalTimeManagementConfig == NULL)
+  {
+    return 0U;
+  }
+
+  return UpdateGlobalTimeManagement(service, globalTimeManagementConfig);
+}
+
+uint8_t ConfigurationServiceSetCabinetEnvironmentConfig(
+  ConfigurationService_t *service,
+  const IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig)
+{
+  if (cabinetEnvironmentConfig == NULL)
+  {
+    return 0U;
+  }
+
+  return UpdateCabinetEnvironment(service, cabinetEnvironmentConfig);
 }
 
 uint8_t ConfigurationServiceSetUnitTimeSourceCommanded(

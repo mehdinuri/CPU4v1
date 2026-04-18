@@ -42,7 +42,10 @@ typedef struct __attribute__((packed))
   uint8_t b5V1High         : 2;
   uint8_t b5V2High         : 2;
   uint8_t bIsolatedVoltage : 1;
-  uint8_t bReserved        : 5;
+  uint8_t bFlashActive     : 1;
+  uint8_t bGridFault       : 1;
+  uint8_t bCanOverflow     : 1;
+  uint8_t bReserved        : 2;
   uint8_t bFrequency       : 8;
 } tSMeasurementFrame;
 
@@ -70,6 +73,7 @@ typedef struct
 
   uint8_t  bFlashState;
   uint32_t lFlashPeriod;
+  uint32_t lLastFlashTick;
   uint16_t sFlashStateCntr;
   uint16_t sCommErrorCntr;
 
@@ -124,7 +128,7 @@ void MeasurementService_UpdateLEDs(MeasurementServiceCtx_t *ctx);
 void MeasurementService_SendMeasurements(MeasurementServiceCtx_t *ctx);
 
 /* Advance the flash-sync counter and send sync CAN frames at period edges. */
-void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx);
+void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx, uint32_t lNowMs);
 
 /* Returns 1 if flash state is active (suppress normal measurement send). */
 uint8_t MeasurementService_IsFlash(const MeasurementServiceCtx_t *ctx);

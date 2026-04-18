@@ -48,6 +48,27 @@ static IUnitInputPort_t s_unitInputPort;
 static IOutputDriverPort_t s_outputPort;
 static IMmuPort_t s_mmuPort;
 
+static void ReplicateSequencePlansFromBase(IntersectionConfig_t *config)
+{
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (sequenceIndex = 1U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
+    }
+  }
+}
+
 static uint8_t FakeModuleBusRead(void *ctx, ModuleBusSnapshot_t *snapshot)
 {
   FakeModuleBusCtx_t *moduleBusCtx = (FakeModuleBusCtx_t *) ctx;
@@ -171,6 +192,7 @@ static IntersectionConfig_t MakeControllerConfig(void)
   config.rings[1].barrierPhaseCount = 1U;
   config.rings[1].phaseOrder[0] = 2U;
   config.rings[1].phaseOrder[1] = 3U;
+  ReplicateSequencePlansFromBase(&config);
 
   config.vehicleDetectors[0].callPhase = 2U;
   config.vehicleDetectors[1].callPhase = 1U;

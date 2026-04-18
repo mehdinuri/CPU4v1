@@ -27,6 +27,27 @@ static FakeMmuCtx_t s_mmuCtx;
 static IOutputDriverPort_t s_outputPort;
 static IMmuPort_t s_mmuPort;
 
+static void ReplicateSequencePlansFromBase(IntersectionConfig_t *config)
+{
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (sequenceIndex = 1U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
+    }
+  }
+}
+
 static uint8_t FakeOutputApply(void *ctx, const OutputDriverImage_t *image)
 {
   FakeOutputDriverCtx_t *outputCtx = (FakeOutputDriverCtx_t *) ctx;
@@ -87,6 +108,7 @@ static IntersectionConfig_t MakeDispatcherConfig(void)
   config.rings[1].barrierPhaseCount = 1U;
   config.rings[1].phaseOrder[0] = 2U;
   config.rings[1].phaseOrder[1] = 3U;
+  ReplicateSequencePlansFromBase(&config);
 
   for (detectorIndex = config.phaseCount;
        detectorIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
@@ -105,6 +127,29 @@ static IntersectionConfig_t MakeDispatcherConfig(void)
   config.channels[0].controlSource = 1U;
   config.channels[0].controlType =
     INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+
+  return config;
+}
+
+static IntersectionConfig_t MakeTransitDispatcherConfig(void)
+{
+  IntersectionConfig_t config = MakeDispatcherConfig();
+  uint8_t phaseIndex;
+
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].minGreenDs = 10U;
+    config.phases[phaseIndex].yellowChangeDs = 3U;
+    config.phases[phaseIndex].redClearDs = 2U;
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.channels[0].controlSource = 1U;
+  config.channels[0].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP;
+  config.overlaps[0].type = INTERSECTION_OVERLAP_TYPE_TRANSIT_2;
+  config.overlaps[0].includedPhases.length = 1U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
 
   return config;
 }
@@ -203,12 +248,46 @@ void test_dispatcher_preserves_channel_dimming_flags(void)
                           s_outputCtx.lastImage.channelDimAlternateHalfCycle[0]);
 }
 
+void test_dispatcher_converts_flash_green_output(void)
+{
+  OutputDriverImage_t appliedImage;
+  IntersectionConfig_t config = MakeTransitDispatcherConfig();
+  const IntersectionRuntime_t *runtime;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(
+    IntersectionEngineSetRemoteManualControlTimeout(&s_engine, 3U));
+
+  for (uint32_t tickIndex = 0U; tickIndex < 100U; ++tickIndex)
+  {
+    IntersectionEngineTick(&s_engine);
+  }
+
+  TEST_ASSERT_TRUE(
+    IntersectionEngineSetRemoteManualIntervalAdvance(&s_engine, 1U));
+  IntersectionEngineTick(&s_engine);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[0].interval);
+
+  TEST_ASSERT_TRUE(IntersectionOutputDispatcherDispatch(&s_dispatcher));
+  TEST_ASSERT_TRUE(IntersectionOutputDispatcherGetLastAppliedImage(
+                     &s_dispatcher,
+                     &appliedImage));
+  TEST_ASSERT_EQUAL_INT(OUTPUT_DRIVER_ASPECT_FLASH_GREEN,
+                        appliedImage.channels[0]);
+  TEST_ASSERT_EQUAL_INT(OUTPUT_DRIVER_ASPECT_FLASH_GREEN,
+                        s_outputCtx.lastImage.channels[0]);
+}
+
 int main(void)
 {
   UNITY_BEGIN();
   RUN_TEST(test_dispatcher_applies_engine_output_image_through_output_port);
   RUN_TEST(test_dispatcher_allows_mmu_to_force_all_red_output);
   RUN_TEST(test_dispatcher_preserves_channel_dimming_flags);
+  RUN_TEST(test_dispatcher_converts_flash_green_output);
 
   return UNITY_END();
 }

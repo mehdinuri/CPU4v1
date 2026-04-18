@@ -253,7 +253,7 @@ void MeasurementTaskFunc(void *argument)
 
     if (MeasurementService_IsFlash(&s_svc) != 0U)
     {
-      MeasurementService_FlashSync(&s_svc);
+      MeasurementService_FlashSync(&s_svc, HAL_GetTick());
     }
     else
     {

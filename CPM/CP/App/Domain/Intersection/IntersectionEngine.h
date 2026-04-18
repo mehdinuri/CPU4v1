@@ -38,9 +38,11 @@ typedef struct
   uint8_t remoteManualPedAutoAdvance[INTERSECTION_RING_COUNT_MAX];
   uint8_t remoteManualTickAccumulator;
   uint8_t pedWalkServiceCyclePattern;
+  uint8_t activeSequenceNumber;
   uint8_t automaticFlashEntryPositions[INTERSECTION_RING_COUNT_MAX];
   uint8_t automaticFlashExitPositions[INTERSECTION_RING_COUNT_MAX];
   IntersectionConfig_t config;
+  IntersectionRingPlan_t activeRingPlans[INTERSECTION_RING_COUNT_MAX];
   uint16_t minGreenTicks[INTERSECTION_PHASE_COUNT_MAX];
   uint32_t maxGreenTicks[INTERSECTION_PHASE_COUNT_MAX];
   uint32_t runningMaxTicks[INTERSECTION_PHASE_COUNT_MAX];
@@ -93,6 +95,15 @@ typedef struct
   uint8_t preemptCyclingDemandFilterActive;
   uint8_t linkedPreemptSourceIndex;
   uint8_t linkedPreemptTargetIndex;
+  IntersectionPedInterval_t overlapPedIntervals[
+    INTERSECTION_OVERLAP_COUNT_MAX];
+  uint16_t overlapPedIntervalElapsedTicks[INTERSECTION_OVERLAP_COUNT_MAX];
+  uint8_t overlapPedServiceWindowActive[INTERSECTION_OVERLAP_COUNT_MAX];
+  uint8_t overlapTrailStage[INTERSECTION_OVERLAP_COUNT_MAX];
+  IntersectionOutputAspect_t overlapLastBaseAspect[
+    INTERSECTION_OVERLAP_COUNT_MAX];
+  uint16_t overlapTrailTicksRemaining[
+    INTERSECTION_OVERLAP_COUNT_MAX];
   IntersectionPhaseInterval_t preemptEntryPhaseIntervals[
     INTERSECTION_PHASE_COUNT_MAX];
   IntersectionPedInterval_t preemptEntryPedIntervals[

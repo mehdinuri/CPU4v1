@@ -17,11 +17,20 @@
 #define INTERSECTION_CHANNEL_COUNT_MAX 16U
 #define INTERSECTION_OVERLAP_COUNT_MAX 16U
 #define INTERSECTION_PATTERN_COUNT_MAX 8U
+#define INTERSECTION_SEQUENCE_COUNT_MAX 8U
 #define INTERSECTION_SPLIT_COUNT_MAX 4U
 #define INTERSECTION_TIMEBASE_ACTION_COUNT_MAX 48U
+#define INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX 6U
+#define INTERSECTION_DAY_PLAN_COUNT_MAX 2U
+#define INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX 3U
+#define INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX 1U
 #define INTERSECTION_PREEMPT_COUNT_MAX 8U
 #define INTERSECTION_PED_INPUT_COUNT_MAX 8U
 #define INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX 16U
+#define INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX 3U
+#define INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX 1U
+#define INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX 1U
+#define INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX 64U
 #define INTERSECTION_PREEMPT_GATE_COUNT_MAX 8U
 #define INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX 255U
 #define INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX 8U
@@ -357,6 +366,82 @@ typedef struct
 
 typedef struct
 {
+  uint16_t monthMask;
+  uint8_t dayMask;
+  uint8_t dayPlanNumber;
+  uint32_t dateMask;
+} IntersectionTimebaseScheduleEntryConfig_t;
+
+typedef struct
+{
+  uint8_t hour;
+  uint8_t minute;
+  uint8_t actionNumber;
+  uint8_t reserved0;
+} IntersectionDayPlanEventConfig_t;
+
+typedef struct
+{
+  uint8_t beginMonth;
+  uint8_t beginOccurrences;
+  uint8_t beginDayOfWeek;
+  uint8_t beginDayOfMonth;
+  uint32_t beginSecondsToTransition;
+  uint8_t endMonth;
+  uint8_t endOccurrences;
+  uint8_t endDayOfWeek;
+  uint8_t endDayOfMonth;
+  uint32_t endSecondsToTransition;
+  uint32_t secondsToAdjust;
+} IntersectionDaylightSavingEntryConfig_t;
+
+typedef struct
+{
+  uint8_t globalDaylightSaving;
+  uint8_t reserved0;
+  uint8_t reserved1;
+  uint8_t reserved2;
+  int32_t controllerStandardTimeZoneSeconds;
+  IntersectionTimebaseScheduleEntryConfig_t schedules[
+    INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX];
+  IntersectionDayPlanEventConfig_t dayPlans[INTERSECTION_DAY_PLAN_COUNT_MAX][
+    INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX];
+  IntersectionDaylightSavingEntryConfig_t daylightSavingEntries[
+    INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX];
+} IntersectionGlobalTimeManagementConfig_t;
+
+typedef struct
+{
+  uint8_t type;
+  uint8_t description[INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX];
+} IntersectionCabinetEnvironmentDeviceConfig_t;
+
+typedef struct
+{
+  int8_t highThreshold;
+  int8_t lowThreshold;
+  uint8_t description[INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX];
+} IntersectionCabinetTemperatureSensorConfig_t;
+
+typedef struct
+{
+  uint8_t threshold;
+  uint8_t description[INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX];
+} IntersectionCabinetHumiditySensorConfig_t;
+
+typedef struct
+{
+  uint8_t atccLedMode;
+  IntersectionCabinetEnvironmentDeviceConfig_t devices[
+    INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX];
+  IntersectionCabinetTemperatureSensorConfig_t temperatureSensors[
+    INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX];
+  IntersectionCabinetHumiditySensorConfig_t humiditySensors[
+    INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX];
+} IntersectionCabinetEnvironmentConfig_t;
+
+typedef struct
+{
   uint8_t pattern;
   uint8_t auxiliaryFunction;
   uint8_t specialFunction;
@@ -457,9 +542,16 @@ typedef struct
   uint8_t barrierCount;
   uint8_t reserved;
   IntersectionPhaseConfig_t phases[INTERSECTION_PHASE_COUNT_MAX];
-  IntersectionRingPlan_t rings[INTERSECTION_RING_COUNT_MAX];
+  union
+  {
+    IntersectionRingPlan_t rings[INTERSECTION_RING_COUNT_MAX];
+    IntersectionRingPlan_t sequencePlans[INTERSECTION_SEQUENCE_COUNT_MAX][
+      INTERSECTION_RING_COUNT_MAX];
+  };
   IntersectionCoordinationConfig_t coordination;
   IntersectionTimebaseConfig_t timebase;
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+  IntersectionCabinetEnvironmentConfig_t cabinetEnvironment;
   IntersectionUnitConfig_t unit;
   IntersectionPreemptConfig_t preempts[INTERSECTION_PREEMPT_COUNT_MAX];
   IntersectionVehicleDetectorConfig_t vehicleDetectors[
@@ -523,6 +615,14 @@ typedef enum
   INTERSECTION_CONFIG_ERROR_TIMEBASE_PATTERN_SYNC,
   INTERSECTION_CONFIG_ERROR_TIMEBASE_ACTION_PATTERN,
   INTERSECTION_CONFIG_ERROR_TIMEBASE_ACTION_AUXILIARY_FUNCTION,
+  INTERSECTION_CONFIG_ERROR_GLOBAL_TIME_MANAGEMENT,
+  INTERSECTION_CONFIG_ERROR_TIMEBASE_SCHEDULE,
+  INTERSECTION_CONFIG_ERROR_DAY_PLAN,
+  INTERSECTION_CONFIG_ERROR_DAYLIGHT_SAVING,
+  INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_DEVICE_TYPE,
+  INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_TEMPERATURE_THRESHOLD,
+  INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_HUMIDITY_THRESHOLD,
+  INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_LED_MODE,
   INTERSECTION_CONFIG_ERROR_UNIT_AUTO_PEDESTRIAN_CLEAR,
   INTERSECTION_CONFIG_ERROR_UNIT_STARTUP_FLASH_MODE,
   INTERSECTION_CONFIG_ERROR_UNIT_TIME_SOURCE,

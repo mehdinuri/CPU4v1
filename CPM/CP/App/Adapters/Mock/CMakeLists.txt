@@ -17,6 +17,7 @@ target_sources(Mock_Adapters PRIVATE
     MockDisplayAdapter.c
     MockUserInputAdapter.c
     MockHeaterAdapter.c
+    MockPowerMonitorAdapter.c
     MockDoorSensorAdapter.c
     MockStatusLEDAdapter.c
     MockRelayAdapter.c

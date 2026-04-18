@@ -10,6 +10,8 @@
 #include "fdcan.h"
 #include "CanMsgSender.h"
 
+extern volatile uint8_t g_bCanTxOverflowCount;
+
 /* ---------------------------------------------------------------------------
  * Private adapter implementation
  * ---------------------------------------------------------------------------*/
@@ -29,6 +31,12 @@ static void AdapterSend(void *ctx,
                bDataLen);
 }
 
+static uint8_t AdapterGetOverflowCount(void *ctx)
+{
+  (void) ctx;
+  return g_bCanTxOverflowCount;
+}
+
 /* ---------------------------------------------------------------------------
  * Public adapter API
  * ---------------------------------------------------------------------------*/
@@ -40,8 +48,9 @@ void CANTxAdapterInit(CANTxAdapterCtx_t *ctx)
 ICANTxPort_t CANTxAdapterCreatePort(CANTxAdapterCtx_t *ctx)
 {
   ICANTxPort_t port;
-  port.ctx  = ctx;
-  port.Send = AdapterSend;
+  port.ctx              = ctx;
+  port.Send             = AdapterSend;
+  port.GetOverflowCount = AdapterGetOverflowCount;
   return port;
 }
 

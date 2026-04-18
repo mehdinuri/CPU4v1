@@ -87,11 +87,12 @@ static NtcipError_t GetActiveSequenceEntry(const NtcipContext_t *context,
 {
   NtcipError_t error;
   uint8_t ringIndex = 0U;
+  uint8_t localSequenceNumber = 0U;
 
   error = DecodeSequenceIndexes(context,
                                 indexes,
                                 indexCount,
-                                sequenceNumber,
+                                &localSequenceNumber,
                                 &ringIndex);
 
   if (error != NTCIP_ERROR_OK)
@@ -100,11 +101,18 @@ static NtcipError_t GetActiveSequenceEntry(const NtcipContext_t *context,
   }
 
   if ((ringPlan != NULL)
-      && (ConfigurationServiceGetActiveRingPlan(context->configurationService,
-                                                ringIndex,
-                                                ringPlan) == 0U))
+      && (ConfigurationServiceGetActiveSequenceRingPlan(
+            context->configurationService,
+            localSequenceNumber,
+            ringIndex,
+            ringPlan) == 0U))
   {
     return NTCIP_ERROR_GEN_ERROR;
+  }
+
+  if (sequenceNumber != NULL)
+  {
+    *sequenceNumber = localSequenceNumber;
   }
 
   if (ringNumber != NULL)
@@ -123,12 +131,12 @@ static NtcipError_t GetCandidateSequenceEntry(
   IntersectionRingPlan_t *ringPlan)
 {
   NtcipError_t error;
-  uint8_t ignoredSequenceNumber = 0U;
+  uint8_t sequenceNumber = 0U;
 
   error = DecodeSequenceIndexes(context,
                                 indexes,
                                 indexCount,
-                                &ignoredSequenceNumber,
+                                &sequenceNumber,
                                 ringIndex);
 
   if (error != NTCIP_ERROR_OK)
@@ -137,9 +145,11 @@ static NtcipError_t GetCandidateSequenceEntry(
   }
 
   if ((ringPlan == NULL)
-      || (ConfigurationServiceGetCandidateRingPlan(context->configurationService,
-                                                   *ringIndex,
-                                                   ringPlan) == 0U))
+      || (ConfigurationServiceGetCandidateSequenceRingPlan(
+            context->configurationService,
+            sequenceNumber,
+            *ringIndex,
+            ringPlan) == 0U))
   {
     return NTCIP_ERROR_GEN_ERROR;
   }
@@ -381,6 +391,7 @@ static NtcipError_t SetValueSequenceObject(
 
   return (ConfigurationServiceSetRingSequenceData(
             context->configurationService,
+            (uint8_t) indexes[0],
             ringIndex,
             value->data.octetString.bytes,
             (uint8_t) value->data.octetString.length) != 0U)

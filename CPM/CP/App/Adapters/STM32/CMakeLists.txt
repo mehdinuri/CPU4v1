@@ -23,6 +23,7 @@ target_sources(Adapters_STM32 PRIVATE
     KeypadAdapter.c
     UnitInputAdapter.c
     HeaterAdapter.c
+    PowerMonitorAdapter.c
     DoorSensorAdapter.c
     CommLEDAdapter.c
     RelayAdapter.c

@@ -22,6 +22,7 @@ typedef struct
                uint32_t lID,
                const uint8_t *baData,
                uint8_t bDataLen);
+  uint8_t (*GetOverflowCount)(void *ctx);
 } ICANTxPort_t;
 
 /* ---------------------------------------------------------------------------
@@ -33,6 +34,11 @@ static inline void CANTx_Send(ICANTxPort_t *p,
                                uint8_t bDataLen)
 {
   p->Send(p->ctx, lID, baData, bDataLen);
+}
+
+static inline uint8_t CANTx_GetOverflowCount(ICANTxPort_t *p)
+{
+  return p->GetOverflowCount(p->ctx);
 }
 
 #endif /* PORTS_ICANTXPORT_H */

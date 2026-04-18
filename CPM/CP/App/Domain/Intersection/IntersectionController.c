@@ -40,6 +40,7 @@ static uint8_t ChannelFeedbackMatchesAspect(OutputDriverAspect_t expectedAspect,
 
       case OUTPUT_DRIVER_ASPECT_FLASH_RED:
       case OUTPUT_DRIVER_ASPECT_FLASH_YELLOW:
+      case OUTPUT_DRIVER_ASPECT_FLASH_GREEN:
       default:
       {
         return 1U;

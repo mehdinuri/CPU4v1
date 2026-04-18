@@ -6,6 +6,7 @@
 #include "IntersectionConfig.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #define INTERSECTION_CHANNEL_FLASH_ALLOWED_MASK 0x0EU
 #define INTERSECTION_CHANNEL_DIM_ALLOWED_MASK 0x0FU
@@ -254,6 +255,7 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
 {
   uint8_t i;
   uint8_t ringIndex;
+  uint8_t sequenceIndex;
   uint8_t detectorIndex;
 
   if (config == NULL)
@@ -305,17 +307,23 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
     config->phases[i].reserved = 0U;
   }
 
-  for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    config->rings[ringIndex].phaseCount = INTERSECTION_RING_PHASE_COUNT_MAX;
-    config->rings[ringIndex].barrierPhaseCount = 2U;
-    config->rings[ringIndex].reserved0 = 0U;
-    config->rings[ringIndex].reserved1 = 0U;
-
-    for (i = 0U; i < INTERSECTION_RING_PHASE_COUNT_MAX; i++)
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
     {
-      config->rings[ringIndex].phaseOrder[i] =
-        (uint8_t) (ringIndex * INTERSECTION_RING_PHASE_COUNT_MAX + i);
+      config->sequencePlans[sequenceIndex][ringIndex].phaseCount =
+        INTERSECTION_RING_PHASE_COUNT_MAX;
+      config->sequencePlans[sequenceIndex][ringIndex].barrierPhaseCount = 2U;
+      config->sequencePlans[sequenceIndex][ringIndex].reserved0 = 0U;
+      config->sequencePlans[sequenceIndex][ringIndex].reserved1 = 0U;
+
+      for (i = 0U; i < INTERSECTION_RING_PHASE_COUNT_MAX; i++)
+      {
+        config->sequencePlans[sequenceIndex][ringIndex].phaseOrder[i] =
+          (uint8_t) (ringIndex * INTERSECTION_RING_PHASE_COUNT_MAX + i);
+      }
     }
   }
 
@@ -373,6 +381,87 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
     action->specialFunction = 0U;
     action->enabledLane = 0U;
   }
+
+  config->globalTimeManagement.globalDaylightSaving = 20U;
+  config->globalTimeManagement.reserved0 = 0U;
+  config->globalTimeManagement.reserved1 = 0U;
+  config->globalTimeManagement.reserved2 = 0U;
+  config->globalTimeManagement.controllerStandardTimeZoneSeconds = 0;
+
+  for (i = 0U; i < INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX; i++)
+  {
+    IntersectionTimebaseScheduleEntryConfig_t *schedule =
+      &config->globalTimeManagement.schedules[i];
+
+    schedule->monthMask = 0U;
+    schedule->dayMask = 0U;
+    schedule->dayPlanNumber = 0U;
+    schedule->dateMask = 0U;
+  }
+
+  for (ringIndex = 0U; ringIndex < INTERSECTION_DAY_PLAN_COUNT_MAX; ringIndex++)
+  {
+    for (i = 0U; i < INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX; i++)
+    {
+      IntersectionDayPlanEventConfig_t *event =
+        &config->globalTimeManagement.dayPlans[ringIndex][i];
+
+      event->hour = 0U;
+      event->minute = 0U;
+      event->actionNumber = 0U;
+      event->reserved0 = 0U;
+    }
+  }
+
+  for (i = 0U; i < INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX; i++)
+  {
+    IntersectionDaylightSavingEntryConfig_t *entry =
+      &config->globalTimeManagement.daylightSavingEntries[i];
+
+    entry->beginMonth = 3U;
+    entry->beginOccurrences = 2U;
+    entry->beginDayOfWeek = 1U;
+    entry->beginDayOfMonth = 1U;
+    entry->beginSecondsToTransition = 7200U;
+    entry->endMonth = 11U;
+    entry->endOccurrences = 1U;
+    entry->endDayOfWeek = 1U;
+    entry->endDayOfMonth = 1U;
+    entry->endSecondsToTransition = 7200U;
+    entry->secondsToAdjust = 3600U;
+  }
+
+  config->cabinetEnvironment.atccLedMode = 1U;
+  memset(config->cabinetEnvironment.devices,
+         0,
+         sizeof(config->cabinetEnvironment.devices));
+  memset(config->cabinetEnvironment.temperatureSensors,
+         0,
+         sizeof(config->cabinetEnvironment.temperatureSensors));
+  memset(config->cabinetEnvironment.humiditySensors,
+         0,
+         sizeof(config->cabinetEnvironment.humiditySensors));
+  config->cabinetEnvironment.devices[0].type = 2U;
+  (void) memcpy(config->cabinetEnvironment.devices[0].description,
+                "DOOR",
+                4U);
+  config->cabinetEnvironment.devices[1].type = 3U;
+  (void) memcpy(config->cabinetEnvironment.devices[1].description,
+                "FAN",
+                3U);
+  config->cabinetEnvironment.devices[2].type = 4U;
+  (void) memcpy(config->cabinetEnvironment.devices[2].description,
+                "HEATER",
+                6U);
+  (void) memcpy(config->cabinetEnvironment.temperatureSensors[0].description,
+                "TEMP SENSOR",
+                11U);
+  config->cabinetEnvironment.temperatureSensors[0].highThreshold = 0;
+  config->cabinetEnvironment.temperatureSensors[0].lowThreshold = 0;
+  (void) memcpy(config->cabinetEnvironment.humiditySensors[0].description,
+                "HUMIDITY SENSOR",
+                15U);
+  config->cabinetEnvironment.humiditySensors[0].threshold = 0U;
 
   config->unit.startUpFlashSeconds = 0U;
   config->unit.autoPedestrianClear =
@@ -530,12 +619,12 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
 {
   uint8_t phaseIndex;
   uint8_t ringIndex;
+  uint8_t sequenceIndex;
   uint8_t detectorIndex;
   uint8_t seenDetectors[INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX] = { 0U };
   uint8_t seenPedInputs[INTERSECTION_PED_INPUT_COUNT_MAX] = { 0U };
   uint8_t channelIndex;
   uint8_t overlapIndex;
-  uint8_t phaseSeen[INTERSECTION_PHASE_COUNT_MAX] = { 0U };
 
   if (config == NULL)
   {
@@ -808,79 +897,91 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
     }
   }
 
-  for (ringIndex = 0U; ringIndex < config->ringCount; ringIndex++)
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &config->rings[ringIndex];
-    uint8_t serviceIndex;
+    uint8_t phaseSeen[INTERSECTION_PHASE_COUNT_MAX] = { 0U };
 
-    if ((ringPlan->phaseCount == 0U)
-        || (ringPlan->phaseCount > INTERSECTION_RING_PHASE_COUNT_MAX))
+    for (ringIndex = 0U; ringIndex < config->ringCount; ringIndex++)
     {
-      SetError(errorInfo,
-               INTERSECTION_CONFIG_ERROR_RING_PHASE_COUNT,
-               (uint16_t) ringIndex + 1U);
+      const IntersectionRingPlan_t *ringPlan =
+        &config->sequencePlans[sequenceIndex][ringIndex];
+      uint16_t rowIndex = (uint16_t) (sequenceIndex * config->ringCount)
+                          + (uint16_t) ringIndex + 1U;
+      uint8_t serviceIndex;
 
-      return 0U;
-    }
-
-    if ((ringPlan->barrierPhaseCount == 0U)
-        || (ringPlan->barrierPhaseCount > ringPlan->phaseCount))
-    {
-      SetError(errorInfo,
-               INTERSECTION_CONFIG_ERROR_RING_BARRIER_POSITION,
-               (uint16_t) ringIndex + 1U);
-
-      return 0U;
-    }
-
-    for (serviceIndex = 0U; serviceIndex < ringPlan->phaseCount; serviceIndex++)
-    {
-      uint8_t plannedPhaseIndex = ringPlan->phaseOrder[serviceIndex];
-
-      if (plannedPhaseIndex >= config->phaseCount)
+      if ((ringPlan->phaseCount == 0U)
+          || (ringPlan->phaseCount > INTERSECTION_RING_PHASE_COUNT_MAX))
       {
         SetError(errorInfo,
-                 INTERSECTION_CONFIG_ERROR_RING_PHASE_ORDER,
-                 (uint16_t) ringIndex + 1U);
+                 INTERSECTION_CONFIG_ERROR_RING_PHASE_COUNT,
+                 rowIndex);
 
         return 0U;
       }
 
-      if (phaseSeen[plannedPhaseIndex] != 0U)
+      if ((ringPlan->barrierPhaseCount == 0U)
+          || (ringPlan->barrierPhaseCount > ringPlan->phaseCount))
       {
         SetError(errorInfo,
-                 INTERSECTION_CONFIG_ERROR_RING_PHASE_ORDER,
-                 (uint16_t) ringIndex + 1U);
+                 INTERSECTION_CONFIG_ERROR_RING_BARRIER_POSITION,
+                 rowIndex);
 
         return 0U;
       }
 
+      for (serviceIndex = 0U;
+           serviceIndex < ringPlan->phaseCount;
+           serviceIndex++)
+      {
+        uint8_t plannedPhaseIndex = ringPlan->phaseOrder[serviceIndex];
+
+        if (plannedPhaseIndex >= config->phaseCount)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_RING_PHASE_ORDER,
+                   rowIndex);
+
+          return 0U;
+        }
+
+        if (phaseSeen[plannedPhaseIndex] != 0U)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_RING_PHASE_ORDER,
+                   rowIndex);
+
+          return 0U;
+        }
+
+        if ((IntersectionPhaseOptionsEnabled(
+               config->phases[plannedPhaseIndex].phaseOptions) == 0U)
+            || (config->phases[plannedPhaseIndex].ring != ringIndex))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_PHASE_ASSIGNMENT,
+                   (uint16_t) plannedPhaseIndex + 1U);
+
+          return 0U;
+        }
+
+        phaseSeen[plannedPhaseIndex] = 1U;
+      }
+    }
+
+    for (phaseIndex = 0U; phaseIndex < config->phaseCount; phaseIndex++)
+    {
       if ((IntersectionPhaseOptionsEnabled(
-             config->phases[plannedPhaseIndex].phaseOptions) == 0U)
-          || (config->phases[plannedPhaseIndex].ring != ringIndex))
+             config->phases[phaseIndex].phaseOptions) != 0U)
+          && (phaseSeen[phaseIndex] == 0U))
       {
         SetError(errorInfo,
                  INTERSECTION_CONFIG_ERROR_PHASE_ASSIGNMENT,
-                 (uint16_t) plannedPhaseIndex + 1U);
+                 (uint16_t) phaseIndex + 1U);
 
         return 0U;
       }
-
-      phaseSeen[plannedPhaseIndex] = 1U;
-    }
-  }
-
-  for (phaseIndex = 0U; phaseIndex < config->phaseCount; phaseIndex++)
-  {
-    if ((IntersectionPhaseOptionsEnabled(config->phases[phaseIndex].phaseOptions)
-         != 0U)
-        && (phaseSeen[phaseIndex] == 0U))
-    {
-      SetError(errorInfo,
-               INTERSECTION_CONFIG_ERROR_PHASE_ASSIGNMENT,
-               (uint16_t) phaseIndex + 1U);
-
-      return 0U;
     }
   }
 
@@ -943,7 +1044,7 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
     }
 
     if ((pattern->sequenceNumber == 0U)
-        || (pattern->sequenceNumber > 1U))
+        || (pattern->sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
     {
       SetError(errorInfo,
                INTERSECTION_CONFIG_ERROR_PATTERN_SEQUENCE_NUMBER,
@@ -1042,6 +1143,145 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
 
       return 0U;
     }
+  }
+
+  if ((config->globalTimeManagement.globalDaylightSaving < 1U)
+      || (config->globalTimeManagement.globalDaylightSaving > 20U)
+      || (config->globalTimeManagement.controllerStandardTimeZoneSeconds
+          < -43200)
+      || (config->globalTimeManagement.controllerStandardTimeZoneSeconds
+          > 43200))
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_GLOBAL_TIME_MANAGEMENT,
+             0U);
+
+    return 0U;
+  }
+
+  for (ringIndex = 0U; ringIndex < INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX;
+       ringIndex++)
+  {
+    const IntersectionTimebaseScheduleEntryConfig_t *schedule =
+      &config->globalTimeManagement.schedules[ringIndex];
+    uint16_t objectIndex = (uint16_t) ringIndex + 1U;
+
+    if (schedule->dayPlanNumber > INTERSECTION_DAY_PLAN_COUNT_MAX)
+    {
+      SetError(errorInfo,
+               INTERSECTION_CONFIG_ERROR_TIMEBASE_SCHEDULE,
+               objectIndex);
+
+      return 0U;
+    }
+  }
+
+  for (ringIndex = 0U; ringIndex < INTERSECTION_DAY_PLAN_COUNT_MAX; ringIndex++)
+  {
+    uint8_t eventIndex;
+
+    for (eventIndex = 0U; eventIndex < INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX;
+         eventIndex++)
+    {
+      const IntersectionDayPlanEventConfig_t *event =
+        &config->globalTimeManagement.dayPlans[ringIndex][eventIndex];
+      uint16_t objectIndex =
+        (uint16_t) (ringIndex * INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX)
+        + (uint16_t) eventIndex + 1U;
+
+      if ((event->hour > 23U) || (event->minute > 59U)
+          || (event->actionNumber > INTERSECTION_TIMEBASE_ACTION_COUNT_MAX))
+      {
+        SetError(errorInfo,
+                 INTERSECTION_CONFIG_ERROR_DAY_PLAN,
+                 objectIndex);
+
+        return 0U;
+      }
+    }
+  }
+
+  for (ringIndex = 0U;
+       ringIndex < INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX;
+       ringIndex++)
+  {
+    const IntersectionDaylightSavingEntryConfig_t *entry =
+      &config->globalTimeManagement.daylightSavingEntries[ringIndex];
+    uint16_t objectIndex = (uint16_t) ringIndex + 1U;
+
+    if ((entry->beginMonth < 1U) || (entry->beginMonth > 14U)
+        || (entry->beginOccurrences < 1U) || (entry->beginOccurrences > 9U)
+        || (entry->beginDayOfWeek < 1U) || (entry->beginDayOfWeek > 7U)
+        || (entry->beginDayOfMonth < 1U) || (entry->beginDayOfMonth > 31U)
+        || (entry->endMonth < 1U) || (entry->endMonth > 12U)
+        || (entry->endOccurrences < 1U) || (entry->endOccurrences > 9U)
+        || (entry->endDayOfWeek < 1U) || (entry->endDayOfWeek > 7U)
+        || (entry->endDayOfMonth < 1U) || (entry->endDayOfMonth > 31U)
+        || (entry->secondsToAdjust > 21600U))
+    {
+      SetError(errorInfo,
+               INTERSECTION_CONFIG_ERROR_DAYLIGHT_SAVING,
+               objectIndex);
+
+      return 0U;
+    }
+  }
+
+  for (ringIndex = 0U;
+       ringIndex < INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX;
+       ringIndex++)
+  {
+    if ((config->cabinetEnvironment.devices[ringIndex].type < 1U)
+        || (config->cabinetEnvironment.devices[ringIndex].type > 5U))
+    {
+      SetError(errorInfo,
+               INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_DEVICE_TYPE,
+               (uint16_t) ringIndex + 1U);
+
+      return 0U;
+    }
+  }
+
+  for (ringIndex = 0U;
+       ringIndex < INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX;
+       ringIndex++)
+  {
+    const IntersectionCabinetTemperatureSensorConfig_t *sensor =
+      &config->cabinetEnvironment.temperatureSensors[ringIndex];
+
+    if (sensor->lowThreshold > sensor->highThreshold)
+    {
+      SetError(
+        errorInfo,
+        INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_TEMPERATURE_THRESHOLD,
+        (uint16_t) ringIndex + 1U);
+
+      return 0U;
+    }
+  }
+
+  for (ringIndex = 0U;
+       ringIndex < INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX;
+       ringIndex++)
+  {
+    if (config->cabinetEnvironment.humiditySensors[ringIndex].threshold > 101U)
+    {
+      SetError(errorInfo,
+               INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_HUMIDITY_THRESHOLD,
+               (uint16_t) ringIndex + 1U);
+
+      return 0U;
+    }
+  }
+
+  if ((config->cabinetEnvironment.atccLedMode < 1U)
+      || (config->cabinetEnvironment.atccLedMode > 3U))
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_CABINET_ENVIRONMENT_LED_MODE,
+             0U);
+
+    return 0U;
   }
 
   for (detectorIndex = 0U;
@@ -1290,7 +1530,7 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
     }
 
     if ((preempt->sequenceNumber == 0U)
-        || (preempt->sequenceNumber > 1U))
+        || (preempt->sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
     {
       SetError(errorInfo,
                INTERSECTION_CONFIG_ERROR_PREEMPT_SEQUENCE_NUMBER,
@@ -1671,7 +1911,6 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
   const IntersectionConfig_t *config,
   IntersectionConfigErrorInfo_t *errorInfo)
 {
-  uint8_t channelIndex;
   uint8_t overlapIndex;
   uint8_t preemptIndex;
 
@@ -1683,30 +1922,6 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
   }
 
   SetError(errorInfo, INTERSECTION_CONFIG_ERROR_NONE, 0U);
-
-  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
-       ++channelIndex)
-  {
-    const IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
-    uint16_t objectIndex = (uint16_t) channelIndex + 1U;
-
-    if (channel->controlSource == 0U)
-    {
-      continue;
-    }
-
-    if (((IntersectionChannelControlType_t) channel->controlType
-         == INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP)
-        || ((IntersectionChannelControlType_t) channel->controlType
-            == INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP))
-    {
-      SetError(errorInfo,
-               INTERSECTION_CONFIG_ERROR_CHANNEL_CONTROL_TYPE,
-               objectIndex);
-
-      return 0U;
-    }
-  }
 
   for (overlapIndex = 0U; overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
        ++overlapIndex)
@@ -1723,6 +1938,8 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
     switch ((IntersectionOverlapType_t) overlap->type)
     {
         case INTERSECTION_OVERLAP_TYPE_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
         case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW:
         case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE:
         case INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION:
@@ -1733,8 +1950,6 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
           break;
         }
 
-        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
-        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
         default:
         {
           SetError(errorInfo, INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE, objectIndex);
@@ -1755,7 +1970,8 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
       continue;
     }
 
-    if ((preempt->sequenceNumber != 0U) && (preempt->sequenceNumber != 1U))
+    if ((preempt->sequenceNumber != 0U)
+        && (preempt->sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
     {
       SetError(errorInfo,
                INTERSECTION_CONFIG_ERROR_PREEMPT_SEQUENCE_NUMBER,

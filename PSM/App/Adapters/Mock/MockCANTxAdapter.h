@@ -18,6 +18,7 @@ typedef struct
   uint8_t  aLastData[MOCK_CAN_BUF_SIZE]; /* payload of last call       */
   uint8_t  bLastLen;                    /* length of last call        */
   uint32_t lSendCount;                  /* total Send calls           */
+  uint8_t  bMockOverflow;               /* simulated overflow state   */
 } MockCANTxAdapterCtx_t;
 
 void          MockCANTxAdapterInit(MockCANTxAdapterCtx_t *ctx);

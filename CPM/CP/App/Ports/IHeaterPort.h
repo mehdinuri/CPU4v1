@@ -7,6 +7,7 @@
 #ifndef IHEATER_PORT_H
 #define IHEATER_PORT_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct
@@ -15,6 +16,7 @@ typedef struct
 
   void (*Enable)(void *ctx);
   void (*Disable)(void *ctx);
+  uint8_t (*GetState)(void *ctx);
 } IHeaterPort_t;
 
 static inline void HeaterEnable(IHeaterPort_t *p)
@@ -25,6 +27,16 @@ static inline void HeaterEnable(IHeaterPort_t *p)
 static inline void HeaterDisable(IHeaterPort_t *p)
 {
   p->Disable(p->ctx);
+}
+
+static inline uint8_t HeaterGetState(IHeaterPort_t *p)
+{
+  if ((p == NULL) || (p->GetState == NULL))
+  {
+    return 0U;
+  }
+
+  return p->GetState(p->ctx);
 }
 
 #endif /* IHEATER_PORT_H */

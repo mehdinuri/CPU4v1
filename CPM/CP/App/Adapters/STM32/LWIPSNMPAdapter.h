@@ -9,11 +9,15 @@
 #include "Domain/Intersection/ConfigurationService.h"
 #include "Domain/Intersection/IntersectionActivationService.h"
 #include "Domain/Intersection/DetectorReportService.h"
+#include "Domain/Intersection/GlobalTimeManagementService.h"
 #include "Domain/Intersection/IntersectionController.h"
 #include "Domain/Intersection/IntersectionEngine.h"
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
 #include "Domain/NTCIP/Core/NtcipObjectDirectory.h"
 #include "Domain/NTCIP/NtcipContext.h"
+#include "Ports/IDoorSensorPort.h"
+#include "Ports/IHeaterPort.h"
+#include "Ports/IPowerMonitorPort.h"
 #include "Ports/IUnitAlarmPort.h"
 #include "Ports/IUnitClockPort.h"
 
@@ -42,6 +46,10 @@ typedef struct
   IntersectionEngine_t *intersectionEngine;
   IntersectionController_t *intersectionController;
   DetectorReportService_t *detectorReportService;
+  GlobalTimeManagementService_t *globalTimeManagementService;
+  IDoorSensorPort_t *doorSensorPort;
+  IHeaterPort_t *heaterPort;
+  IPowerMonitorPort_t *powerMonitorPort;
   IUnitAlarmPort_t *unitAlarmPort;
   IUnitClockPort_t *unitClockPort;
   NtcipDbTransactionService_t dbTransactionService;
@@ -58,9 +66,18 @@ void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
 void LWIPSNMPAdapterBindDetectorReportService(
   LWIPSNMPAdapterCtx_t *ctx,
   DetectorReportService_t *detectorReportService);
+void LWIPSNMPAdapterBindGlobalTimeManagementService(
+  LWIPSNMPAdapterCtx_t *ctx,
+  GlobalTimeManagementService_t *globalTimeManagementService);
 void LWIPSNMPAdapterBindActivationService(
   LWIPSNMPAdapterCtx_t *ctx,
   IntersectionActivationService_t *activationService);
+void LWIPSNMPAdapterBindDoorSensorPort(LWIPSNMPAdapterCtx_t *ctx,
+                                       IDoorSensorPort_t *doorSensorPort);
+void LWIPSNMPAdapterBindHeaterPort(LWIPSNMPAdapterCtx_t *ctx,
+                                   IHeaterPort_t *heaterPort);
+void LWIPSNMPAdapterBindPowerMonitorPort(LWIPSNMPAdapterCtx_t *ctx,
+                                         IPowerMonitorPort_t *powerMonitorPort);
 void LWIPSNMPAdapterBindUnitAlarmPort(LWIPSNMPAdapterCtx_t *ctx,
                                       IUnitAlarmPort_t *unitAlarmPort);
 void LWIPSNMPAdapterBindUnitClockPort(LWIPSNMPAdapterCtx_t *ctx,

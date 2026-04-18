@@ -337,9 +337,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 
 		if (verdict == FREQ_CAPTURE_VERDICT_ENTER_SLEEP)
 		{
-			Tim2OCStopIT();
-			Tim2ICStopIT();
-			TimEnterStandby();
+			MeasurementFlashStateSet(1U);
 		}
 		else
 		{

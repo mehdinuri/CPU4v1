@@ -4,6 +4,9 @@
  * Drives PE10 (HEAT pin) directly via HAL.
  */
 #include "HeaterAdapter.h"
+
+#include <stddef.h>
+
 #include "main.h"
 #include "stm32h7xx_hal.h"
 
@@ -26,6 +29,21 @@ static void AdapterDisable(void *ctx)
   c->enabled = 0U;
 }
 
+static uint8_t AdapterGetState(void *ctx)
+{
+  HeaterAdapterCtx_t *c = (HeaterAdapterCtx_t *) ctx;
+
+  if (c == NULL)
+  {
+    return 0U;
+  }
+
+  c->enabled = (uint8_t) (HAL_GPIO_ReadPin(HEAT_GPIO_Port, HEAT_Pin)
+                          == GPIO_PIN_SET);
+
+  return c->enabled;
+}
+
 /* ------------------------------------------------------------------
  * Public API
  * ------------------------------------------------------------------ */
@@ -42,6 +60,7 @@ IHeaterPort_t HeaterAdapterCreatePort(HeaterAdapterCtx_t *ctx)
   port.ctx = ctx;
   port.Enable = AdapterEnable;
   port.Disable = AdapterDisable;
+  port.GetState = AdapterGetState;
 
   return port;
 }

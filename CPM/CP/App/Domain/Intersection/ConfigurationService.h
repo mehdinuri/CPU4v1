@@ -13,19 +13,28 @@
 #include "Ports/IConfigRepositoryPort.h"
 
 #define CONFIGURATION_IMAGE_MAGIC 0x43464731UL
-#define CONFIGURATION_IMAGE_SCHEMA_VERSION 16UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION 19UL
 #define CONFIGURATION_IMAGE_HEADER_SIZE 40U
 #define CONFIGURATION_PHASE_IMAGE_SIZE 56U
 #define CONFIGURATION_VEHICLE_DETECTOR_IMAGE_SIZE 20U
 #define CONFIGURATION_PED_DETECTOR_IMAGE_SIZE 6U
 #define CONFIGURATION_TIMEBASE_ACTION_IMAGE_SIZE 4U
 #define CONFIGURATION_UNIT_IMAGE_SIZE 12U
+#define CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE 91U
+#define CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE \
+        (1U \
+         + (INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX \
+            * (1U + INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX)) \
+         + (INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX \
+            * (INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX + 2U)) \
+         + (INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX \
+            * (INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX + 1U)))
 #define CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE \
         (2U + (INTERSECTION_USER_DEFINED_BACKUP_OID_COMPONENT_COUNT_MAX * 4U) \
          + INTERSECTION_USER_DEFINED_BACKUP_DESCRIPTION_MAX)
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * CONFIGURATION_PHASE_IMAGE_SIZE) \
-         + (INTERSECTION_RING_COUNT_MAX * 8U) \
+         + (INTERSECTION_SEQUENCE_COUNT_MAX * INTERSECTION_RING_COUNT_MAX * 8U) \
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
@@ -46,9 +55,11 @@
          + 2U \
          + (INTERSECTION_TIMEBASE_ACTION_COUNT_MAX \
             * CONFIGURATION_TIMEBASE_ACTION_IMAGE_SIZE) \
+         + CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE \
          + CONFIGURATION_UNIT_IMAGE_SIZE \
          + (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
-            * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE))
+            * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE) \
+         + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE)
 
 #define CONFIGURATION_SLOT_STATE_ERASED 0xFFFFFFFFUL
 #define CONFIGURATION_SLOT_STATE_WRITING 0x7FFFFFFFUL
@@ -113,13 +124,20 @@ typedef struct
   uint8_t barrierCountValid;
   uint8_t reserved[3];
   uint8_t phaseValid[INTERSECTION_PHASE_COUNT_MAX];
-  uint8_t ringValid[INTERSECTION_RING_COUNT_MAX];
+  union
+  {
+    uint8_t ringValid[INTERSECTION_RING_COUNT_MAX];
+    uint8_t sequencePlanValid[INTERSECTION_SEQUENCE_COUNT_MAX][
+      INTERSECTION_RING_COUNT_MAX];
+  };
   uint8_t channelValid[INTERSECTION_CHANNEL_COUNT_MAX];
   uint8_t overlapValid[INTERSECTION_OVERLAP_COUNT_MAX];
   uint8_t vehicleDetectorValid[INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX];
   uint8_t pedestrianDetectorValid[INTERSECTION_PED_INPUT_COUNT_MAX];
   uint8_t coordinationValid;
   uint8_t timebaseValid;
+  uint8_t globalTimeManagementValid;
+  uint8_t cabinetEnvironmentValid;
   uint8_t unitValid;
   uint8_t inputMappingValid;
   uint8_t detectorReportsValid;
@@ -130,7 +148,12 @@ typedef struct
   uint8_t userDefinedBackupContentValid[
     INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX];
   IntersectionPhaseConfig_t phases[INTERSECTION_PHASE_COUNT_MAX];
-  IntersectionRingPlan_t rings[INTERSECTION_RING_COUNT_MAX];
+  union
+  {
+    IntersectionRingPlan_t rings[INTERSECTION_RING_COUNT_MAX];
+    IntersectionRingPlan_t sequencePlans[INTERSECTION_SEQUENCE_COUNT_MAX][
+      INTERSECTION_RING_COUNT_MAX];
+  };
   IntersectionChannelConfig_t channels[INTERSECTION_CHANNEL_COUNT_MAX];
   IntersectionOverlapConfig_t overlaps[INTERSECTION_OVERLAP_COUNT_MAX];
   IntersectionVehicleDetectorConfig_t vehicleDetectors[
@@ -140,6 +163,8 @@ typedef struct
   IntersectionDetectorReportConfig_t detectorReports;
   IntersectionCoordinationConfig_t coordination;
   IntersectionTimebaseConfig_t timebase;
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+  IntersectionCabinetEnvironmentConfig_t cabinetEnvironment;
   IntersectionUnitConfig_t unit;
   IntersectionInputMappingConfig_t inputMapping;
   IntersectionPreemptConfig_t preempts[INTERSECTION_PREEMPT_COUNT_MAX];
@@ -186,10 +211,26 @@ uint8_t ConfigurationServiceGetActiveRingPlan(
   const ConfigurationService_t *service,
   uint8_t ringIndex,
   IntersectionRingPlan_t *ringPlan);
+uint8_t ConfigurationServiceGetActiveSequenceRingPlan(
+  const ConfigurationService_t *service,
+  uint8_t sequenceNumber,
+  uint8_t ringIndex,
+  IntersectionRingPlan_t *ringPlan);
 uint8_t ConfigurationServiceGetCandidateRingPlan(
   ConfigurationService_t *service,
   uint8_t ringIndex,
   IntersectionRingPlan_t *ringPlan);
+uint8_t ConfigurationServiceGetCandidateSequenceRingPlan(
+  ConfigurationService_t *service,
+  uint8_t sequenceNumber,
+  uint8_t ringIndex,
+  IntersectionRingPlan_t *ringPlan);
+uint8_t ConfigurationServiceGetCandidateGlobalTimeManagementConfig(
+  ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig);
+uint8_t ConfigurationServiceGetCandidateCabinetEnvironmentConfig(
+  ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
 uint8_t ConfigurationServiceGetActiveChannelConfig(
   const ConfigurationService_t *service,
   uint8_t channelIndex,
@@ -211,6 +252,12 @@ uint8_t ConfigurationServiceGetActiveCoordinationConfig(
 uint8_t ConfigurationServiceGetActiveTimebaseConfig(
   const ConfigurationService_t *service,
   IntersectionTimebaseConfig_t *timebaseConfig);
+uint8_t ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+  const ConfigurationService_t *service,
+  IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig);
+uint8_t ConfigurationServiceGetActiveCabinetEnvironmentConfig(
+  const ConfigurationService_t *service,
+  IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
 uint8_t ConfigurationServiceGetActiveUnitConfig(
   const ConfigurationService_t *service,
   IntersectionUnitConfig_t *unitConfig);
@@ -436,6 +483,7 @@ uint8_t ConfigurationServiceSetPhaseRing(ConfigurationService_t *service,
                                          uint8_t phaseIndex,
                                          uint8_t ringIndex);
 uint8_t ConfigurationServiceSetRingSequenceData(ConfigurationService_t *service,
+                                                uint8_t sequenceNumber,
                                                 uint8_t ringIndex,
                                                 const uint8_t *phaseNumbers,
                                                 uint8_t length);
@@ -692,6 +740,12 @@ uint8_t ConfigurationServiceSetTimebaseActionEnabledLane(
   ConfigurationService_t *service,
   uint8_t actionIndex,
   uint8_t enabledLane);
+uint8_t ConfigurationServiceSetGlobalTimeManagementConfig(
+  ConfigurationService_t *service,
+  const IntersectionGlobalTimeManagementConfig_t *globalTimeManagementConfig);
+uint8_t ConfigurationServiceSetCabinetEnvironmentConfig(
+  ConfigurationService_t *service,
+  const IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
 uint8_t ConfigurationServiceSetUnitTimeSourceCommanded(
   ConfigurationService_t *service,
   uint8_t timeSourceCommanded);

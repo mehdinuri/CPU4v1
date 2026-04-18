@@ -6,6 +6,7 @@
 
 #include "Domain/NTCIP/Mib1201v0315/GlobalConfigurationObjects.h"
 #include "Domain/NTCIP/Mib1201v0315/GlobalDbManagementObjects.h"
+#include "Domain/NTCIP/Mib1201v0315/GlobalTimeManagementObjects.h"
 #include "Domain/NTCIP/Mib1201v0315NewAuxIO/AuxIoV2Objects.h"
 
 void Ntcip1201RegisterObjects(NtcipObjectDirectory_t *directory,
@@ -13,5 +14,6 @@ void Ntcip1201RegisterObjects(NtcipObjectDirectory_t *directory,
 {
   GlobalConfigurationObjectsRegister(directory, context);
   GlobalDbManagementObjectsRegister(directory, context);
+  GlobalTimeManagementObjectsRegister(directory, context);
   AuxIoV2ObjectsRegister(directory, context);
 }

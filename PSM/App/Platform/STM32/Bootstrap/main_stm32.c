@@ -60,7 +60,7 @@ static const tSFrequencyCaptureFSMConfig s_freqCaptureCfg = {
   .lCaptureTimeoutMs       = 100U,
   .bTargetFreqHz           = 50U,
   .bFreqToleranceHz        = 5U,
-  .sBadReadingsBeforeSleep = 10U
+  .sBadReadingsBeforeSleep = 500U
 };
 
 /* ------------------------------------------------------------------

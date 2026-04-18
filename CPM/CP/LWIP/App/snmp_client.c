@@ -76,8 +76,14 @@ static void BindDomainSnmpAdapter(void)
                       &g_intersectionController);
   LWIPSNMPAdapterBindDetectorReportService(&s_lwipSnmpAdapterCtx,
                                            &g_detectorReportService);
+  LWIPSNMPAdapterBindGlobalTimeManagementService(&s_lwipSnmpAdapterCtx,
+                                                 &g_globalTimeManagementService);
   LWIPSNMPAdapterBindActivationService(&s_lwipSnmpAdapterCtx,
                                        &g_intersectionActivationService);
+  LWIPSNMPAdapterBindDoorSensorPort(&s_lwipSnmpAdapterCtx, &g_doorPort);
+  LWIPSNMPAdapterBindHeaterPort(&s_lwipSnmpAdapterCtx, &g_heaterPort);
+  LWIPSNMPAdapterBindPowerMonitorPort(&s_lwipSnmpAdapterCtx,
+                                      &g_powerMonitorPort);
   LWIPSNMPAdapterBindUnitAlarmPort(&s_lwipSnmpAdapterCtx, &g_unitAlarmPort);
   LWIPSNMPAdapterBindUnitClockPort(&s_lwipSnmpAdapterCtx, &g_unitClockPort);
   LWIPSNMPBridgeBindAdapter(&s_lwipSnmpAdapterCtx);

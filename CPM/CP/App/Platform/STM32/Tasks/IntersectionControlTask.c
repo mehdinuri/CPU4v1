@@ -24,6 +24,7 @@ void IntersectionControlTaskFunc(void *argument)
   {
     (void) IntersectionControllerStep(&g_intersectionController);
     DetectorReportServiceStep(&g_detectorReportService);
+    GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
 
     wakeTick += INTERSECTION_CONTROL_TASK_PERIOD_MS;
     (void) osDelayUntil(wakeTick);

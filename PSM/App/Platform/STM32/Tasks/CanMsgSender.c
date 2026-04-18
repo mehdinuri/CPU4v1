@@ -24,6 +24,7 @@ void vCANMsgSenderInit(void);
 /* Public define ------------------------------------------------------------*/
 
 /* Public variables ---------------------------------------------------------*/
+volatile uint8_t g_bCanTxOverflowCount = 0U;
 
 /* Public function prototypes -----------------------------------------------*/
 
@@ -70,7 +71,12 @@ void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
     if (osMessageQueuePut(CANTxReqsQueueHandle, &pSReq, 0, 0) != osOK)
     {
       osMemoryPoolFree(CANTxReqsMemPoolHandle, pSReq);
+      g_bCanTxOverflowCount++;
     }
+  }
+  else
+  {
+    g_bCanTxOverflowCount++;
   }
 }
 

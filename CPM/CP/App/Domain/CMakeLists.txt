@@ -11,6 +11,7 @@ target_sources(Domain PRIVATE
     Intersection/IntersectionActivationService.c
     Intersection/IntersectionController.c
     Intersection/IntersectionOutputDispatcher.c
+    Intersection/GlobalTimeManagementService.c
     Intersection/Phase.c
     Intersection/SignalGroup.c
     Intersection/Conflict.c
@@ -38,6 +39,7 @@ target_sources(Domain PRIVATE
     NTCIP/NTCIP1202.c
     NTCIP/Mib1201v0315/GlobalConfigurationObjects.c
     NTCIP/Mib1201v0315/GlobalDbManagementObjects.c
+    NTCIP/Mib1201v0315/GlobalTimeManagementObjects.c
     NTCIP/Mib1201v0315NewAuxIO/AuxIoV2Objects.c
     NTCIP/Mib1202v0335/PhaseObjects.c
     NTCIP/Mib1202v0335/PhaseStatusObjects.c
@@ -49,6 +51,7 @@ target_sources(Domain PRIVATE
     NTCIP/Mib1202v0335/CoordObjects.c
     NTCIP/Mib1202v0335/TimebaseObjects.c
     NTCIP/Mib1202v0335/ClockObjects.c
+    NTCIP/Mib1202v0335/CabinetEnvironmentObjects.c
     NTCIP/Mib1202v0335/DetectorObjects.c
     NTCIP/Mib1202v0335/DetectorReportObjects.c
     NTCIP/Mib1202v0335/SpecialFunctionObjects.c

@@ -18,6 +18,7 @@
 #include "PersistencePorts.h"
 
 #include "Adapters/STM32/HeaterAdapter.h"
+#include "Adapters/STM32/PowerMonitorAdapter.h"
 #include "Adapters/STM32/RelayAdapter.h"
 #include "Adapters/STM32/DoorSensorAdapter.h"
 #include "Adapters/STM32/CommLEDAdapter.h"
@@ -77,6 +78,7 @@ static uint8_t s_wifiRxDmaBuf[WIFI_RX_DMA_BUF_SIZE];
  * These are the sole owners of adapter state.
  * ------------------------------------------------------------------ */
 static HeaterAdapterCtx_t s_heaterCtx;
+static PowerMonitorAdapterCtx_t s_powerMonitorCtx;
 static RelayAdapterCtx_t s_relayCtx;
 static DoorSensorAdapterCtx_t s_doorCtx;
 static CommLEDAdapterCtx_t s_commLEDCtx;
@@ -111,6 +113,7 @@ static EthernetNtcipModemAdapterCtx_t s_ethernetNtcipModemCtx;
  * Port instances — declared extern in HardwarePorts.h.
  * ------------------------------------------------------------------ */
 IHeaterPort_t g_heaterPort;
+IPowerMonitorPort_t g_powerMonitorPort;
 IRelayPort_t g_relayPort;
 IDoorSensorPort_t g_doorPort;
 IStatusLEDPort_t g_commLEDPort;
@@ -141,6 +144,7 @@ IntersectionEngine_t g_intersectionEngine;
 IntersectionActivationService_t g_intersectionActivationService;
 IntersectionController_t g_intersectionController;
 DetectorReportService_t g_detectorReportService;
+GlobalTimeManagementService_t g_globalTimeManagementService;
 IntersectionOutputDispatcher_t g_intersectionOutputDispatcher;
 
 /* ------------------------------------------------------------------
@@ -204,6 +208,9 @@ void MainApplication_Init(void)
 {
   HeaterAdapterInit(&s_heaterCtx);
   g_heaterPort = HeaterAdapterCreatePort(&s_heaterCtx);
+
+  PowerMonitorAdapterInit(&s_powerMonitorCtx);
+  g_powerMonitorPort = PowerMonitorAdapterCreatePort(&s_powerMonitorCtx);
 
   RelayAdapterInit(&s_relayCtx);
   g_relayPort = RelayAdapterCreatePort(&s_relayCtx);
@@ -291,8 +298,13 @@ void MainApplication_Init(void)
                             &g_intersectionEngine,
                             &g_intersectionController,
                             &g_rtcPort);
+  GlobalTimeManagementServiceInit(&g_globalTimeManagementService);
+  GlobalTimeManagementServiceBind(&g_globalTimeManagementService,
+                                  &g_intersectionEngine,
+                                  &g_rtcPort);
   (void) IntersectionControllerStep(&g_intersectionController);
   DetectorReportServiceStep(&g_detectorReportService);
+  GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
 
   LogRepositoryAdapterInit(&s_logRepositoryCtx, &s_eepromStoragePort);
   g_logRepositoryPort = LogRepositoryAdapterCreatePort(&s_logRepositoryCtx);

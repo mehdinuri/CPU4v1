@@ -28,6 +28,10 @@ static uint8_t RingSystemOmitRedClearActive(const IntersectionEngine_t *engine,
                                             uint8_t ringIndex);
 static uint8_t RemoteManualControlActive(const IntersectionEngine_t *engine);
 static uint8_t PreemptModeActive(const IntersectionEngine_t *engine);
+static const IntersectionRingPlan_t *GetActiveRingPlan(
+  const IntersectionEngine_t *engine,
+  uint8_t ringIndex);
+static void SyncActiveSequencePlan(IntersectionEngine_t *engine);
 static uint8_t PhaseDontWalkRevertActive(const IntersectionEngine_t *engine,
                                          uint8_t phaseIndex);
 static uint8_t PhaseSystemPedOmitActive(const IntersectionEngine_t *engine,
@@ -46,6 +50,14 @@ static uint16_t PhaseCurrentWalkTicks(const IntersectionEngine_t *engine,
                                       uint8_t phaseIndex);
 static uint16_t PhaseCurrentPedClearTicks(const IntersectionEngine_t *engine,
                                           uint8_t phaseIndex);
+static uint16_t OverlapWalkTicks(const IntersectionEngine_t *engine,
+                                 uint8_t overlapIndex);
+static uint16_t OverlapPedClearTicks(const IntersectionEngine_t *engine,
+                                     uint8_t overlapIndex);
+static void ResetOverlapPedState(IntersectionEngine_t *engine,
+                                 uint8_t overlapIndex);
+static void ResetOverlapTrailState(IntersectionEngine_t *engine,
+                                   uint8_t overlapIndex);
 static uint16_t PhasePedAdvanceTicks(const IntersectionEngine_t *engine,
                                      uint8_t phaseIndex);
 static uint16_t PhasePedStartDelayTicks(const IntersectionEngine_t *engine,
@@ -58,8 +70,10 @@ static void EnterBarrierWait(IntersectionEngine_t *engine,
                              uint8_t ringIndex,
                              uint8_t pendingPosition);
 static void TickInactivePedStates(IntersectionEngine_t *engine);
+static void TickOverlapPedStates(IntersectionEngine_t *engine);
 static void TryStartAdvancePedWalks(IntersectionEngine_t *engine);
 static void TickControllerRings(IntersectionEngine_t *engine);
+static void RefreshAutomaticFlashPhasePositions(IntersectionEngine_t *engine);
 static uint8_t PreemptCyclingPhaseAllowed(const IntersectionEngine_t *engine,
                                           uint8_t phaseIndex);
 static uint8_t PreemptCyclingPedAllowed(const IntersectionEngine_t *engine,
@@ -71,6 +85,14 @@ typedef enum
   INTERSECTION_AUTOMATIC_FLASH_STATE_ENTRY,
   INTERSECTION_AUTOMATIC_FLASH_STATE_FLASHING
 } IntersectionAutomaticFlashState_t;
+
+typedef enum
+{
+  INTERSECTION_OVERLAP_TRAIL_STAGE_NONE = 0,
+  INTERSECTION_OVERLAP_TRAIL_STAGE_GREEN,
+  INTERSECTION_OVERLAP_TRAIL_STAGE_YELLOW,
+  INTERSECTION_OVERLAP_TRAIL_STAGE_RED
+} IntersectionOverlapTrailStage_t;
 
 typedef struct
 {
@@ -107,6 +129,37 @@ static uint16_t PhasePedClearTicks(const IntersectionEngine_t *engine,
                                    uint8_t phaseIndex)
 {
   return (uint16_t) (engine->config.phases[phaseIndex].pedClearSeconds * 100U);
+}
+
+static uint16_t OverlapWalkTicks(const IntersectionEngine_t *engine,
+                                 uint8_t overlapIndex)
+{
+  return (uint16_t) (engine->config.overlaps[overlapIndex].walkSeconds * 100U);
+}
+
+static uint16_t OverlapTrailGreenTicks(const IntersectionEngine_t *engine,
+                                       uint8_t overlapIndex)
+{
+  return (uint16_t) (engine->config.overlaps[overlapIndex].trailGreenDs * 10U);
+}
+
+static uint16_t OverlapTrailYellowTicks(const IntersectionEngine_t *engine,
+                                        uint8_t overlapIndex)
+{
+  return (uint16_t) (engine->config.overlaps[overlapIndex].trailYellowDs * 10U);
+}
+
+static uint16_t OverlapTrailRedTicks(const IntersectionEngine_t *engine,
+                                     uint8_t overlapIndex)
+{
+  return (uint16_t) (engine->config.overlaps[overlapIndex].trailRedDs * 10U);
+}
+
+static uint16_t OverlapPedClearTicks(const IntersectionEngine_t *engine,
+                                     uint8_t overlapIndex)
+{
+  return (uint16_t) (engine->config.overlaps[overlapIndex].pedClearSeconds
+                     * 100U);
 }
 
 static uint16_t PhaseCurrentPedClearTicks(const IntersectionEngine_t *engine,
@@ -152,6 +205,157 @@ static uint16_t PhasePedStartDelayTicks(const IntersectionEngine_t *engine,
   }
 
   return PhasePedDelayTicks(engine, phaseIndex);
+}
+
+static const IntersectionRingPlan_t *GetActiveRingPlan(
+  const IntersectionEngine_t *engine,
+  uint8_t ringIndex)
+{
+  if ((engine == NULL) || (ringIndex >= engine->config.ringCount))
+  {
+    return NULL;
+  }
+
+  return &engine->activeRingPlans[ringIndex];
+}
+
+static uint8_t FindPhasePositionInRingPlan(const IntersectionRingPlan_t *ringPlan,
+                                           uint8_t phaseIndex,
+                                           uint8_t *position)
+{
+  uint8_t planPosition;
+
+  if ((ringPlan == NULL) || (position == NULL))
+  {
+    return 0U;
+  }
+
+  for (planPosition = 0U; planPosition < ringPlan->phaseCount; planPosition++)
+  {
+    if (ringPlan->phaseOrder[planPosition] == phaseIndex)
+    {
+      *position = planPosition;
+
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t GetEffectiveSequenceNumber(const IntersectionEngine_t *engine)
+{
+  uint8_t sequenceNumber = 1U;
+
+  if (engine == NULL)
+  {
+    return 1U;
+  }
+
+  if ((engine->activePreemptIndex < INTERSECTION_PREEMPT_COUNT_MAX)
+      && (engine->runtime.preemptStates[engine->activePreemptIndex]
+          == INTERSECTION_PREEMPT_STATE_DWELL))
+  {
+    sequenceNumber = engine->config.preempts[engine->activePreemptIndex].
+      sequenceNumber;
+  }
+  else if ((engine->runtime.mode == INTERSECTION_CONTROL_MODE_COORDINATED)
+           && (engine->runtime.coordPatternStatus >= 1U)
+           && (engine->runtime.coordPatternStatus <= INTERSECTION_PATTERN_COUNT_MAX))
+  {
+    sequenceNumber = engine->config.coordination.patterns[
+      engine->runtime.coordPatternStatus - 1U].sequenceNumber;
+  }
+
+  if ((sequenceNumber == 0U)
+      || (sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
+  {
+    sequenceNumber = 1U;
+  }
+
+  return sequenceNumber;
+}
+
+static void LoadActiveSequencePlan(IntersectionEngine_t *engine,
+                                   uint8_t sequenceNumber)
+{
+  uint8_t ringIndex;
+  uint8_t sequenceIndex;
+
+  if ((engine == NULL) || (sequenceNumber == 0U)
+      || (sequenceNumber > INTERSECTION_SEQUENCE_COUNT_MAX))
+  {
+    return;
+  }
+
+  sequenceIndex = (uint8_t) (sequenceNumber - 1U);
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    engine->activeRingPlans[ringIndex] =
+      engine->config.sequencePlans[sequenceIndex][ringIndex];
+  }
+
+  engine->activeSequenceNumber = sequenceNumber;
+}
+
+static void SyncActiveSequencePlan(IntersectionEngine_t *engine)
+{
+  uint8_t targetSequenceNumber;
+  uint8_t ringIndex;
+
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  targetSequenceNumber = GetEffectiveSequenceNumber(engine);
+
+  if ((engine->activeSequenceNumber == targetSequenceNumber)
+      && (engine->activeSequenceNumber != 0U))
+  {
+    return;
+  }
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    const IntersectionRingPlan_t *oldPlan = GetActiveRingPlan(engine, ringIndex);
+    const IntersectionRingPlan_t *newPlan =
+      &engine->config.sequencePlans[targetSequenceNumber - 1U][ringIndex];
+    IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[ringIndex];
+    uint8_t activePhaseIndex = ringRuntime->activePhaseIndex;
+    uint8_t pendingPhaseIndex = activePhaseIndex;
+    uint8_t activePosition = 0U;
+    uint8_t pendingPosition = 0U;
+
+    if ((oldPlan != NULL) && (ringRuntime->pendingPosition < oldPlan->phaseCount))
+    {
+      pendingPhaseIndex = oldPlan->phaseOrder[ringRuntime->pendingPosition];
+    }
+
+    engine->activeRingPlans[ringIndex] = *newPlan;
+
+    if (FindPhasePositionInRingPlan(newPlan,
+                                    activePhaseIndex,
+                                    &activePosition) == 0U)
+    {
+      activePosition = 0U;
+    }
+
+    if (FindPhasePositionInRingPlan(newPlan,
+                                    pendingPhaseIndex,
+                                    &pendingPosition) == 0U)
+    {
+      pendingPosition = activePosition;
+    }
+
+    ringRuntime->activePosition = activePosition;
+    ringRuntime->pendingPosition = pendingPosition;
+    ringRuntime->activePhaseIndex = newPlan->phaseOrder[activePosition];
+  }
+
+  engine->activeSequenceNumber = targetSequenceNumber;
+  RefreshAutomaticFlashPhasePositions(engine);
 }
 
 static void ResetPedWalkServiceCycleCounts(IntersectionEngine_t *engine)
@@ -212,7 +416,7 @@ static uint8_t GetRingDeterministicTicksToPendingGreen(
   }
 
   ringRuntime = &engine->runtime.rings[ringIndex];
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
 
   if ((ringRuntime->pendingPosition >= ringPlan->phaseCount)
       || (ringRuntime->pendingPosition == ringRuntime->activePosition))
@@ -307,7 +511,7 @@ static uint8_t AutomaticFlashRingPositionConfigured(
     return 0U;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
 
   return (uint8_t) (positions[ringIndex] < ringPlan->phaseCount);
 }
@@ -1353,6 +1557,9 @@ static void ClearPreemptOverlapOutputs(IntersectionEngine_t *engine)
        overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
        overlapIndex++)
   {
+    ResetOverlapPedState(engine, overlapIndex);
+    ResetOverlapTrailState(engine, overlapIndex);
+    engine->overlapPedServiceWindowActive[overlapIndex] = 0U;
     engine->runtime.overlaps[overlapIndex].aspect =
       INTERSECTION_OUTPUT_ASPECT_RED;
   }
@@ -1815,7 +2022,8 @@ static uint16_t CoordinationCriticalPathSeconds(
 
   for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+    const IntersectionRingPlan_t *ringPlan =
+      GetActiveRingPlan(engine, ringIndex);
     uint8_t position;
 
     for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -1845,7 +2053,8 @@ static uint16_t CoordinationSplitOverrunSeconds(
 
   for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+    const IntersectionRingPlan_t *ringPlan =
+      GetActiveRingPlan(engine, ringIndex);
     uint8_t position;
 
     for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -2823,7 +3032,7 @@ static uint8_t RingHasDemandInBarrierGroup(const IntersectionEngine_t *engine,
                                            uint8_t ringIndex,
                                            uint8_t barrierGroup)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t position;
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -2861,7 +3070,7 @@ static uint8_t FindBarrierCrossRequestForRing(const IntersectionEngine_t *engine
       continue;
     }
 
-    otherPlan = &engine->config.rings[otherRingIndex];
+    otherPlan = GetActiveRingPlan(engine, otherRingIndex);
     otherRuntime = &engine->runtime.rings[otherRingIndex];
     pendingPosition = otherRuntime->pendingPosition;
 
@@ -2905,7 +3114,7 @@ static uint8_t FindDualEntryPositionForBarrierGroup(
   uint8_t partnerPhaseIndex,
   uint8_t *dualEntryPosition)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t position;
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -2948,7 +3157,7 @@ static uint8_t FindAutomaticFlashPhasePosition(
     return 0U;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
 
   for (ringPosition = 0U; ringPosition < ringPlan->phaseCount; ringPosition++)
   {
@@ -3077,7 +3286,7 @@ static uint8_t ResolveRequestedPosition(const IntersectionEngine_t *engine,
 static uint8_t FindFirstDemandPosition(const IntersectionEngine_t *engine,
                                        uint8_t ringIndex)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t position;
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -3096,7 +3305,7 @@ static uint8_t FindFirstDemandPosition(const IntersectionEngine_t *engine,
 static uint8_t RingHasDemand(const IntersectionEngine_t *engine,
                              uint8_t ringIndex)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t position;
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -3116,7 +3325,7 @@ static uint8_t FindNextDemandPosition(const IntersectionEngine_t *engine,
                                       uint8_t ringIndex,
                                       uint8_t currentPosition)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t offset;
 
   for (offset = 1U; offset <= ringPlan->phaseCount; offset++)
@@ -3145,7 +3354,7 @@ static uint8_t IsBarrierCrossing(const IntersectionEngine_t *engine,
                                  uint8_t fromPosition,
                                  uint8_t toPosition)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
 
   return (uint8_t) (BarrierGroupForPosition(ringPlan, fromPosition)
                     != BarrierGroupForPosition(ringPlan, toPosition));
@@ -3165,7 +3374,8 @@ static uint8_t AspectIsYellow(IntersectionOutputAspect_t aspect)
 
 static uint8_t AspectIsGreen(IntersectionOutputAspect_t aspect)
 {
-  return (uint8_t) (aspect == INTERSECTION_OUTPUT_ASPECT_GREEN);
+  return (uint8_t) ((aspect == INTERSECTION_OUTPUT_ASPECT_GREEN)
+                    || (aspect == INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN));
 }
 
 static uint8_t GroupBitMask(uint8_t zeroBasedIndex)
@@ -3408,9 +3618,196 @@ static void TickPhasePedState(IntersectionEngine_t *engine, uint8_t phaseIndex)
   }
 } /* TickPhasePedState */
 
+static void ResetOverlapPedState(IntersectionEngine_t *engine,
+                                 uint8_t overlapIndex)
+{
+  engine->overlapPedIntervals[overlapIndex] =
+    INTERSECTION_PED_INTERVAL_DONT_WALK;
+  engine->overlapPedIntervalElapsedTicks[overlapIndex] = 0U;
+}
+
+static void ResetOverlapTrailState(IntersectionEngine_t *engine,
+                                   uint8_t overlapIndex)
+{
+  engine->overlapTrailStage[overlapIndex] =
+    (uint8_t) INTERSECTION_OVERLAP_TRAIL_STAGE_NONE;
+  engine->overlapLastBaseAspect[overlapIndex] = INTERSECTION_OUTPUT_ASPECT_RED;
+  engine->overlapTrailTicksRemaining[overlapIndex] = 0U;
+}
+
+static void StartOverlapPedWalk(IntersectionEngine_t *engine,
+                                uint8_t overlapIndex)
+{
+  engine->overlapPedIntervals[overlapIndex] = INTERSECTION_PED_INTERVAL_WALK;
+  engine->overlapPedIntervalElapsedTicks[overlapIndex] = 0U;
+}
+
+static void StartOverlapPedClear(IntersectionEngine_t *engine,
+                                 uint8_t overlapIndex)
+{
+  engine->overlapPedIntervals[overlapIndex] = INTERSECTION_PED_INTERVAL_CLEAR;
+  engine->overlapPedIntervalElapsedTicks[overlapIndex] = 0U;
+}
+
+static uint8_t PedestrianOverlapServiceActive(
+  const IntersectionEngine_t *engine,
+  const IntersectionOverlapConfig_t *overlap)
+{
+  uint8_t index;
+  uint8_t anyYellowOrRedClear = 0U;
+  uint8_t anyNext = 0U;
+  uint8_t anyPedClear = 0U;
+
+  if ((engine == NULL) || (overlap == NULL))
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < overlap->includedPhases.length; index++)
+  {
+    uint8_t phaseNumber = overlap->includedPhases.values[index];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+    const IntersectionPhaseRuntime_t *phaseRuntime;
+
+    if ((phaseNumber == 0U) || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    phaseRuntime = &engine->runtime.phases[phaseIndex];
+
+    if ((phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_GREEN)
+        || (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_WALK))
+    {
+      return 1U;
+    }
+
+    if ((phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_YELLOW)
+        || (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_RED_CLEAR))
+    {
+      anyYellowOrRedClear = 1U;
+    }
+
+    if (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_CLEAR)
+    {
+      anyPedClear = 1U;
+    }
+
+    if (phaseRuntime->next != 0U)
+    {
+      anyNext = 1U;
+    }
+  }
+
+  return (uint8_t) (((anyYellowOrRedClear != 0U) && (anyNext != 0U))
+                    || ((anyPedClear != 0U) && (anyNext != 0U)));
+}
+
+static void TickOverlapPedStates(IntersectionEngine_t *engine)
+{
+  uint8_t overlapIndex;
+
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  for (overlapIndex = 0U;
+       overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       overlapIndex++)
+  {
+    const IntersectionOverlapConfig_t *overlap = &engine->config.overlaps[
+      overlapIndex];
+    uint8_t serviceActive;
+    uint8_t newServiceWindow;
+
+    if (((IntersectionOverlapType_t) overlap->type
+         != INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL)
+        || (overlap->includedPhases.length == 0U))
+    {
+      ResetOverlapPedState(engine, overlapIndex);
+      engine->overlapPedServiceWindowActive[overlapIndex] = 0U;
+
+      continue;
+    }
+
+    serviceActive = PedestrianOverlapServiceActive(engine, overlap);
+    newServiceWindow = (uint8_t) ((serviceActive != 0U)
+                                  && (engine->overlapPedServiceWindowActive[
+                                        overlapIndex] == 0U));
+    engine->overlapPedServiceWindowActive[overlapIndex] =
+      (uint8_t) (serviceActive != 0U);
+
+    switch (engine->overlapPedIntervals[overlapIndex])
+    {
+        case INTERSECTION_PED_INTERVAL_WALK:
+        {
+          uint16_t totalWalkTicks = (uint16_t) (OverlapWalkTicks(engine,
+                                                                 overlapIndex)
+                                                + OverlapTrailGreenTicks(engine,
+                                                                         overlapIndex));
+
+          if (engine->overlapPedIntervalElapsedTicks[overlapIndex] < UINT16_MAX)
+          {
+            engine->overlapPedIntervalElapsedTicks[overlapIndex]++;
+          }
+
+          if (engine->overlapPedIntervalElapsedTicks[overlapIndex]
+              >= totalWalkTicks)
+          {
+            if (OverlapPedClearTicks(engine, overlapIndex) == 0U)
+            {
+              ResetOverlapPedState(engine, overlapIndex);
+            }
+            else
+            {
+              StartOverlapPedClear(engine, overlapIndex);
+            }
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PED_INTERVAL_CLEAR:
+        {
+          if (engine->overlapPedIntervalElapsedTicks[overlapIndex] < UINT16_MAX)
+          {
+            engine->overlapPedIntervalElapsedTicks[overlapIndex]++;
+          }
+
+          if (engine->overlapPedIntervalElapsedTicks[overlapIndex]
+              >= OverlapPedClearTicks(engine, overlapIndex))
+          {
+            ResetOverlapPedState(engine, overlapIndex);
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PED_INTERVAL_DONT_WALK:
+        default:
+        {
+          if (newServiceWindow != 0U)
+          {
+            if (OverlapWalkTicks(engine, overlapIndex) != 0U)
+            {
+              StartOverlapPedWalk(engine, overlapIndex);
+            }
+            else if (OverlapPedClearTicks(engine, overlapIndex) != 0U)
+            {
+              StartOverlapPedClear(engine, overlapIndex);
+            }
+          }
+
+          break;
+        }
+    }
+  }
+}
+
 static void SetRingPhasesRed(IntersectionEngine_t *engine, uint8_t ringIndex)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   uint8_t position;
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
@@ -3429,7 +3826,7 @@ static void SetRingRedRestStage(IntersectionEngine_t *engine,
                                 uint8_t position)
 {
   IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[ringIndex];
-  uint8_t phaseIndex = engine->config.rings[ringIndex].phaseOrder[position];
+  uint8_t phaseIndex = engine->activeRingPlans[ringIndex].phaseOrder[position];
 
   SetRingPhasesRed(engine, ringIndex);
   ringRuntime->activePosition = position;
@@ -3529,7 +3926,7 @@ static void ForceControllerRedRest(IntersectionEngine_t *engine)
     ringRuntime->activePosition = 0U;
     ringRuntime->pendingPosition = 0U;
     ringRuntime->activePhaseIndex =
-      engine->config.rings[ringIndex].phaseOrder[0];
+      engine->activeRingPlans[ringIndex].phaseOrder[0];
     ringRuntime->barrierWaiting = 0U;
     ringRuntime->stage = INTERSECTION_RING_STAGE_RED_REST;
     ringRuntime->statusCode = INTERSECTION_RING_STATUS_RED_REST;
@@ -4115,8 +4512,14 @@ static uint8_t FindRingPositionForPhase(const IntersectionEngine_t *engine,
        localRingIndex < engine->config.ringCount;
        localRingIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[localRingIndex];
+    const IntersectionRingPlan_t *ringPlan =
+      GetActiveRingPlan(engine, localRingIndex);
     uint8_t localPosition;
+
+    if (ringPlan == NULL)
+    {
+      continue;
+    }
 
     for (localPosition = 0U; localPosition < ringPlan->phaseCount;
          localPosition++)
@@ -4343,7 +4746,12 @@ static uint8_t FindConfiguredCyclingPositionForRing(
     return 0U;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
+
+  if (ringPlan == NULL)
+  {
+    return 0U;
+  }
 
   for (ringPosition = 0U; ringPosition < ringPlan->phaseCount; ringPosition++)
   {
@@ -4384,7 +4792,12 @@ static uint8_t FindConfiguredDwellPositionForRing(const IntersectionEngine_t *en
     return 0U;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
+
+  if (ringPlan == NULL)
+  {
+    return 0U;
+  }
 
   for (ringPosition = 0U; ringPosition < ringPlan->phaseCount; ringPosition++)
   {
@@ -4640,12 +5053,17 @@ static uint8_t SelectCoordinatedExitTarget(
     return 0U;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
   splitIndex = (uint8_t) (pattern->splitNumber - 1U);
   cycleTicks = (uint32_t) pattern->cycleTimeSeconds * 100U;
   offsetTicks = (uint32_t) pattern->offsetTimeSeconds * 100U;
   syncTicks = engine->coordSyncTicks % cycleTicks;
   localTicks = (syncTicks + cycleTicks - (offsetTicks % cycleTicks)) % cycleTicks;
+
+  if (ringPlan == NULL)
+  {
+    return 0U;
+  }
 
   for (position = 0U; position < ringPlan->phaseCount; position++)
   {
@@ -4727,9 +5145,14 @@ static void ApplyRingExitRecoveryTarget(
     return;
   }
 
-  ringPlan = &engine->config.rings[ringIndex];
+  ringPlan = GetActiveRingPlan(engine, ringIndex);
   ringRuntime = &engine->runtime.rings[ringIndex];
   position = target->position;
+
+  if (ringPlan == NULL)
+  {
+    return;
+  }
 
   if ((target->valid == 0U) || (position >= ringPlan->phaseCount))
   {
@@ -5895,8 +6318,16 @@ static void StartRingGreenStage(IntersectionEngine_t *engine,
                                 uint8_t startPedWalk)
 {
   IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[ringIndex];
-  uint8_t phaseIndex = engine->config.rings[ringIndex].phaseOrder[nextPosition];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
+  uint8_t phaseIndex;
   uint8_t detectorIndex;
+
+  if ((ringPlan == NULL) || (nextPosition >= ringPlan->phaseCount))
+  {
+    return;
+  }
+
+  phaseIndex = ringPlan->phaseOrder[nextPosition];
 
   SetRingPhasesRed(engine, ringIndex);
   ringRuntime->activePosition = nextPosition;
@@ -6014,8 +6445,17 @@ static void ApplyRingStartupState(IntersectionEngine_t *engine,
                                   uint8_t ringIndex)
 {
   IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[ringIndex];
-  uint8_t phaseIndex = engine->config.rings[ringIndex].phaseOrder[0];
-  uint8_t startup = engine->config.phases[phaseIndex].startup;
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
+  uint8_t phaseIndex;
+  uint8_t startup = 0U;
+
+  if ((ringPlan == NULL) || (ringPlan->phaseCount == 0U))
+  {
+    return;
+  }
+
+  phaseIndex = ringPlan->phaseOrder[0];
+  startup = engine->config.phases[phaseIndex].startup;
 
   engine->startupPending[ringIndex] = 0U;
   engine->startupHold[ringIndex] = 0U;
@@ -6082,7 +6522,15 @@ static void EnterGreen(IntersectionEngine_t *engine,
                        uint8_t ringIndex,
                        uint8_t nextPosition)
 {
-  uint8_t phaseIndex = engine->config.rings[ringIndex].phaseOrder[nextPosition];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
+  uint8_t phaseIndex;
+
+  if ((ringPlan == NULL) || (nextPosition >= ringPlan->phaseCount))
+  {
+    return;
+  }
+
+  phaseIndex = ringPlan->phaseOrder[nextPosition];
 
   if (PhaseRedRevertActive(engine, phaseIndex) != 0U)
   {
@@ -6292,7 +6740,7 @@ static uint8_t FindConditionalServicePosition(IntersectionEngine_t *engine,
                                               uint8_t ringIndex,
                                               uint8_t *servicePosition)
 {
-  const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+  const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
   const IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[
     ringIndex];
   const IntersectionPhaseConfig_t *phaseConfig = &engine->config.phases[
@@ -6300,7 +6748,8 @@ static uint8_t FindConditionalServicePosition(IntersectionEngine_t *engine,
   uint8_t previousPosition;
   uint8_t previousPhaseIndex;
 
-  if (((phaseConfig->phaseOptions & PHASE_OPTIONS_COND_SERVICE) == 0U)
+  if ((ringPlan == NULL)
+      || ((phaseConfig->phaseOptions & PHASE_OPTIONS_COND_SERVICE) == 0U)
       || ((ringRuntime->terminationReasonBits
            & (INTERSECTION_RING_TERMINATION_GAP_OUT
               | INTERSECTION_RING_TERMINATION_MAX_OUT)) == 0U)
@@ -6425,8 +6874,14 @@ static void RefreshPhaseNextFlags(IntersectionEngine_t *engine)
   {
     const IntersectionRingRuntime_t *ringRuntime =
       &engine->runtime.rings[ringIndex];
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+    const IntersectionRingPlan_t *ringPlan =
+      GetActiveRingPlan(engine, ringIndex);
     uint8_t pendingPosition = ringRuntime->pendingPosition;
+
+    if (ringPlan == NULL)
+    {
+      continue;
+    }
 
     if (ringRuntime->stage == INTERSECTION_RING_STAGE_GREEN)
     {
@@ -6531,6 +6986,8 @@ typedef struct
   uint8_t anyYellow;
   uint8_t anyRedClear;
   uint8_t anyNext;
+  uint8_t anyPedWalk;
+  uint8_t anyPedClear;
 } IntersectionOverlapPhaseSummary_t;
 
 static void SummarizeOverlapPhaseList(
@@ -6579,6 +7036,16 @@ static void SummarizeOverlapPhaseList(
     {
       summary->anyNext = 1U;
     }
+
+    if (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_WALK)
+    {
+      summary->anyPedWalk = 1U;
+    }
+
+    if (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_CLEAR)
+    {
+      summary->anyPedClear = 1U;
+    }
   }
 }
 
@@ -6617,6 +7084,245 @@ static uint8_t OverlapConflictingPedActive(
   return 0U;
 }
 
+static uint8_t OverlapSupportsTrailTiming(
+  const IntersectionOverlapConfig_t *overlap)
+{
+  if (overlap == NULL)
+  {
+    return 0U;
+  }
+
+  switch ((IntersectionOverlapType_t) overlap->type)
+  {
+      case INTERSECTION_OVERLAP_TYPE_NORMAL:
+      case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW:
+      case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE:
+      case INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION:
+      case INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION:
+      case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
+      {
+        return 1U;
+      }
+
+      case INTERSECTION_OVERLAP_TYPE_OTHER:
+      case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+      case INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION:
+      case INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION:
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static IntersectionOutputAspect_t OverlapTrailYellowAspect(
+  const IntersectionOverlapConfig_t *overlap)
+{
+  if (overlap == NULL)
+  {
+    return INTERSECTION_OUTPUT_ASPECT_RED;
+  }
+
+  if ((IntersectionOverlapType_t) overlap->type
+      == INTERSECTION_OVERLAP_TYPE_TRANSIT_2)
+  {
+    return INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN;
+  }
+
+  return INTERSECTION_OUTPUT_ASPECT_YELLOW;
+}
+
+static IntersectionOutputAspect_t OverlapTrailStageAspect(
+  const IntersectionOverlapConfig_t *overlap,
+  IntersectionOverlapTrailStage_t stage)
+{
+  switch (stage)
+  {
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_GREEN:
+      {
+        return INTERSECTION_OUTPUT_ASPECT_GREEN;
+      }
+
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_YELLOW:
+      {
+        return OverlapTrailYellowAspect(overlap);
+      }
+
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_RED:
+      {
+        return INTERSECTION_OUTPUT_ASPECT_RED;
+      }
+
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_NONE:
+      default:
+      {
+        return INTERSECTION_OUTPUT_ASPECT_RED;
+      }
+  }
+}
+
+static uint8_t StartOverlapTrailStage(IntersectionEngine_t *engine,
+                                      uint8_t overlapIndex,
+                                      IntersectionOverlapTrailStage_t stage,
+                                      uint16_t ticks)
+{
+  if ((engine == NULL) || (ticks == 0U))
+  {
+    return 0U;
+  }
+
+  engine->overlapTrailStage[overlapIndex] = (uint8_t) stage;
+  engine->overlapTrailTicksRemaining[overlapIndex] = (uint16_t) (ticks - 1U);
+
+  return 1U;
+}
+
+static uint8_t AdvanceOverlapTrailStage(IntersectionEngine_t *engine,
+                                        uint8_t overlapIndex,
+                                        const IntersectionOverlapConfig_t *overlap)
+{
+  IntersectionOverlapTrailStage_t currentStage;
+
+  if ((engine == NULL) || (overlap == NULL))
+  {
+    return 0U;
+  }
+
+  currentStage = (IntersectionOverlapTrailStage_t)
+                 engine->overlapTrailStage[overlapIndex];
+
+  switch (currentStage)
+  {
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_GREEN:
+      {
+        if (StartOverlapTrailStage(engine,
+                                   overlapIndex,
+                                   INTERSECTION_OVERLAP_TRAIL_STAGE_YELLOW,
+                                   OverlapTrailYellowTicks(engine,
+                                                           overlapIndex))
+            != 0U)
+        {
+          return 1U;
+        }
+
+        if (StartOverlapTrailStage(engine,
+                                   overlapIndex,
+                                   INTERSECTION_OVERLAP_TRAIL_STAGE_RED,
+                                   OverlapTrailRedTicks(engine, overlapIndex))
+            != 0U)
+        {
+          return 1U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_YELLOW:
+      {
+        if (StartOverlapTrailStage(engine,
+                                   overlapIndex,
+                                   INTERSECTION_OVERLAP_TRAIL_STAGE_RED,
+                                   OverlapTrailRedTicks(engine, overlapIndex))
+            != 0U)
+        {
+          return 1U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_RED:
+      case INTERSECTION_OVERLAP_TRAIL_STAGE_NONE:
+      default:
+      {
+        break;
+      }
+  }
+
+  ResetOverlapTrailState(engine, overlapIndex);
+
+  return 0U;
+}
+
+static IntersectionOutputAspect_t ApplyOverlapTrailTiming(
+  IntersectionEngine_t *engine,
+  uint8_t overlapIndex,
+  const IntersectionOverlapConfig_t *overlap,
+  IntersectionOutputAspect_t baseAspect,
+  uint8_t allowStart)
+{
+  uint16_t trailTicks;
+
+  if ((engine == NULL) || (overlap == NULL))
+  {
+    return baseAspect;
+  }
+
+  if ((OverlapSupportsTrailTiming(overlap) == 0U) || (allowStart == 0U))
+  {
+    ResetOverlapTrailState(engine, overlapIndex);
+    engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+    return baseAspect;
+  }
+
+  trailTicks = OverlapTrailGreenTicks(engine, overlapIndex);
+
+  if (trailTicks == 0U)
+  {
+    ResetOverlapTrailState(engine, overlapIndex);
+    engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+    return baseAspect;
+  }
+
+  if (engine->overlapTrailStage[overlapIndex]
+      != (uint8_t) INTERSECTION_OVERLAP_TRAIL_STAGE_NONE)
+  {
+    IntersectionOverlapTrailStage_t stage = (IntersectionOverlapTrailStage_t)
+                                            engine->overlapTrailStage[
+                                              overlapIndex];
+
+    if (engine->overlapTrailTicksRemaining[overlapIndex] != 0U)
+    {
+      engine->overlapTrailTicksRemaining[overlapIndex]--;
+      engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+      return OverlapTrailStageAspect(overlap, stage);
+    }
+
+    if (AdvanceOverlapTrailStage(engine, overlapIndex, overlap) != 0U)
+    {
+      stage = (IntersectionOverlapTrailStage_t)
+              engine->overlapTrailStage[overlapIndex];
+      engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+      return OverlapTrailStageAspect(overlap, stage);
+    }
+
+    engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+    return baseAspect;
+  }
+
+  if ((engine->overlapLastBaseAspect[overlapIndex]
+       == INTERSECTION_OUTPUT_ASPECT_GREEN)
+      && (baseAspect != INTERSECTION_OUTPUT_ASPECT_GREEN))
+  {
+    (void) StartOverlapTrailStage(engine,
+                                  overlapIndex,
+                                  INTERSECTION_OVERLAP_TRAIL_STAGE_GREEN,
+                                  trailTicks);
+    engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+    return INTERSECTION_OUTPUT_ASPECT_GREEN;
+  }
+
+  engine->overlapLastBaseAspect[overlapIndex] = baseAspect;
+
+  return baseAspect;
+}
+
 static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
 {
   uint8_t overlapIndex;
@@ -6643,6 +7349,7 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
     if ((overlap->type == (uint8_t) INTERSECTION_OVERLAP_TYPE_OTHER)
         || (overlap->includedPhases.length == 0U))
     {
+      ResetOverlapTrailState(engine, overlapIndex);
       engine->runtime.overlaps[overlapIndex].aspect = aspect;
       continue;
     }
@@ -6726,6 +7433,28 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
                    && (includedSummary.anyNext == 0U))
           {
             aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+        {
+          aspect = PedIntervalToAspect(engine->overlapPedIntervals[overlapIndex]);
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
+        {
+          /* 1202 defines only green and terminal-yellow flashing green. */
+          if (includedSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedSummary.anyYellow != 0U)
+                   && (includedSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN;
           }
 
           break;
@@ -6839,8 +7568,6 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
           break;
         }
 
-        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
-        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
         case INTERSECTION_OVERLAP_TYPE_OTHER:
         default:
         {
@@ -6848,6 +7575,11 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
         }
     }
 
+    aspect = ApplyOverlapTrailTiming(engine,
+                                     overlapIndex,
+                                     overlap,
+                                     aspect,
+                                     (uint8_t) (conflictingPedActive == 0U));
     engine->runtime.overlaps[overlapIndex].aspect = aspect;
   }
 } /* RefreshOverlapOutputs */
@@ -6883,6 +7615,7 @@ static uint8_t ChannelAspectShouldDim(const IntersectionEngine_t *engine,
       }
 
       case INTERSECTION_OUTPUT_ASPECT_GREEN:
+      case INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN:
       {
         return (uint8_t) ((mask & 0x01U) != 0U);
       }
@@ -6989,8 +7722,10 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
       else if ((flashDwell != 0U)
                && (channel->controlSource != 0U)
                && (channel->controlSource <= INTERSECTION_OVERLAP_COUNT_MAX)
-               && ((IntersectionChannelControlType_t) channel->controlType
-                   == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP))
+               && (((IntersectionChannelControlType_t) channel->controlType
+                    == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP)
+                   || ((IntersectionChannelControlType_t) channel->controlType
+                       == INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP)))
       {
         aspect = (OverlapReferenceListContainsOverlap(&preempt->dwellOverlaps,
                                                       (uint8_t) (channel->
@@ -7018,8 +7753,12 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
       }
       else if ((channel->controlSource != 0U)
                && (channel->controlSource <= INTERSECTION_OVERLAP_COUNT_MAX)
-               && ((IntersectionChannelControlType_t) channel->controlType
-                   == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP))
+               && (((IntersectionChannelControlType_t) channel->controlType
+                    == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP)
+                   || ((IntersectionChannelControlType_t) channel->controlType
+                       == INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP)
+                   || ((IntersectionChannelControlType_t) channel->controlType
+                       == INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP)))
       {
         aspect = engine->runtime.overlaps[channel->controlSource - 1U].aspect;
       }
@@ -7117,6 +7856,8 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
           }
 
           case INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP:
+          case INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP:
+          case INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP:
           {
             if (channel->controlSource <= INTERSECTION_OVERLAP_COUNT_MAX)
             {
@@ -7131,8 +7872,6 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
             break;
           }
 
-          case INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP:
-          case INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP:
           case INTERSECTION_CHANNEL_CONTROL_TYPE_OTHER:
           default:
           {
@@ -7585,11 +8324,17 @@ static void TryStartAdvancePedWalks(IntersectionEngine_t *engine)
   {
     const IntersectionRingRuntime_t *ringRuntime =
       &engine->runtime.rings[ringIndex];
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+    const IntersectionRingPlan_t *ringPlan =
+      GetActiveRingPlan(engine, ringIndex);
     uint8_t pendingPosition = 0U;
     uint8_t pendingPhaseIndex;
     uint32_t ticksToGreen = 0U;
     uint16_t advanceTicks;
+
+    if (ringPlan == NULL)
+    {
+      continue;
+    }
 
     if (GetRingDeterministicTicksToPendingGreen(engine,
                                                 ringIndex,
@@ -7688,6 +8433,8 @@ uint8_t IntersectionEngineLoadConfig(IntersectionEngine_t *engine,
 
   IntersectionEngineInit(engine);
   engine->config = *config;
+  engine->activeSequenceNumber = 0U;
+  LoadActiveSequencePlan(engine, 1U);
   engine->configLoaded = 1U;
   engine->systemPatternControl = 0U;
   engine->systemSyncControlSeconds = 0U;
@@ -7863,10 +8610,25 @@ void IntersectionEngineReset(IntersectionEngine_t *engine)
   memset(engine->preemptEntryPedElapsedTicks,
          0,
          sizeof(engine->preemptEntryPedElapsedTicks));
+  memset(engine->overlapPedIntervals, 0, sizeof(engine->overlapPedIntervals));
+  memset(engine->overlapPedIntervalElapsedTicks,
+         0,
+         sizeof(engine->overlapPedIntervalElapsedTicks));
+  memset(engine->overlapPedServiceWindowActive,
+         0,
+         sizeof(engine->overlapPedServiceWindowActive));
+  memset(engine->overlapTrailStage, 0, sizeof(engine->overlapTrailStage));
+  memset(engine->overlapLastBaseAspect,
+         0,
+         sizeof(engine->overlapLastBaseAspect));
+  memset(engine->overlapTrailTicksRemaining,
+         0,
+         sizeof(engine->overlapTrailTicksRemaining));
   memset(engine->phaseDemandWaitTicks, 0, sizeof(engine->phaseDemandWaitTicks));
   memset(engine->preemptShortServiceOrder,
          0xFF,
          sizeof(engine->preemptShortServiceOrder));
+  LoadActiveSequencePlan(engine, 1U);
   engine->runtime.configLoaded = 1U;
   engine->runtime.mode = INTERSECTION_CONTROL_MODE_FREE;
   engine->runtime.coordPatternStatus = 254U;
@@ -7922,8 +8684,13 @@ void IntersectionEngineReset(IntersectionEngine_t *engine)
 
   for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
   {
-    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[ringIndex];
+    const IntersectionRingPlan_t *ringPlan = GetActiveRingPlan(engine, ringIndex);
     IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[ringIndex];
+
+    if ((ringPlan == NULL) || (ringPlan->phaseCount == 0U))
+    {
+      continue;
+    }
 
     ringRuntime->activePosition = 0U;
     ringRuntime->pendingPosition = 0U;
@@ -7961,6 +8728,7 @@ void IntersectionEngineTick(IntersectionEngine_t *engine)
   TickRemoteManualControlTimer(engine);
 
   UpdateCoordinationRuntime(engine);
+  SyncActiveSequencePlan(engine);
 
   if ((engine->coordDiagnosticCycleTicks != 0U)
       && ((CoordinationPatternIsActive(engine) != 0U)
@@ -7972,6 +8740,7 @@ void IntersectionEngineTick(IntersectionEngine_t *engine)
     engine->coordSyncTicks = (engine->coordSyncTicks + 1U)
                              % engine->coordDiagnosticCycleTicks;
     UpdateCoordinationRuntime(engine);
+    SyncActiveSequencePlan(engine);
   }
 
   RefreshPhaseDemandWaitTimes(engine);
@@ -8055,6 +8824,7 @@ void IntersectionEngineTick(IntersectionEngine_t *engine)
   TickControllerRings(engine);
   TickInactivePedStates(engine);
   TryStartAdvancePedWalks(engine);
+  TickOverlapPedStates(engine);
   RefreshRuntimeViews(engine);
   FinalizeRemoteManualAdvanceCommand(engine);
 } /* IntersectionEngineTick */

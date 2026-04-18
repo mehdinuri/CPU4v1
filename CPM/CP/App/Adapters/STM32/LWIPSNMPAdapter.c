@@ -152,16 +152,26 @@ static void StageCommittedConfig(void *ctx)
 {
   LWIPSNMPAdapterCtx_t *adapterCtx = (LWIPSNMPAdapterCtx_t *) ctx;
 
-  if ((adapterCtx == NULL) || (adapterCtx->configurationService == NULL)
-      || (adapterCtx->activationService == NULL))
+  if ((adapterCtx == NULL) || (adapterCtx->configurationService == NULL))
   {
     return;
   }
 
-  (void) IntersectionActivationServiceStageCommittedConfig(
-    adapterCtx->activationService,
-    ConfigurationServiceGetActiveConfig(adapterCtx->configurationService),
-    ConfigurationServiceGetActiveSetId(adapterCtx->configurationService));
+  if (adapterCtx->activationService != NULL)
+  {
+    (void) IntersectionActivationServiceStageCommittedConfig(
+      adapterCtx->activationService,
+      ConfigurationServiceGetActiveConfig(adapterCtx->configurationService),
+      ConfigurationServiceGetActiveSetId(adapterCtx->configurationService));
+  }
+
+  if (adapterCtx->globalTimeManagementService != NULL)
+  {
+    GlobalTimeManagementServiceHandleCommittedConfig(
+      adapterCtx->globalTimeManagementService,
+      &ConfigurationServiceGetActiveConfig(
+        adapterCtx->configurationService)->globalTimeManagement);
+  }
 }
 
 void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
@@ -174,6 +184,10 @@ void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
   ctx->intersectionEngine = intersectionEngine;
   ctx->intersectionController = intersectionController;
   ctx->detectorReportService = NULL;
+  ctx->globalTimeManagementService = NULL;
+  ctx->doorSensorPort = NULL;
+  ctx->heaterPort = NULL;
+  ctx->powerMonitorPort = NULL;
   ctx->unitAlarmPort = NULL;
   ctx->unitClockPort = NULL;
   memset(ctx->sessionStates, 0, sizeof(ctx->sessionStates));
@@ -204,6 +218,20 @@ void LWIPSNMPAdapterBindDetectorReportService(
                                         detectorReportService);
 }
 
+void LWIPSNMPAdapterBindGlobalTimeManagementService(
+  LWIPSNMPAdapterCtx_t *ctx,
+  GlobalTimeManagementService_t *globalTimeManagementService)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->globalTimeManagementService = globalTimeManagementService;
+  NtcipContextBindGlobalTimeManagementService(&ctx->ntcipContext,
+                                              globalTimeManagementService);
+}
+
 void LWIPSNMPAdapterBindActivationService(
   LWIPSNMPAdapterCtx_t *ctx,
   IntersectionActivationService_t *activationService)
@@ -217,6 +245,42 @@ void LWIPSNMPAdapterBindActivationService(
   NtcipDbTransactionServiceBindCommitObserver(&ctx->dbTransactionService,
                                               StageCommittedConfig,
                                               ctx);
+}
+
+void LWIPSNMPAdapterBindDoorSensorPort(LWIPSNMPAdapterCtx_t *ctx,
+                                       IDoorSensorPort_t *doorSensorPort)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->doorSensorPort = doorSensorPort;
+  NtcipContextBindDoorSensorPort(&ctx->ntcipContext, doorSensorPort);
+}
+
+void LWIPSNMPAdapterBindHeaterPort(LWIPSNMPAdapterCtx_t *ctx,
+                                   IHeaterPort_t *heaterPort)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->heaterPort = heaterPort;
+  NtcipContextBindHeaterPort(&ctx->ntcipContext, heaterPort);
+}
+
+void LWIPSNMPAdapterBindPowerMonitorPort(LWIPSNMPAdapterCtx_t *ctx,
+                                         IPowerMonitorPort_t *powerMonitorPort)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->powerMonitorPort = powerMonitorPort;
+  NtcipContextBindPowerMonitorPort(&ctx->ntcipContext, powerMonitorPort);
 }
 
 void LWIPSNMPAdapterBindUnitAlarmPort(LWIPSNMPAdapterCtx_t *ctx,

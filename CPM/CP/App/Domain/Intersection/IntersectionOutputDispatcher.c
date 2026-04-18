@@ -35,6 +35,11 @@ static OutputDriverAspect_t ConvertAspect(IntersectionOutputAspect_t aspect)
         return OUTPUT_DRIVER_ASPECT_FLASH_RED;
       }
 
+      case INTERSECTION_OUTPUT_ASPECT_FLASH_GREEN:
+      {
+        return OUTPUT_DRIVER_ASPECT_FLASH_GREEN;
+      }
+
       case INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW:
       default:
       {

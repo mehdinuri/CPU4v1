@@ -29,6 +29,11 @@ static void AdapterSend(void *ctx,
   c->lSendCount++;
 }
 
+static uint8_t AdapterGetOverflowCount(void *ctx)
+{
+  return ((MockCANTxAdapterCtx_t *) ctx)->bMockOverflow;
+}
+
 /* ---------------------------------------------------------------------------
  * Public adapter API
  * ---------------------------------------------------------------------------*/
@@ -40,8 +45,9 @@ void MockCANTxAdapterInit(MockCANTxAdapterCtx_t *ctx)
 ICANTxPort_t MockCANTxAdapterCreatePort(MockCANTxAdapterCtx_t *ctx)
 {
   ICANTxPort_t port;
-  port.ctx  = ctx;
-  port.Send = AdapterSend;
+  port.ctx              = ctx;
+  port.Send             = AdapterSend;
+  port.GetOverflowCount = AdapterGetOverflowCount;
   return port;
 }
 

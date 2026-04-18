@@ -104,14 +104,14 @@ void test_init_accepts_valid_period_from_eeprom(void)
                            &s_freqPort,
                            &s_eepromPort);
 
-  /* Valid period read → not written back; period is multiplied by 10 */
-  TEST_ASSERT_EQUAL_UINT32(100U, s_svc.SRuntime.lFlashPeriod);
+  /* Valid period read → not written back; period is multiplied by 200 */
+  TEST_ASSERT_EQUAL_UINT32(2000U, s_svc.SRuntime.lFlashPeriod);
 }
 
 void test_init_default_period_is_multiplied_when_eeprom_fails(void)
 {
-  /* Regression: FlashPeriodCheck default path must multiply by 10 so the
-   * runtime period is in ticks (50), not raw seconds (5). */
+  /* Regression: FlashPeriodCheck default path must multiply by 200 so the
+   * runtime period is in ms (1000), not raw units (5). */
   MockEepromAdapterInit(&s_eeprom);
   s_eeprom.bReadResult = 0U;   /* EEPROM read failure */
   s_eepromPort = MockEepromAdapterCreatePort(&s_eeprom);
@@ -124,7 +124,7 @@ void test_init_default_period_is_multiplied_when_eeprom_fails(void)
                            &s_freqPort,
                            &s_eepromPort);
 
-  TEST_ASSERT_EQUAL_UINT32(50U, s_svc.SRuntime.lFlashPeriod);
+  TEST_ASSERT_EQUAL_UINT32(1000U, s_svc.SRuntime.lFlashPeriod);
 }
 
 void test_init_writes_default_period_when_value_out_of_range(void)
@@ -143,8 +143,8 @@ void test_init_writes_default_period_when_value_out_of_range(void)
                            &s_freqPort,
                            &s_eepromPort);
 
-  /* Period out of range → write default 5 to EEPROM, then multiply → 50 ticks */
-  TEST_ASSERT_EQUAL_UINT32(50U, s_svc.SRuntime.lFlashPeriod);
+  /* Period out of range → write default 5 to EEPROM, then multiply → 1000 ms */
+  TEST_ASSERT_EQUAL_UINT32(1000U, s_svc.SRuntime.lFlashPeriod);
   TEST_ASSERT_TRUE(s_eeprom.lWriteCount >= 1U);
 }
 
@@ -309,45 +309,64 @@ void test_send_measurements_toggles_com_led_after_period(void)
  * FlashSync
  * ---------------------------------------------------------------------------*/
 
-void test_flash_sync_sends_sync0_at_counter_zero(void)
+void test_flash_sync_sends_sync0_at_period_boundary(void)
 {
-  /* FlashSync increments the counter first, then checks.
-   * To reach the == 0 branch, start at lFlashPeriod - 1 so the
-   * post-increment wraps back to 0. */
-  s_svc.SRuntime.lFlashPeriod    = 50U;
-  s_svc.SRuntime.sFlashStateCntr = 49U; /* 49 + 1 = 50 >= period → reset to 0 */
+  /* bPeriod 5 = 1000ms total cycle. */
+  MeasurementService_PeriodApply(&s_svc, 5U);
+  s_svc.SRuntime.lLastFlashTick  = 0U;
 
-  MeasurementService_FlashSync(&s_svc);
+  /* At t=1000, it should trigger "start of cycle" (Sync ON) */
+  MeasurementService_FlashSync(&s_svc, 1000U);
 
   TEST_ASSERT_EQUAL_UINT32(PSM_CAN_ID_FLASH_SYNC_1, s_can.lLastID);
-  TEST_ASSERT_EQUAL_UINT8(0U, s_can.aLastData[0] & 0x01U); /* bFlashSync bit */
+  TEST_ASSERT_EQUAL_UINT8(0U, s_can.aLastData[0] & 0x01U); /* bFlashSync bit 0 = ON */
   TEST_ASSERT_EQUAL_UINT8(1U, s_led.aLEDStates[LED_ID_COM]);
 }
 
 void test_flash_sync_sends_sync1_at_half_period(void)
 {
-  s_svc.SRuntime.lFlashPeriod    = 50U;
-  s_svc.SRuntime.sFlashStateCntr = 24U; /* next tick → 25 = period/2 */
+  MeasurementService_PeriodApply(&s_svc, 5U);
+  s_svc.SRuntime.lLastFlashTick  = 1000U;
+  s_svc.SRuntime.sFlashStateCntr = 0U;
 
-  MeasurementService_FlashSync(&s_svc);
+  /* At t=1500 (500ms elapsed), it should trigger "mid-cycle" (Sync OFF) */
+  MeasurementService_FlashSync(&s_svc, 1500U);
 
   TEST_ASSERT_EQUAL_UINT32(PSM_CAN_ID_FLASH_SYNC_1, s_can.lLastID);
-  TEST_ASSERT_EQUAL_UINT8(1U, s_can.aLastData[0] & 0x01U);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_can.aLastData[0] & 0x01U); /* bFlashSync bit 1 = OFF */
   TEST_ASSERT_EQUAL_UINT8(0U, s_led.aLEDStates[LED_ID_COM]);
+  TEST_ASSERT_EQUAL_UINT16(1U, s_svc.SRuntime.sFlashStateCntr); /* latch set */
 }
 
-void test_flash_sync_no_send_mid_cycle(void)
+void test_flash_sync_no_redundant_send_mid_cycle(void)
 {
-  s_svc.SRuntime.lFlashPeriod    = 50U;
-  s_svc.SRuntime.sFlashStateCntr = 10U; /* next tick → 11, not 0 or 25 */
+  MeasurementService_PeriodApply(&s_svc, 5U);
+  s_svc.SRuntime.lLastFlashTick  = 1000U;
+  s_svc.SRuntime.sFlashStateCntr = 1U; /* already sent mid-cycle */
 
-  MeasurementService_FlashSync(&s_svc);
+  s_can.lSendCount = 0U;
+  MeasurementService_FlashSync(&s_svc, 1510U);
 
   TEST_ASSERT_EQUAL_UINT32(0U, s_can.lSendCount);
 }
 
+void test_send_measurements_reports_status_bits(void)
+{
+  s_svc.SRuntime.sNetVoltage = 0U; /* Force AC Fault */
+  s_svc.SRuntime.bFlashState = 1U; /* Force Flash Active */
+  s_can.bMockOverflow        = 1U; /* Force CAN Overflow */
+
+  MeasurementService_SendMeasurements(&s_svc);
+
+  TEST_ASSERT_EQUAL_UINT32(PSM_CAN_ID_MEASUREMENT, s_can.lLastID);
+  /* bit 1: FlashActive, bit 2: GridFault, bit 3: CanOverflow */
+  /* Expected: 1 << 3 | 1 << 4 | 1 << 5 = 8 | 16 | 32 = 56 (0x38) */
+  /* bIsolatedVoltage is bit 2, let's assume it is 0. */
+  TEST_ASSERT_EQUAL_UINT8(0x38U, s_can.aLastData[6] & 0x38U);
+}
+
 /* ---------------------------------------------------------------------------
- * CommCheck / CommCntrReset / FlashState
+ * CommCheck / CommCntrReset / FlashState / PeriodSet / OffsetSet
  * ---------------------------------------------------------------------------*/
 
 void test_comm_check_triggers_flash_after_max_errors(void)
@@ -464,12 +483,12 @@ void test_period_set_writes_eeprom_and_multiplies(void)
   MeasurementService_PeriodSet(&s_svc, 10U);
 
   TEST_ASSERT_EQUAL_UINT32(initial_writes + 1U, s_eeprom.lWriteCount);
-  TEST_ASSERT_EQUAL_UINT32(100U, s_svc.SRuntime.lFlashPeriod);
+  TEST_ASSERT_EQUAL_UINT32(2000U, s_svc.SRuntime.lFlashPeriod);
 }
 
 void test_period_set_no_write_when_unchanged(void)
 {
-  /* PeriodSet now compares lFlashPeriod (ticks) against bPeriod * 10.
+  /* PeriodSet now compares lFlashPeriod (ms) against bPeriod * 200.
    * Setting the same raw value twice should skip the second EEPROM write. */
   MeasurementService_PeriodSet(&s_svc, 10U);
   uint32_t writes_after_first = s_eeprom.lWriteCount;
@@ -477,7 +496,7 @@ void test_period_set_no_write_when_unchanged(void)
   MeasurementService_PeriodSet(&s_svc, 10U);
 
   TEST_ASSERT_EQUAL_UINT32(writes_after_first, s_eeprom.lWriteCount);
-  TEST_ASSERT_EQUAL_UINT32(100U, s_svc.SRuntime.lFlashPeriod);
+  TEST_ASSERT_EQUAL_UINT32(2000U, s_svc.SRuntime.lFlashPeriod);
 }
 
 void test_period_set_does_not_update_runtime_when_eeprom_write_fails(void)
@@ -486,7 +505,7 @@ void test_period_set_does_not_update_runtime_when_eeprom_write_fails(void)
 
   MeasurementService_PeriodSet(&s_svc, 10U);
 
-  TEST_ASSERT_EQUAL_UINT32(50U, s_svc.SRuntime.lFlashPeriod);
+  TEST_ASSERT_EQUAL_UINT32(1000U, s_svc.SRuntime.lFlashPeriod);
 }
 
 /* ---------------------------------------------------------------------------
@@ -560,10 +579,11 @@ int main(void)
   RUN_TEST(test_send_measurements_uses_correct_can_id);
   RUN_TEST(test_send_measurements_encodes_frequency);
   RUN_TEST(test_send_measurements_toggles_com_led_after_period);
+  RUN_TEST(test_send_measurements_reports_status_bits);
 
-  RUN_TEST(test_flash_sync_sends_sync0_at_counter_zero);
+  RUN_TEST(test_flash_sync_sends_sync0_at_period_boundary);
   RUN_TEST(test_flash_sync_sends_sync1_at_half_period);
-  RUN_TEST(test_flash_sync_no_send_mid_cycle);
+  RUN_TEST(test_flash_sync_no_redundant_send_mid_cycle);
 
   RUN_TEST(test_comm_check_triggers_flash_after_max_errors);
   RUN_TEST(test_comm_cntr_reset_clears_counter);
