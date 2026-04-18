@@ -8,8 +8,11 @@ target_sources(PSM_MockAdapters PRIVATE
     MockSignalInputAdapter.c
     MockEepromAdapter.c
     MockCANTxAdapter.c
+    MockCANRxAdapter.c
     MockVoltageSensorAdapter.c
     MockFrequencySensorAdapter.c
+    MockFrequencyCaptureAdapter.c
+    MockWatchdogAdapter.c
 )
 
 target_include_directories(PSM_MockAdapters

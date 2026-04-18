@@ -23,36 +23,16 @@
 /* USER CODE BEGIN 0 */
 #include "utilities.h"
 #include "Measurement.h"
+#include "HardwarePorts.h"
 
-#define TIM2_CLOCK_FREQ 100000
-#define TIM2_MAX_COUNT 0xFFFFFFFF
+#define TIM2_CLOCK_FREQ                     100000U
+#define TIM2_MAX_COUNT                       0xFFFFFFFFU
 
-#define TIM2_CH2_CAPTURE_TIMEOUT_MS 100
-#define TIM2_CH2_EVALUATION_INTERVAL_MS 1
-#define TIM2_CH2_EVALUATION_INTERVAL_COUNTS (TIM2_CH2_EVALUATION_INTERVAL_MS * (TIM2_CLOCK_FREQ / 1000))
+#define TIM2_CH2_EVALUATION_INTERVAL_MS      1U
+#define TIM2_CH2_EVALUATION_INTERVAL_COUNTS  (TIM2_CH2_EVALUATION_INTERVAL_MS * (TIM2_CLOCK_FREQ / 1000U))
 
-#define TARGET_FREQ_HZ 50
-#define FREQ_TOLERANCE_HZ 5
-#define BAD_READINGS_BEFORE_SLEEP 10
-
-#define TIM2_CH3_CAPTURE_TIMEOUT_MS 100
-#define TIM2_CH3_EVALUATION_INTERVAL_MS 10
-#define TIM2_CH3_EVALUATION_INTERVAL_COUNTS (TIM2_CH3_EVALUATION_INTERVAL_MS * (TIM2_CLOCK_FREQ / 1000))
-
-volatile uint32_t lICValue1 = 0;
-volatile uint32_t lICValue2 = 0;
-volatile uint32_t lICCaptureDiff = 0;
-volatile uint8_t fFirstValueCaptured = FALSE;
-volatile uint8_t bMeasuredFreqInHz = 0;
-
-volatile uint32_t lLastCaptureTime = 0;
-volatile uint16_t sBadReadingsCntr = 0;
-
-volatile uint32_t lTim2Ch2CurrentCounterValue = 0;
-volatile uint32_t lTim2Ch2NextCompareValue = 0;
-
-volatile uint32_t lTim2Ch3CurrentCounterValue = 0;
-volatile uint32_t lTim2Ch3NextCompareValue = 0;
+#define TIM2_CH3_EVALUATION_INTERVAL_MS      10U
+#define TIM2_CH3_EVALUATION_INTERVAL_COUNTS  (TIM2_CH3_EVALUATION_INTERVAL_MS * (TIM2_CLOCK_FREQ / 1000U))
 
 /* USER CODE END 0 */
 
@@ -259,9 +239,8 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 /* USER CODE BEGIN 1 */
 void Tim2ICStartIT(void)
 {
-	fFirstValueCaptured = 0;
-	lLastCaptureTime = HAL_GetTick();
-	
+	FrequencyCapture_Restart(&g_frequencyCapturePort, HAL_GetTick());
+
 	if (HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1) != HAL_OK)
 	{
 		Error_Handler();
@@ -328,110 +307,51 @@ void TimEnterStandby(void)
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) 
+	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
 	{
-		lLastCaptureTime = HAL_GetTick();
-
-		if (fFirstValueCaptured == FALSE) 
-		{
-			lICValue1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-			fFirstValueCaptured = TRUE;
-		} 
-		else 
-		{
-			lICValue2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-
-			if (lICValue2 > lICValue1)
-			{
-				lICCaptureDiff = lICValue2 - lICValue1;
-			} 
-			else if (lICValue2 < lICValue1)
-			{
-				lICCaptureDiff = ((TIM2_MAX_COUNT - lICValue1) + lICValue2) + 1;
-			}
-			else
-			{
-				lICCaptureDiff = 0;
-				fFirstValueCaptured = FALSE;
-			}
-
-			if (lICCaptureDiff != 0)
-			{
-				bMeasuredFreqInHz = TIM2_CLOCK_FREQ / lICCaptureDiff;
-			}
-			else
-			{
-				bMeasuredFreqInHz = 0;
-			}
-			
-			MeasurementNetFrequencySet(bMeasuredFreqInHz);
-
-			lICValue1 = lICValue2;
-		}
+		uint32_t lCapture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+		FrequencyCapture_OnEdge(&g_frequencyCapturePort, lCapture, HAL_GetTick());
 	}
 }
 
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) 
+	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
 	{
 		MeasurementCommCheck();
-		
-		lTim2Ch2CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
-		lTim2Ch2NextCompareValue = (lTim2Ch2CurrentCounterValue + TIM2_CH2_EVALUATION_INTERVAL_COUNTS);
-			
-		if (lTim2Ch2NextCompareValue > TIM2_MAX_COUNT) 
+
+		uint32_t lCounter = __HAL_TIM_GET_COUNTER(htim);
+		uint32_t lNext    = lCounter + TIM2_CH2_EVALUATION_INTERVAL_COUNTS;
+
+		if (lNext > TIM2_MAX_COUNT)
 		{
-			lTim2Ch2NextCompareValue -= (TIM2_MAX_COUNT + 1);
+			lNext -= (TIM2_MAX_COUNT + 1U);
 		}
-		
-		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_2, lTim2Ch2NextCompareValue);
+
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_2, lNext);
 	}
-	else if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) 
+	else if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
 	{
-		uint32_t lCurTime = HAL_GetTick();
-		uint8_t bFreq = bMeasuredFreqInHz;
-		uint8_t fSignalTimedout = FALSE;
+		tEFrequencyCaptureVerdict verdict =
+		    FrequencyCapture_Evaluate(&g_frequencyCapturePort, HAL_GetTick());
 
-		 if (!fFirstValueCaptured || ((lCurTime - lLastCaptureTime) > TIM2_CH3_CAPTURE_TIMEOUT_MS))
-		 {
-			 fSignalTimedout = TRUE;
-			 if (bMeasuredFreqInHz != 0 || fFirstValueCaptured) 
-			 {
-				 bMeasuredFreqInHz = 0;
-				 fFirstValueCaptured = 0;
-			 }
-
-			 bFreq = 0;
-		}
-
-		if (!fSignalTimedout && (bFreq >= (TARGET_FREQ_HZ - FREQ_TOLERANCE_HZ)) && (bFreq <= (TARGET_FREQ_HZ + FREQ_TOLERANCE_HZ)))
-		{
-			sBadReadingsCntr = 0;
-		}
-		else
-		{
-			sBadReadingsCntr++;
-		}
-
-		if (sBadReadingsCntr >= BAD_READINGS_BEFORE_SLEEP)
+		if (verdict == FREQ_CAPTURE_VERDICT_ENTER_SLEEP)
 		{
 			Tim2OCStopIT();
 			Tim2ICStopIT();
-			
 			TimEnterStandby();
 		}
 		else
 		{
-			lTim2Ch3CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
-			lTim2Ch3NextCompareValue = (lTim2Ch3CurrentCounterValue + TIM2_CH3_EVALUATION_INTERVAL_COUNTS);
-			
-			if (lTim2Ch3NextCompareValue > TIM2_MAX_COUNT) 
+			uint32_t lCounter = __HAL_TIM_GET_COUNTER(htim);
+			uint32_t lNext    = lCounter + TIM2_CH3_EVALUATION_INTERVAL_COUNTS;
+
+			if (lNext > TIM2_MAX_COUNT)
 			{
-				lTim2Ch3NextCompareValue -= (TIM2_MAX_COUNT + 1);
+				lNext -= (TIM2_MAX_COUNT + 1U);
 			}
-			
-			__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_3, lTim2Ch3NextCompareValue);
+
+			__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_3, lNext);
 		}
 	}
 }

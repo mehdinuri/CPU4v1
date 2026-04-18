@@ -1,7 +1,9 @@
 # Unit tests — pure Domain logic with no HAL/FreeRTOS dependencies.
 
-Add_Unity_Test(Test_Measurement        Test_Measurement.c)
-Add_Unity_Test(Test_MeasurementService Test_MeasurementService.c)
+Add_Unity_Test(Test_Measurement           Test_Measurement.c)
+Add_Unity_Test(Test_MeasurementService    Test_MeasurementService.c)
+Add_Unity_Test(Test_VoltageRMS            Test_VoltageRMS.c)
+Add_Unity_Test(Test_FrequencyCaptureFSM   Test_FrequencyCaptureFSM.c)
 
 # MeasurementService tests need mock adapters
 target_link_libraries(Test_MeasurementService PRIVATE PSM_MockAdapters)

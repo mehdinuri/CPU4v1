@@ -23,7 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include "utilities.h"
 #include "gpio.h"
-#include "iwdg.h"
+#include "HardwarePorts.h"
 
 #define I2C_EEPROM_DEVICE_BASE_ADDR 0xA0
 #define I2C_EEPROM_PAGE_SIZE 16
@@ -168,7 +168,7 @@ uint8_t I2CEEPROMWrite(uint32_t lAddress, const void *pvData, uint32_t lDataSize
 
 	while (sBytesRemained > 0)
 	{
-		IWDGRefresh();
+		Watchdog_Refresh(&g_watchdogPort);
 
 		uint16_t sBytesInPage = I2C_EEPROM_PAGE_SIZE - (sWriteAddr % I2C_EEPROM_PAGE_SIZE);
 		uint16_t sBytesToWrite = (sBytesRemained < sBytesInPage) ? sBytesRemained : sBytesInPage;

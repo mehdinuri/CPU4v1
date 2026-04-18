@@ -21,27 +21,22 @@
 #include "adc.h"
 
 /* USER CODE BEGIN 0 */
-#include <string.h>
 #include "Measurement.h"
-#include <math.h>
+#include "Domain/VoltageRMS.h"
 
-#define V_REF 3.38f
-#define ADC_MAX_VAL 4095.0f // ADC Resolution (12-bit)
+#define V_REF                     3.38f
+#define ADC_MAX_VAL               4095.0f   /* 12-bit ADC full scale */
 
-#define ADC1_SAMPLES_PER_CYCLE 128
-#define ADC1_BUF_LEN (ADC1_SAMPLES_PER_CYCLE * 2) // 128 samples per cycle * 2 cycles = 256
-#define ADC1_GRID_SCALING_FACTOR  276.89f // ZMPT107 Scaling Factor (200k / 750R)
+#define ADC1_SAMPLES_PER_CYCLE    128
+#define ADC1_BUF_LEN              (ADC1_SAMPLES_PER_CYCLE * 2)
+#define ADC1_GRID_SCALING_FACTOR  276.89f   /* ZMPT107 + 200k/750R divider */
+
+#define ADC2_REG_VOUT_SCALING     2.05f     /* 5V divider */
+#define ADC3_REG_VIN_SCALING      11.29f    /* 24V divider */
 
 uint16_t saADC1ConvVals[ADC1_BUF_LEN];
-volatile float fGridRMSVoltage = 0.0f;
-
-#define ADC2_REG_VOUT_SCALING 2.05f // 5V Divider
 volatile uint16_t sADC2ConvVal = 0;
-volatile float fVOut = 0.0f;
-
-#define ADC3_REG_VIN_SCALING 11.29f // 24V Divider
 volatile uint16_t sADC3ConvVal = 0;
-volatile float fVIn = 0.0f;
 
 /* USER CODE END 0 */
 
@@ -524,39 +519,18 @@ void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
 
 static void ADCCalculate(uint16_t *saConvVals, uint8_t bLen)
 {
-	uint32_t lSum = 0;
-	uint64_t lSumSquares = 0;
-	uint8_t bIdx = 0;
-	
-	// Calculate Mean
-	for (bIdx = 0; bIdx < bLen; bIdx++)
-	{
-		lSum += (saConvVals[bIdx]);
-	}
-	
-	float fMean = (float)((float)lSum / (float)bLen);
+	float fGridRMS = VoltageRMS_ComputeAC(saConvVals, (size_t) bLen,
+	                                       V_REF, ADC_MAX_VAL,
+	                                       ADC1_GRID_SCALING_FACTOR);
+	float fVOut = VoltageRMS_ConvertDC(sADC2ConvVal, V_REF, ADC_MAX_VAL,
+	                                    ADC2_REG_VOUT_SCALING);
+	float fVIn  = VoltageRMS_ConvertDC(sADC3ConvVal, V_REF, ADC_MAX_VAL,
+	                                    ADC3_REG_VIN_SCALING);
 
-	// Accumulate Squares of AC Component
-	for (bIdx = 0; bIdx < bLen; bIdx++)
-	{
-		float fACVal = (float)((float)(saConvVals[bIdx]) - fMean);
-		lSumSquares += (uint64_t)(fACVal * fACVal);
-	}
-
-	// Calculate RMS
-	float fGridRMSRaw = sqrtf((float)lSumSquares / bLen);
-
-	// Convert to Voltage: Net Voltage = (fRawRMS / 4095) * 3.3V * Scaling Factor
-	fGridRMSVoltage = fGridRMSRaw * (V_REF / ADC_MAX_VAL) * ADC1_GRID_SCALING_FACTOR;
-	
-	// Snapshot DC Voltages (Background DMA)
-	fVOut = ((float)sADC2ConvVal * (V_REF / ADC_MAX_VAL)) * ADC2_REG_VOUT_SCALING;
-	fVIn = ((float)sADC3ConvVal * (V_REF / ADC_MAX_VAL)) * ADC3_REG_VIN_SCALING;
-	
-	MeasurementNetVoltageSet(fGridRMSVoltage);
+	MeasurementNetVoltageSet(fGridRMS);
 	MeasurementRegVOutSet(fVOut);
 	MeasurementRegVInSet(fVIn);
-	
+
 	MeasurementThreadFlagSet();
 }
 

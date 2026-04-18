@@ -23,7 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include <string.h>
 #include "cmsis_os.h"
-#include "CanMsgParser.h"
+#include "HardwarePorts.h"
 /* USER CODE END 0 */
 
 FDCAN_HandleTypeDef hfdcan1;
@@ -426,21 +426,29 @@ void CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan)
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 {
+  (void) RxFifo0ITs;
+
   if (hfdcan->Instance == FDCAN1)
   {
-		tSFDCANRxMsg SRxMsg;
-    memset(&SRxMsg, 0, sizeof(SRxMsg));
+    FDCAN_RxHeaderTypeDef SRxHeader;
+    uint8_t               baRawData[CANRX_MAX_DATA_LEN];
 
-    SRxMsg.hfdcan = &hfdcan1;
-
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &SRxMsg.SRxHeader, SRxMsg.baData) != HAL_OK)
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &SRxHeader, baRawData) != HAL_OK)
     {
       Error_Handler();
     }
 
-    SRxMsg.SRxHeader.DataLength = CANGetRxDataLength(SRxMsg.SRxHeader.DataLength);
-		
-		CANRxRequest(&SRxMsg);
+    tSCANRxFrame SFrame;
+    SFrame.lId         = SRxHeader.Identifier;
+    SFrame.fExtendedId = (SRxHeader.IdType == FDCAN_EXTENDED_ID) ? 1U : 0U;
+    SFrame.bDataLen    = CANGetRxDataLength(SRxHeader.DataLength);
+
+    uint8_t bCopy = (SFrame.bDataLen > CANRX_MAX_DATA_LEN)
+                  ? CANRX_MAX_DATA_LEN
+                  : SFrame.bDataLen;
+    memcpy(SFrame.baData, baRawData, bCopy);
+
+    CanRx_SubmitFrame(&g_canRxPort, &SFrame);
   }
 }
 /* USER CODE END 1 */

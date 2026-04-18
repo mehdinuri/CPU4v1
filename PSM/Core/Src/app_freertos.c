@@ -425,7 +425,7 @@ void MaintenanceTaskFunc(void *argument)
 			bTaskFailures = 0;
 		}
 		
-		IWDGRefresh();
+		Watchdog_Refresh(&g_watchdogPort);
 #else
     osDelay(10);
 #endif

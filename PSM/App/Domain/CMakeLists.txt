@@ -6,6 +6,8 @@ add_library(PSM_Domain STATIC)
 target_sources(PSM_Domain PRIVATE
     Measurement.c
     MeasurementService.c
+    VoltageRMS.c
+    FrequencyCaptureFSM.c
 )
 
 # Public include: callers use #include "Domain/Measurement.h"
@@ -19,6 +21,10 @@ target_compile_options(PSM_Domain PRIVATE
     -Wall -Wextra -Werror -Wpedantic
     -Wno-unused-parameter
 )
+
+# VoltageRMS uses sqrtf — propagate libm dependency to all consumers so the
+# link order (library before -lm) is correct.
+target_link_libraries(PSM_Domain PUBLIC m)
 
 # Coverage instrumentation — only for Host Debug builds
 target_compile_options(PSM_Domain PRIVATE

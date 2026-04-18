@@ -15,29 +15,53 @@
 #include "Adapters/STM32/SignalInputAdapter.h"
 #include "Adapters/STM32/EepromAdapter.h"
 #include "Adapters/STM32/CANTxAdapter.h"
+#include "Adapters/STM32/CANRxAdapter.h"
 #include "Adapters/STM32/VoltageSensorAdapter.h"
 #include "Adapters/STM32/FrequencySensorAdapter.h"
+#include "Adapters/STM32/FrequencyCaptureAdapter.h"
+#include "Adapters/STM32/WatchdogAdapter.h"
+
+#include "stm32g4xx_hal.h"  /* HAL_GetTick() */
 
 /* ------------------------------------------------------------------
  * Adapter contexts — one per hardware resource.
  * These are the sole owners of adapter state.
  * ------------------------------------------------------------------ */
-static IndicatorLEDAdapterCtx_t    s_led;
-static SignalInputAdapterCtx_t     s_input;
-static EepromAdapterCtx_t          s_eeprom;
-static CANTxAdapterCtx_t           s_can;
-static VoltageSensorAdapterCtx_t   s_voltage;
-static FrequencySensorAdapterCtx_t s_freq;
+static IndicatorLEDAdapterCtx_t       s_led;
+static SignalInputAdapterCtx_t        s_input;
+static EepromAdapterCtx_t             s_eeprom;
+static CANTxAdapterCtx_t              s_canTx;
+static CANRxAdapterCtx_t              s_canRx;
+static VoltageSensorAdapterCtx_t      s_voltage;
+static FrequencySensorAdapterCtx_t    s_freq;
+static FrequencyCaptureAdapterCtx_t   s_freqCapture;
+static WatchdogAdapterCtx_t           s_watchdog;
 
 /* ------------------------------------------------------------------
  * Port instances — declared extern in HardwarePorts.h.
  * ------------------------------------------------------------------ */
-IIndicatorLEDPort_t    g_indicatorLEDPort;
-ISignalInputPort_t     g_signalInputPort;
-IEepromPort_t          g_eepromPort;
-ICANTxPort_t           g_canTxPort;
-IVoltageSensorPort_t   g_voltageSensorPort;
-IFrequencySensorPort_t g_frequencySensorPort;
+IIndicatorLEDPort_t       g_indicatorLEDPort;
+ISignalInputPort_t        g_signalInputPort;
+IEepromPort_t             g_eepromPort;
+ICANTxPort_t              g_canTxPort;
+ICANRxPort_t              g_canRxPort;
+IVoltageSensorPort_t      g_voltageSensorPort;
+IFrequencySensorPort_t    g_frequencySensorPort;
+IFrequencyCapturePort_t   g_frequencyCapturePort;
+IWatchdogPort_t           g_watchdogPort;
+
+/* ------------------------------------------------------------------
+ * Grid-frequency capture configuration — passed to the adapter at
+ * init time; matches the TIM2 channel setup in Core/Src/tim.c.
+ * ------------------------------------------------------------------ */
+static const tSFrequencyCaptureFSMConfig s_freqCaptureCfg = {
+  .lClockFreqHz            = 100000U,
+  .lCounterMax             = 0xFFFFFFFFU,
+  .lCaptureTimeoutMs       = 100U,
+  .bTargetFreqHz           = 50U,
+  .bFreqToleranceHz        = 5U,
+  .sBadReadingsBeforeSleep = 10U
+};
 
 /* ------------------------------------------------------------------
  * ISR/DMA-callback wrappers.
@@ -81,14 +105,28 @@ void MainApplication_Init(void)
   EepromAdapterInit(&s_eeprom);
   g_eepromPort = EepromAdapterCreatePort(&s_eeprom);
 
-  CANTxAdapterInit(&s_can);
-  g_canTxPort = CANTxAdapterCreatePort(&s_can);
+  CANTxAdapterInit(&s_canTx);
+  g_canTxPort = CANTxAdapterCreatePort(&s_canTx);
+
+  CANRxAdapterInit(&s_canRx);
+  g_canRxPort = CANRxAdapterCreatePort(&s_canRx);
 
   VoltageSensorAdapterInit(&s_voltage);
   g_voltageSensorPort = VoltageSensorAdapterCreatePort(&s_voltage);
 
   FrequencySensorAdapterInit(&s_freq);
   g_frequencySensorPort = FrequencySensorAdapterCreatePort(&s_freq);
+
+  /* Frequency-capture adapter publishes via MeasurementNetFrequencySet, which
+   * routes to the FrequencySensor adapter context above. */
+  FrequencyCaptureAdapterInit(&s_freqCapture,
+                               &s_freqCaptureCfg,
+                               MeasurementNetFrequencySet,
+                               HAL_GetTick());
+  g_frequencyCapturePort = FrequencyCaptureAdapterCreatePort(&s_freqCapture);
+
+  WatchdogAdapterInit(&s_watchdog);
+  g_watchdogPort = WatchdogAdapterCreatePort(&s_watchdog);
 } /* MainApplication_Init */
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

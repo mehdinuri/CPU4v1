@@ -11,8 +11,11 @@ add_library(PSM_Platform_STM32 STATIC
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/SignalInputAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/EepromAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/CANTxAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/CANRxAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/VoltageSensorAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/FrequencySensorAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/FrequencyCaptureAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/WatchdogAdapter.c
 )
 
 # Bootstrap/ and Tasks/ are PUBLIC so the main executable (Core/Src/*) and
