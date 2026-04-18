@@ -21,13 +21,13 @@ services:
       dockerfile: Tools/Docker/Dockerfile.test
     volumes:
       - ../..:/workspace:z
-      - /workspace/build/Host-Test
     working_dir: /workspace
     command: >
       bash -c "
+        rm -rf build/Docker-Host-Test &&
         cmake --preset Docker-Host-Test &&
         cmake --build --preset Docker-Host-Test &&
-        cd /tmp/Docker-host-test &&
+        cd /workspace/build/Docker-Host-Test &&
         find . -name '*.gcda' -delete &&
         ctest --output-on-failure &&
         mkdir -p /workspace/build/coverage-report &&
