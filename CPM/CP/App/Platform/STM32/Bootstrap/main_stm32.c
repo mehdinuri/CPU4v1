@@ -30,6 +30,8 @@
 #include "Adapters/STM32/UnitInputAdapter.h"
 #include "Adapters/STM32/SignalCardAdapter.h"
 #include "Adapters/STM32/MmuAdapter.h"
+#include "Adapters/STM32/FieldInputCanAdapter.h"
+#include "Adapters/STM32/CompositeModuleBusPort.h"
 #include "Adapters/STM32/ModuleBusAdapter.h"
 #include "Adapters/STM32/FlashStorageAdapter.h"
 #include "Adapters/STM32/EepromStorageAdapter.h"
@@ -90,7 +92,9 @@ static UnitClockAdapterCtx_t s_unitClockCtx;
 static UnitInputAdapterCtx_t s_unitInputCtx;
 static SignalCardAdapterCtx_t s_signalCardCtx;
 static MmuAdapterCtx_t s_mmuCtx;
+static FieldInputCanAdapterCtx_t s_fieldInputCanCtx;
 static ModuleBusAdapterCtx_t s_moduleBusCtx;
+static CompositeModuleBusPortCtx_t s_compositeModuleBusCtx;
 static FlashStorageAdapterCtx_t s_flashStorageCtx;
 static EepromStorageAdapterCtx_t s_eepromStorageCtx;
 static PersistenceAdapterCtx_t s_persistenceCtx;
@@ -138,6 +142,8 @@ IModemPort_t g_modemDriverPort;         /* active modem driver           */
 
 static IFlashStoragePort_t s_flashStoragePort;
 static IEepromStoragePort_t s_eepromStoragePort;
+static IModuleBusPort_t s_fieldInputModuleBusPort;
+static IModuleBusPort_t s_internalModuleBusPort;
 
 ConfigurationService_t g_configurationService;
 IntersectionEngine_t g_intersectionEngine;
@@ -263,11 +269,20 @@ void MainApplication_Init(void)
   (void) IntersectionEngineLoadConfig(&g_intersectionEngine,
                                       ConfigurationServiceGetActiveConfig(
                                         &g_configurationService));
+  FieldInputCanAdapterInit(&s_fieldInputCanCtx,
+                           ConfigurationServiceGetActiveSetId(
+                             &g_configurationService));
+  s_fieldInputModuleBusPort =
+    FieldInputCanAdapterCreatePort(&s_fieldInputCanCtx);
   ModuleBusAdapterInit(&s_moduleBusCtx,
                        &hfdcan2,
                        ConfigurationServiceGetActiveSetId(
                          &g_configurationService));
-  g_moduleBusPort = ModuleBusAdapterCreatePort(&s_moduleBusCtx);
+  s_internalModuleBusPort = ModuleBusAdapterCreatePort(&s_moduleBusCtx);
+  CompositeModuleBusPortInit(&s_compositeModuleBusCtx,
+                             &s_fieldInputModuleBusPort,
+                             &s_internalModuleBusPort);
+  g_moduleBusPort = CompositeModuleBusPortCreatePort(&s_compositeModuleBusCtx);
   SignalCardAdapterInit(&s_signalCardCtx,
                         &hfdcan2,
                         ConfigurationServiceGetActiveSetId(

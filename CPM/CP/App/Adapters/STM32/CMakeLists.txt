@@ -7,6 +7,8 @@ add_library(Adapters_STM32 STATIC)
 target_sources(Adapters_STM32 PRIVATE
     SignalCardAdapter.c
     MmuAdapter.c
+    FieldInputCanAdapter.c
+    CompositeModuleBusPort.c
     ModuleBusAdapter.c
     RTCAdapter.c
     UnitAlarmAdapter.c

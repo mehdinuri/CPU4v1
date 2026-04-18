@@ -115,6 +115,187 @@ static const IntersectionConfig_t *GetControllerConfig(
   return IntersectionEngineGetConfig(controller->engine);
 }
 
+static uint8_t IoMapFamilyMatches(const IntersectionIoInputMapRowConfig_t *row,
+                                  uint16_t pnn,
+                                  uint8_t ptype)
+{
+  return (uint8_t) ((row != NULL)
+                    && (pnn != 0U)
+                    && (ptype != 0U)
+                    && (row->deviceType
+                        == (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM)
+                    && (row->devicePnn == pnn)
+                    && (row->devicePtype == ptype));
+}
+
+static uint8_t IoMapInputRowIsFeigFamily(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  return IoMapFamilyMatches(row,
+                            INTERSECTION_IO_MAP_FEIG_DEVICE_PNN,
+                            INTERSECTION_IO_MAP_FEIG_DEVICE_PTYPE);
+}
+
+static uint8_t IoMapInputRowIsPedFamily(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  return IoMapFamilyMatches(row,
+                            INTERSECTION_IO_MAP_PED_DEVICE_PNN,
+                            INTERSECTION_IO_MAP_PED_DEVICE_PTYPE);
+}
+
+static uint8_t GetFeigPhysicalInputNumber(
+  const IntersectionIoInputMapRowConfig_t *row,
+  uint8_t *physicalInputNumber)
+{
+  uint8_t inputNumber;
+
+  if ((row == NULL) || (physicalInputNumber == NULL)
+      || (IoMapInputRowIsFeigFamily(row) == 0U)
+      || (row->deviceAddr == 0U) || (row->deviceAddr > 8U)
+      || (row->devicePin == 0U) || (row->devicePin > 4U))
+  {
+    return 0U;
+  }
+
+  inputNumber = (uint8_t) (((row->deviceAddr - 1U) * 4U) + row->devicePin);
+  if (inputNumber > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX)
+  {
+    return 0U;
+  }
+
+  *physicalInputNumber = inputNumber;
+
+  return 1U;
+}
+
+static uint8_t GetPedPhysicalInputNumber(
+  const IntersectionIoInputMapRowConfig_t *row,
+  uint8_t *physicalInputNumber)
+{
+  if ((row == NULL) || (physicalInputNumber == NULL)
+      || (IoMapInputRowIsPedFamily(row) == 0U)
+      || (row->deviceAddr != 1U)
+      || (row->devicePin == 0U)
+      || (row->devicePin > INTERSECTION_PED_INPUT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  *physicalInputNumber = row->devicePin;
+
+  return 1U;
+}
+
+static void ApplyCanonicalInputMap(const IntersectionConfig_t *config,
+                                   const ModuleBusSnapshot_t *snapshot,
+                                   uint8_t detectorSourceReady,
+                                   uint8_t pedSourceReady,
+                                   ModuleBusSnapshot_t *effectiveSnapshot)
+{
+  uint8_t rowIndex;
+  uint8_t vehicleMappingsPresent = 0U;
+  uint8_t pedestrianMappingsPresent = 0U;
+
+  if ((config == NULL) || (snapshot == NULL) || (effectiveSnapshot == NULL))
+  {
+    return;
+  }
+
+  for (rowIndex = 0U; rowIndex < INTERSECTION_IO_MAP_MAX_INPUTS; rowIndex++)
+  {
+    const IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[rowIndex];
+
+    if ((row->function
+         == (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_VEHICLE_DETECTOR)
+        && (row->functionIndex != 0U)
+        && (row->functionIndex <= INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+    {
+      vehicleMappingsPresent = 1U;
+    }
+    else if ((row->function
+              == (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_PEDESTRIAN_DETECTOR)
+             && (row->functionIndex != 0U)
+             && (row->functionIndex <= INTERSECTION_PED_INPUT_COUNT_MAX))
+    {
+      pedestrianMappingsPresent = 1U;
+    }
+  }
+
+  if (vehicleMappingsPresent != 0U)
+  {
+    effectiveSnapshot->detectorInputs = 0U;
+    memset(&effectiveSnapshot->vehicleDetectorAlarms[0],
+           0,
+           sizeof(effectiveSnapshot->vehicleDetectorAlarms));
+    memset(&effectiveSnapshot->vehicleDetectorReportedAlarms[0],
+           0,
+           sizeof(effectiveSnapshot->vehicleDetectorReportedAlarms));
+  }
+
+  if (pedestrianMappingsPresent != 0U)
+  {
+    effectiveSnapshot->pedInputs = 0U;
+    memset(&effectiveSnapshot->pedestrianDetectorAlarms[0],
+           0,
+           sizeof(effectiveSnapshot->pedestrianDetectorAlarms));
+  }
+
+  for (rowIndex = 0U; rowIndex < INTERSECTION_IO_MAP_MAX_INPUTS; rowIndex++)
+  {
+    const IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[rowIndex];
+
+    if ((row->function
+         == (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_VEHICLE_DETECTOR)
+        && (row->functionIndex != 0U)
+        && (row->functionIndex <= INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+    {
+      uint8_t physicalInputNumber;
+      uint8_t detectorIndex = (uint8_t) (row->functionIndex - 1U);
+
+      if ((detectorSourceReady != 0U)
+          && (GetFeigPhysicalInputNumber(row, &physicalInputNumber) != 0U))
+      {
+        if (ModuleBusSnapshotRawVehicleDetectorInputActive(
+              snapshot,
+              physicalInputNumber) != 0U)
+        {
+          effectiveSnapshot->detectorInputs |=
+            (uint32_t) (1UL << (uint32_t) detectorIndex);
+        }
+
+        if ((ModuleBusSnapshotRawVehicleDetectorOffline(snapshot,
+                                                        physicalInputNumber)
+             != 0U)
+            || (ModuleBusSnapshotRawVehicleDetectorFault(snapshot,
+                                                        physicalInputNumber)
+                != 0U))
+        {
+          effectiveSnapshot->vehicleDetectorReportedAlarms[detectorIndex] |= 0x01U;
+        }
+      }
+    }
+    else if ((row->function
+              == (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_PEDESTRIAN_DETECTOR)
+             && (row->functionIndex != 0U)
+             && (row->functionIndex <= INTERSECTION_PED_INPUT_COUNT_MAX))
+    {
+      uint8_t physicalInputNumber;
+      uint8_t detectorIndex = (uint8_t) (row->functionIndex - 1U);
+
+      if ((pedSourceReady != 0U)
+          && (GetPedPhysicalInputNumber(row, &physicalInputNumber) != 0U)
+          && (ModuleBusSnapshotRawPedestrianInputActive(snapshot,
+                                                        physicalInputNumber)
+              != 0U))
+      {
+        effectiveSnapshot->pedInputs |=
+          (uint32_t) (1UL << (uint32_t) detectorIndex);
+      }
+    }
+  }
+}
+
 static void ApplyLocalUnitInputs(IntersectionController_t *controller)
 {
   uint8_t dimmingInputActive = 0U;
@@ -148,6 +329,7 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
                                       const ModuleBusSnapshot_t *snapshot)
 {
   const IntersectionConfig_t *config;
+  ModuleBusSnapshot_t effectiveSnapshot;
   uint8_t snapshotContractOk;
   uint8_t detectorNumber;
   uint8_t pedDetectorNumber;
@@ -195,6 +377,13 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
     loadSwitchSourceReady = 0U;
   }
 
+  effectiveSnapshot = *snapshot;
+  ApplyCanonicalInputMap(config,
+                         snapshot,
+                         detectorSourceReady,
+                         pedSourceReady,
+                         &effectiveSnapshot);
+
   for (detectorNumber = 1U;
        detectorNumber <= INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
        ++detectorNumber)
@@ -203,7 +392,7 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
       controller->engine,
       detectorNumber,
       (uint8_t) ((detectorSourceReady != 0U)
-                 && (ModuleBusSnapshotDetectorInputActive(snapshot,
+                 && (ModuleBusSnapshotDetectorInputActive(&effectiveSnapshot,
                                                          detectorNumber)
                      != 0U)));
   }
@@ -216,7 +405,7 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
       controller->engine,
       pedDetectorNumber,
       (uint8_t) ((pedSourceReady != 0U)
-                 && (ModuleBusSnapshotPedInputActive(snapshot,
+                 && (ModuleBusSnapshotPedInputActive(&effectiveSnapshot,
                                                     pedDetectorNumber)
                      != 0U)));
   }
@@ -280,7 +469,7 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
       mmuFlashActive = 1U;
     }
     else if (OutputFeedbackMatchesDispatcher(controller->outputDispatcher,
-                                             snapshot) == 0U)
+                                             &effectiveSnapshot) == 0U)
     {
       mmuFlashActive = 1U;
     }
@@ -288,6 +477,8 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
 
   (void) IntersectionEngineSetMmuFlashControl(controller->engine,
                                               mmuFlashActive);
+  controller->lastSnapshot = effectiveSnapshot;
+  controller->lastSnapshotValid = 1U;
   return MmuSetForceAllRed(controller->mmuPort, mmuFlashActive);
 } /* ApplyModuleBusSnapshot */
 
@@ -354,8 +545,6 @@ uint8_t IntersectionControllerStep(IntersectionController_t *controller)
   if ((controller->moduleBusPort != NULL)
       && (ModuleBusReadSnapshot(controller->moduleBusPort, &snapshot) != 0U))
   {
-    controller->lastSnapshot = snapshot;
-    controller->lastSnapshotValid = 1U;
     snapshotValid = 1U;
     snapshotApplyOk = ApplyModuleBusSnapshot(controller, &snapshot);
     if (snapshotApplyOk == 0U)

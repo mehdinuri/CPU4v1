@@ -38,8 +38,12 @@ typedef struct
   uint8_t staleMask;
   uint8_t contextFaultMask;
   uint8_t sequenceFaultMask;
-  uint16_t detectorInputs;
-  uint8_t pedInputs;
+  uint32_t detectorInputs;
+  uint32_t pedInputs;
+  uint32_t rawVehicleDetectorInputs;
+  uint32_t rawVehicleDetectorOffline;
+  uint32_t rawVehicleDetectorFault;
+  uint32_t rawPedestrianInputs;
   uint8_t preemptInputs;
   uint8_t preemptControls;
   uint8_t mmuStatus;
@@ -116,7 +120,7 @@ static inline uint8_t ModuleBusSnapshotDetectorInputActive(
   uint8_t
   detectorNumber)
 {
-  uint16_t mask;
+  uint32_t mask;
 
   if ((snapshot == NULL) || (detectorNumber == 0U)
       || (detectorNumber > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
@@ -124,7 +128,7 @@ static inline uint8_t ModuleBusSnapshotDetectorInputActive(
     return 0U;
   }
 
-  mask = (uint16_t) (1U << (uint16_t) (detectorNumber - 1U));
+  mask = (uint32_t) (1UL << (uint32_t) (detectorNumber - 1U));
 
   return (uint8_t) ((snapshot->detectorInputs & mask) != 0U);
 }
@@ -133,7 +137,7 @@ static inline uint8_t ModuleBusSnapshotPedInputActive(
   const ModuleBusSnapshot_t *snapshot,
   uint8_t pedInputNumber)
 {
-  uint8_t mask;
+  uint32_t mask;
 
   if ((snapshot == NULL) || (pedInputNumber == 0U)
       || (pedInputNumber > INTERSECTION_PED_INPUT_COUNT_MAX))
@@ -141,9 +145,77 @@ static inline uint8_t ModuleBusSnapshotPedInputActive(
     return 0U;
   }
 
-  mask = (uint8_t) (1U << (uint8_t) (pedInputNumber - 1U));
+  mask = (uint32_t) (1UL << (uint32_t) (pedInputNumber - 1U));
 
   return (uint8_t) ((snapshot->pedInputs & mask) != 0U);
+}
+
+static inline uint8_t ModuleBusSnapshotRawVehicleDetectorInputActive(
+  const ModuleBusSnapshot_t *snapshot,
+  uint8_t detectorNumber)
+{
+  uint32_t mask;
+
+  if ((snapshot == NULL) || (detectorNumber == 0U)
+      || (detectorNumber > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  mask = (uint32_t) (1UL << (uint32_t) (detectorNumber - 1U));
+
+  return (uint8_t) ((snapshot->rawVehicleDetectorInputs & mask) != 0U);
+}
+
+static inline uint8_t ModuleBusSnapshotRawVehicleDetectorOffline(
+  const ModuleBusSnapshot_t *snapshot,
+  uint8_t detectorNumber)
+{
+  uint32_t mask;
+
+  if ((snapshot == NULL) || (detectorNumber == 0U)
+      || (detectorNumber > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  mask = (uint32_t) (1UL << (uint32_t) (detectorNumber - 1U));
+
+  return (uint8_t) ((snapshot->rawVehicleDetectorOffline & mask) != 0U);
+}
+
+static inline uint8_t ModuleBusSnapshotRawVehicleDetectorFault(
+  const ModuleBusSnapshot_t *snapshot,
+  uint8_t detectorNumber)
+{
+  uint32_t mask;
+
+  if ((snapshot == NULL) || (detectorNumber == 0U)
+      || (detectorNumber > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  mask = (uint32_t) (1UL << (uint32_t) (detectorNumber - 1U));
+
+  return (uint8_t) ((snapshot->rawVehicleDetectorFault & mask) != 0U);
+}
+
+static inline uint8_t ModuleBusSnapshotRawPedestrianInputActive(
+  const ModuleBusSnapshot_t *snapshot,
+  uint8_t pedInputNumber)
+{
+  uint32_t mask;
+
+  if ((snapshot == NULL) || (pedInputNumber == 0U)
+      || (pedInputNumber > INTERSECTION_PED_INPUT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  mask = (uint32_t) (1UL << (uint32_t) (pedInputNumber - 1U));
+
+  return (uint8_t) ((snapshot->rawPedestrianInputs & mask) != 0U);
 }
 
 static inline uint8_t ModuleBusSnapshotPreemptInputActive(

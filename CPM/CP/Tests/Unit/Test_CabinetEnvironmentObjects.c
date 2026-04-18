@@ -6,6 +6,7 @@
 #include "unity.h"
 
 #include "Domain/Intersection/ConfigurationService.h"
+#include "Domain/NTCIP/NTCIP1201.h"
 #include "Domain/NTCIP/NTCIP1202.h"
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
 #include "Domain/NTCIP/Core/NtcipObjectDirectory.h"
@@ -147,6 +148,7 @@ void setUp(void)
   NtcipContextBindHeaterPort(&s_ntcipContext, &s_heaterPort);
   NtcipContextBindPowerMonitorPort(&s_ntcipContext, &s_powerPort);
   NtcipObjectDirectoryInit(&s_directory);
+  Ntcip1201RegisterObjects(&s_directory, &s_ntcipContext);
   Ntcip1202RegisterObjects(&s_directory, &s_ntcipContext);
 }
 

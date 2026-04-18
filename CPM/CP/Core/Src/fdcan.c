@@ -25,6 +25,7 @@
 #include <string.h>
 #include "cmsis_os.h"
 #include "defs.h"
+#include "Adapters/STM32/FieldInputCanAdapter.h"
 #include "Adapters/STM32/ModuleBusAdapter.h"
 #include "CanMsgParser.h"
 #include "mmi.h"
@@ -393,6 +394,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     }
 
     SRxMsg.RxHeader.DataLength = CANGetRxDataLength(SRxMsg.RxHeader.DataLength);
+    FieldInputCanAdapterHandleRxFrame(&SRxMsg.RxHeader, &SRxMsg.Data[0]);
 
     if ((SRxMsg.RxHeader.Identifier >= CAN_MMI_STD_ID_FIRST)
         && (SRxMsg.RxHeader.Identifier <= CAN_MMI_STD_ID_LAST) )

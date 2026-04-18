@@ -1973,7 +1973,7 @@ void test_detector_control_group_actuation_drives_runtime_detector_status(void)
                           13U,
                           NULL,
                           &value));
-  TEST_ASSERT_EQUAL_UINT32(2U, value.data.unsigned32);
+  TEST_ASSERT_EQUAL_UINT32(4U, value.data.unsigned32);
 
   NtcipValueSetUnsigned32(&value, 0x01U);
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,

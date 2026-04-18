@@ -13,7 +13,7 @@
 #include "Ports/IConfigRepositoryPort.h"
 
 #define CONFIGURATION_IMAGE_MAGIC 0x43464731UL
-#define CONFIGURATION_IMAGE_SCHEMA_VERSION 19UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION 21UL
 #define CONFIGURATION_IMAGE_HEADER_SIZE 40U
 #define CONFIGURATION_PHASE_IMAGE_SIZE 56U
 #define CONFIGURATION_VEHICLE_DETECTOR_IMAGE_SIZE 20U
@@ -29,6 +29,14 @@
             * (INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX + 2U)) \
          + (INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX \
             * (INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX + 1U)))
+#define CONFIGURATION_IO_MAP_INPUT_ROW_IMAGE_SIZE 11U
+#define CONFIGURATION_IO_MAP_OUTPUT_ROW_IMAGE_SIZE 11U
+#define CONFIGURATION_IO_MAP_IMAGE_SIZE \
+        (INTERSECTION_IO_MAP_DESCRIPTION_MAX \
+         + (INTERSECTION_IO_MAP_MAX_INPUTS \
+            * CONFIGURATION_IO_MAP_INPUT_ROW_IMAGE_SIZE) \
+         + (INTERSECTION_IO_MAP_MAX_OUTPUTS \
+            * CONFIGURATION_IO_MAP_OUTPUT_ROW_IMAGE_SIZE))
 #define CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE \
         (2U + (INTERSECTION_USER_DEFINED_BACKUP_OID_COMPONENT_COUNT_MAX * 4U) \
          + INTERSECTION_USER_DEFINED_BACKUP_DESCRIPTION_MAX)
@@ -59,7 +67,8 @@
          + CONFIGURATION_UNIT_IMAGE_SIZE \
          + (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
             * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE) \
-         + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE)
+         + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE \
+         + CONFIGURATION_IO_MAP_IMAGE_SIZE)
 
 #define CONFIGURATION_SLOT_STATE_ERASED 0xFFFFFFFFUL
 #define CONFIGURATION_SLOT_STATE_WRITING 0x7FFFFFFFUL
@@ -138,6 +147,7 @@ typedef struct
   uint8_t timebaseValid;
   uint8_t globalTimeManagementValid;
   uint8_t cabinetEnvironmentValid;
+  uint8_t ioMapValid;
   uint8_t unitValid;
   uint8_t inputMappingValid;
   uint8_t detectorReportsValid;
@@ -165,6 +175,7 @@ typedef struct
   IntersectionTimebaseConfig_t timebase;
   IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
   IntersectionCabinetEnvironmentConfig_t cabinetEnvironment;
+  IntersectionIoMapConfig_t ioMap;
   IntersectionUnitConfig_t unit;
   IntersectionInputMappingConfig_t inputMapping;
   IntersectionPreemptConfig_t preempts[INTERSECTION_PREEMPT_COUNT_MAX];
@@ -231,6 +242,9 @@ uint8_t ConfigurationServiceGetCandidateGlobalTimeManagementConfig(
 uint8_t ConfigurationServiceGetCandidateCabinetEnvironmentConfig(
   ConfigurationService_t *service,
   IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
+uint8_t ConfigurationServiceGetCandidateIoMapConfig(
+  ConfigurationService_t *service,
+  IntersectionIoMapConfig_t *ioMapConfig);
 uint8_t ConfigurationServiceGetActiveChannelConfig(
   const ConfigurationService_t *service,
   uint8_t channelIndex,
@@ -258,6 +272,9 @@ uint8_t ConfigurationServiceGetActiveGlobalTimeManagementConfig(
 uint8_t ConfigurationServiceGetActiveCabinetEnvironmentConfig(
   const ConfigurationService_t *service,
   IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
+uint8_t ConfigurationServiceGetActiveIoMapConfig(
+  const ConfigurationService_t *service,
+  IntersectionIoMapConfig_t *ioMapConfig);
 uint8_t ConfigurationServiceGetActiveUnitConfig(
   const ConfigurationService_t *service,
   IntersectionUnitConfig_t *unitConfig);
@@ -746,6 +763,9 @@ uint8_t ConfigurationServiceSetGlobalTimeManagementConfig(
 uint8_t ConfigurationServiceSetCabinetEnvironmentConfig(
   ConfigurationService_t *service,
   const IntersectionCabinetEnvironmentConfig_t *cabinetEnvironmentConfig);
+uint8_t ConfigurationServiceSetIoMapConfig(
+  ConfigurationService_t *service,
+  const IntersectionIoMapConfig_t *ioMapConfig);
 uint8_t ConfigurationServiceSetUnitTimeSourceCommanded(
   ConfigurationService_t *service,
   uint8_t timeSourceCommanded);

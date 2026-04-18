@@ -205,6 +205,559 @@ static uint8_t NormalizeVehicleDetectorOptions(uint8_t options)
   return options;
 }
 
+static uint8_t IoMapFamilyMatches(const uint16_t devicePnn,
+                                  const uint8_t devicePtype,
+                                  const uint16_t expectedPnn,
+                                  const uint8_t expectedPtype)
+{
+  return (uint8_t) ((expectedPnn != 0U) && (expectedPtype != 0U)
+                    && (devicePnn == expectedPnn)
+                    && (devicePtype == expectedPtype));
+}
+
+static uint8_t IoMapInputRowIsFeigFamily(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  return IoMapFamilyMatches(row->devicePnn,
+                            row->devicePtype,
+                            INTERSECTION_IO_MAP_FEIG_DEVICE_PNN,
+                            INTERSECTION_IO_MAP_FEIG_DEVICE_PTYPE);
+}
+
+static uint8_t IoMapInputRowIsPedFamily(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  return IoMapFamilyMatches(row->devicePnn,
+                            row->devicePtype,
+                            INTERSECTION_IO_MAP_PED_DEVICE_PNN,
+                            INTERSECTION_IO_MAP_PED_DEVICE_PTYPE);
+}
+
+static uint8_t ValidateIoMapInputDeviceAddr(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapDeviceType_t) row->deviceType)
+  {
+      case INTERSECTION_IO_MAP_DEVICE_UNUSED:
+      {
+        return (uint8_t) (row->deviceAddr == 0U);
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_CUSTOM:
+      {
+        if (IoMapInputRowIsFeigFamily(row) != 0U)
+        {
+          return (uint8_t) ((row->deviceAddr >= 1U) && (row->deviceAddr <= 8U));
+        }
+
+        if (IoMapInputRowIsPedFamily(row) != 0U)
+        {
+          return (uint8_t) (row->deviceAddr == 1U);
+        }
+
+        return 0U;
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t ValidateIoMapInputDevicePin(
+  const IntersectionIoInputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapDeviceType_t) row->deviceType)
+  {
+      case INTERSECTION_IO_MAP_DEVICE_UNUSED:
+      {
+        return (uint8_t) (row->devicePin == 0U);
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_CUSTOM:
+      {
+        if (IoMapInputRowIsFeigFamily(row) != 0U)
+        {
+          return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 4U));
+        }
+
+        if (IoMapInputRowIsPedFamily(row) != 0U)
+        {
+          return (uint8_t) ((row->devicePin >= 1U)
+                            && (row->devicePin
+                                <= INTERSECTION_PED_INPUT_COUNT_MAX));
+        }
+
+        return 0U;
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t ValidateIoMapInputRow(
+  const IntersectionIoInputMapRowConfig_t *row,
+  IntersectionConfigErrorInfo_t *errorInfo,
+  uint16_t objectIndex)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  if ((row->deviceType < (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+      || (row->deviceType > (uint8_t) INTERSECTION_IO_MAP_DEVICE_AUX)
+      || ((row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+          && (row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM)))
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_TYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if ((row->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+      && ((row->devicePnn != 0U) || (row->devicePtype != 0U)))
+  {
+    SetError(errorInfo,
+             (row->devicePnn != 0U)
+             ? INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PNN
+             : INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PTYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if ((row->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM)
+      && (IoMapInputRowIsFeigFamily(row) == 0U)
+      && (IoMapInputRowIsPedFamily(row) == 0U))
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PNN,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (ValidateIoMapInputDeviceAddr(row) == 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_ADDR,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (ValidateIoMapInputDevicePin(row) == 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PIN,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->functionType != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_TYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->functionPtype != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_PTYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapInputFunction_t) row->function)
+  {
+      case INTERSECTION_IO_MAP_INPUT_FUNCTION_UNUSED_INPUT:
+      {
+        if (row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if (row->functionIndex != 1U)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_IO_MAP_INPUT_FUNCTION_PEDESTRIAN_DETECTOR:
+      {
+        if ((row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM)
+            || (IoMapInputRowIsPedFamily(row) == 0U))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if ((row->functionIndex == 0U)
+            || (row->functionIndex > INTERSECTION_PED_INPUT_COUNT_MAX))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_IO_MAP_INPUT_FUNCTION_VEHICLE_DETECTOR:
+      {
+        if ((row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM)
+            || (IoMapInputRowIsFeigFamily(row) == 0U))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if ((row->functionIndex == 0U)
+            || (row->functionIndex > INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      default:
+      {
+        SetError(errorInfo,
+                 INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION,
+                 objectIndex);
+
+        return 0U;
+      }
+  }
+
+  return 1U;
+}
+
+static uint8_t ValidateIoMapOutputDeviceAddr(
+  const IntersectionIoOutputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapDeviceType_t) row->deviceType)
+  {
+      case INTERSECTION_IO_MAP_DEVICE_UNUSED:
+      case INTERSECTION_IO_MAP_DEVICE_FIO:
+      case INTERSECTION_IO_MAP_DEVICE_TS1:
+      case INTERSECTION_IO_MAP_DEVICE_AUX:
+      {
+        return (uint8_t) (row->deviceAddr == 0U);
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_BIU:
+      {
+        return (uint8_t) (((row->deviceAddr >= 1U) && (row->deviceAddr <= 4U))
+                          || ((row->deviceAddr >= 9U)
+                              && (row->deviceAddr <= 12U)));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_SIU:
+      {
+        switch (row->deviceAddr)
+        {
+            case 2U:
+            case 4U:
+            case 5U:
+            case 6U:
+            case 7U:
+            case 8U:
+            case 10U:
+            case 11U:
+            case 12U:
+            case 13U:
+            case 14U:
+            {
+              return 1U;
+            }
+
+            default:
+            {
+              return 0U;
+            }
+        }
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_CUSTOM:
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t ValidateIoMapOutputDevicePin(
+  const IntersectionIoOutputMapRowConfig_t *row)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapDeviceType_t) row->deviceType)
+  {
+      case INTERSECTION_IO_MAP_DEVICE_UNUSED:
+      {
+        return (uint8_t) (row->devicePin == 0U);
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_FIO:
+      {
+        return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 64U));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_TS1:
+      {
+        return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 104U));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_BIU:
+      {
+        return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 39U));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_SIU:
+      {
+        return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 54U));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_AUX:
+      {
+        return (uint8_t) ((row->devicePin >= 1U) && (row->devicePin <= 8U));
+      }
+
+      case INTERSECTION_IO_MAP_DEVICE_CUSTOM:
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t ValidateIoMapOutputRow(
+  const IntersectionIoOutputMapRowConfig_t *row,
+  IntersectionConfigErrorInfo_t *errorInfo,
+  uint16_t objectIndex)
+{
+  if (row == NULL)
+  {
+    return 0U;
+  }
+
+  if ((row->deviceType < (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+      || (row->deviceType > (uint8_t) INTERSECTION_IO_MAP_DEVICE_AUX)
+      || (row->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM))
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_TYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->devicePnn != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_PNN,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->devicePtype != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_PTYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (ValidateIoMapOutputDeviceAddr(row) == 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_ADDR,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (ValidateIoMapOutputDevicePin(row) == 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_PIN,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->functionType != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION_TYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  if (row->functionPtype != 0U)
+  {
+    SetError(errorInfo,
+             INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION_PTYPE,
+             objectIndex);
+
+    return 0U;
+  }
+
+  switch ((IntersectionIoMapOutputFunction_t) row->function)
+  {
+      case INTERSECTION_IO_MAP_OUTPUT_FUNCTION_UNUSED_OUTPUT:
+      {
+        if (row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if (row->functionIndex != 1U)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_IO_MAP_OUTPUT_FUNCTION_IO_USED_AS_INPUT:
+      {
+        if ((row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_BIU)
+            && (row->deviceType != (uint8_t) INTERSECTION_IO_MAP_DEVICE_SIU))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if (row->functionIndex != 1U)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_GREEN:
+      case INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_RED:
+      case INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_YELLOW:
+      {
+        if (row->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_TYPE,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        if ((row->functionIndex == 0U)
+            || (row->functionIndex > INTERSECTION_CHANNEL_COUNT_MAX))
+        {
+          SetError(errorInfo,
+                   INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION_INDEX,
+                   objectIndex);
+
+          return 0U;
+        }
+
+        break;
+      }
+
+      default:
+      {
+        SetError(errorInfo,
+                 INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_FUNCTION,
+                 objectIndex);
+
+        return 0U;
+      }
+  }
+
+  return 1U;
+}
+
 static void RebuildLegacyInputMapping(IntersectionConfig_t *config)
 {
   uint8_t phaseIndex;
@@ -463,6 +1016,73 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
                 15U);
   config->cabinetEnvironment.humiditySensors[0].threshold = 0U;
 
+  memset(config->ioMap.description, 0, sizeof(config->ioMap.description));
+  (void) memcpy(config->ioMap.description, "I/O Map 1", 9U);
+
+  for (i = 0U; i < INTERSECTION_IO_MAP_MAX_INPUTS; i++)
+  {
+    IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[i];
+
+    row->deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED;
+    row->devicePnn = 0U;
+    row->devicePtype = 0U;
+    row->deviceAddr = 0U;
+    row->devicePin = 0U;
+    row->functionType = 0U;
+    row->functionPtype = 0U;
+    row->function =
+      (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_UNUSED_INPUT;
+    row->functionIndex = 1U;
+
+    if ((INTERSECTION_IO_MAP_FEIG_DEVICE_PNN != 0U)
+        && (INTERSECTION_IO_MAP_FEIG_DEVICE_PTYPE != 0U)
+        && (i < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX))
+    {
+      row->deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM;
+      row->devicePnn = INTERSECTION_IO_MAP_FEIG_DEVICE_PNN;
+      row->devicePtype = INTERSECTION_IO_MAP_FEIG_DEVICE_PTYPE;
+      row->deviceAddr = (uint8_t) ((i / 4U) + 1U);
+      row->devicePin = (uint8_t) ((i % 4U) + 1U);
+      row->function =
+        (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_VEHICLE_DETECTOR;
+      row->functionIndex = (uint8_t) (i + 1U);
+    }
+    else if ((INTERSECTION_IO_MAP_PED_DEVICE_PNN != 0U)
+             && (INTERSECTION_IO_MAP_PED_DEVICE_PTYPE != 0U)
+             && (i >= INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX)
+             && (i < (INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX
+                      + INTERSECTION_PED_INPUT_COUNT_MAX)))
+    {
+      uint8_t pedIndex =
+        (uint8_t) (i - INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX);
+
+      row->deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM;
+      row->devicePnn = INTERSECTION_IO_MAP_PED_DEVICE_PNN;
+      row->devicePtype = INTERSECTION_IO_MAP_PED_DEVICE_PTYPE;
+      row->deviceAddr = 1U;
+      row->devicePin = (uint8_t) (pedIndex + 1U);
+      row->function =
+        (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_PEDESTRIAN_DETECTOR;
+      row->functionIndex = (uint8_t) (pedIndex + 1U);
+    }
+  }
+
+  for (i = 0U; i < INTERSECTION_IO_MAP_MAX_OUTPUTS; i++)
+  {
+    IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[i];
+
+    row->deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED;
+    row->devicePnn = 0U;
+    row->devicePtype = 0U;
+    row->deviceAddr = 0U;
+    row->devicePin = 0U;
+    row->functionType = 0U;
+    row->functionPtype = 0U;
+    row->function =
+      (uint8_t) INTERSECTION_IO_MAP_OUTPUT_FUNCTION_UNUSED_OUTPUT;
+    row->functionIndex = 1U;
+  }
+
   config->unit.startUpFlashSeconds = 0U;
   config->unit.autoPedestrianClear =
     (uint8_t) INTERSECTION_UNIT_AUTO_PEDESTRIAN_CLEAR_DISABLE;
@@ -621,6 +1241,7 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
   uint8_t ringIndex;
   uint8_t sequenceIndex;
   uint8_t detectorIndex;
+  uint8_t ioOutputIndex;
   uint8_t seenDetectors[INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX] = { 0U };
   uint8_t seenPedInputs[INTERSECTION_PED_INPUT_COUNT_MAX] = { 0U };
   uint8_t channelIndex;
@@ -1282,6 +1903,78 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
              0U);
 
     return 0U;
+  }
+
+  for (ioOutputIndex = 0U;
+       ioOutputIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+       ioOutputIndex++)
+  {
+    if (ValidateIoMapInputRow(&config->ioMap.inputs[ioOutputIndex],
+                              errorInfo,
+                              (uint16_t) ioOutputIndex + 1U) == 0U)
+    {
+      return 0U;
+    }
+  }
+
+  for (ioOutputIndex = 0U;
+       ioOutputIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+       ioOutputIndex++)
+  {
+    const IntersectionIoInputMapRowConfig_t *rowA = &config->ioMap.inputs[ioOutputIndex];
+    uint8_t compareIndex;
+
+    if (rowA->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+    {
+      continue;
+    }
+
+    for (compareIndex = (uint8_t) (ioOutputIndex + 1U);
+         compareIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+         compareIndex++)
+    {
+      const IntersectionIoInputMapRowConfig_t *rowB =
+        &config->ioMap.inputs[compareIndex];
+
+      if (rowB->deviceType == (uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED)
+      {
+        continue;
+      }
+
+      if ((rowA->devicePnn == rowB->devicePnn)
+          && (rowA->devicePtype == rowB->devicePtype)
+          && (rowA->deviceAddr == rowB->deviceAddr)
+          && (rowA->devicePin == rowB->devicePin))
+      {
+        SetError(errorInfo,
+                 INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PIN,
+                 (uint16_t) compareIndex + 1U);
+
+        return 0U;
+      }
+
+      if ((rowA->function == rowB->function)
+          && (rowA->functionIndex == rowB->functionIndex))
+      {
+        SetError(errorInfo,
+                 INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_FUNCTION_INDEX,
+                 (uint16_t) compareIndex + 1U);
+
+        return 0U;
+      }
+    }
+  }
+
+  for (ioOutputIndex = 0U;
+       ioOutputIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+       ioOutputIndex++)
+  {
+    if (ValidateIoMapOutputRow(&config->ioMap.outputs[ioOutputIndex],
+                               errorInfo,
+                               (uint16_t) ioOutputIndex + 1U) == 0U)
+    {
+      return 0U;
+    }
   }
 
   for (detectorIndex = 0U;

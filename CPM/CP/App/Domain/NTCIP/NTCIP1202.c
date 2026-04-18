@@ -5,6 +5,8 @@
  */
 #include "NTCIP1202.h"
 
+#include "Domain/NTCIP/Mib1202v0335/AscIoInputMappingObjects.h"
+#include "Domain/NTCIP/Mib1202v0335/AscIoOutputMappingObjects.h"
 #include "Domain/NTCIP/Mib1202v0335/CabinetEnvironmentObjects.h"
 #include "Domain/NTCIP/Mib1202v0335/ChannelObjects.h"
 #include "Domain/NTCIP/Mib1202v0335/ChannelStatusObjects.h"
@@ -136,6 +138,8 @@ void Ntcip1202RegisterObjects(NtcipObjectDirectory_t *directory,
   TimebaseObjectsRegister(directory, context);
   ClockObjectsRegister(directory, context);
   CabinetEnvironmentObjectsRegister(directory, context);
+  AscIoInputMappingObjectsRegister(directory, context);
+  AscIoOutputMappingObjectsRegister(directory, context);
   DetectorObjectsRegister(directory, context);
   DetectorReportObjectsRegister(directory, context);
   SpecialFunctionObjectsRegister(directory, context);

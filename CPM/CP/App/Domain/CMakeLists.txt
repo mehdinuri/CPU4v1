@@ -52,6 +52,8 @@ target_sources(Domain PRIVATE
     NTCIP/Mib1202v0335/TimebaseObjects.c
     NTCIP/Mib1202v0335/ClockObjects.c
     NTCIP/Mib1202v0335/CabinetEnvironmentObjects.c
+    NTCIP/Mib1202v0335/AscIoInputMappingObjects.c
+    NTCIP/Mib1202v0335/AscIoOutputMappingObjects.c
     NTCIP/Mib1202v0335/DetectorObjects.c
     NTCIP/Mib1202v0335/DetectorReportObjects.c
     NTCIP/Mib1202v0335/SpecialFunctionObjects.c

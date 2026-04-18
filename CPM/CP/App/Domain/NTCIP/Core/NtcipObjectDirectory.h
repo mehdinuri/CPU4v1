@@ -8,7 +8,7 @@
 
 #include "Domain/NTCIP/Core/NtcipTypes.h"
 
-#define NTCIP_OBJECT_DIRECTORY_GROUP_MAX 24U
+#define NTCIP_OBJECT_DIRECTORY_GROUP_MAX 32U
 #define NTCIP_OBJECT_DIRECTORY_INDEX_MAX 4U
 
 typedef struct NtcipObjectDescriptor NtcipObjectDescriptor_t;

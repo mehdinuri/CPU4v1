@@ -8,6 +8,7 @@
 
 #include "cmsis_os2.h"
 
+#include "Adapters/STM32/FieldInputCanAdapter.h"
 #include "DomainServices.h"
 
 #define INTERSECTION_CONTROL_TASK_PERIOD_MS 10U
@@ -22,6 +23,7 @@ void IntersectionControlTaskFunc(void *argument)
 
   for (;;)
   {
+    FieldInputCanAdapterStep();
     (void) IntersectionControllerStep(&g_intersectionController);
     DetectorReportServiceStep(&g_detectorReportService);
     GlobalTimeManagementServiceStep(&g_globalTimeManagementService);

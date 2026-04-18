@@ -8,6 +8,8 @@
 #include "Domain/Intersection/ConfigurationService.h"
 #include "MockConfigRepositoryAdapter.h"
 
+#include <string.h>
+
 static MockConfigRepositoryAdapterCtx_t s_repoCtx;
 static IConfigRepositoryPort_t s_repoPort;
 static ConfigurationService_t s_service;
@@ -1131,6 +1133,101 @@ void test_reserved_timebase_auxiliary_bits_fail_verify(void)
   TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
 }
 
+void test_io_map_configuration_persists_across_reload(void)
+{
+  ConfigurationService_t reloaded;
+  IntersectionIoMapConfig_t ioMap;
+  static const uint8_t kDescription[] = "North output map";
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceGetCandidateIoMapConfig(&s_service,
+                                                               &ioMap));
+  memset(ioMap.description, 0, sizeof(ioMap.description));
+  memcpy(ioMap.description, kDescription, sizeof(kDescription) - 1U);
+  ioMap.outputs[0].deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_FIO;
+  ioMap.outputs[0].devicePin = 1U;
+  ioMap.outputs[0].function =
+    (uint8_t) INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_GREEN;
+  ioMap.outputs[0].functionIndex = 1U;
+  TEST_ASSERT_TRUE(ConfigurationServiceSetIoMapConfig(&s_service, &ioMap));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceCommit(&s_service));
+
+  ConfigurationServiceInit(&reloaded, &s_repoPort);
+
+  TEST_ASSERT_TRUE(ConfigurationServiceGetActiveIoMapConfig(&reloaded, &ioMap));
+  TEST_ASSERT_EQUAL_UINT8(sizeof(kDescription) - 1U,
+                          (uint8_t) strlen((const char *) ioMap.description));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(kDescription,
+                                ioMap.description,
+                                sizeof(kDescription) - 1U);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t) INTERSECTION_IO_MAP_DEVICE_FIO,
+                          ioMap.outputs[0].deviceType);
+  TEST_ASSERT_EQUAL_UINT8(1U, ioMap.outputs[0].devicePin);
+  TEST_ASSERT_EQUAL_UINT8(
+    (uint8_t) INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_GREEN,
+    ioMap.outputs[0].function);
+  TEST_ASSERT_EQUAL_UINT8(1U, ioMap.outputs[0].functionIndex);
+}
+
+void test_invalid_io_map_row_fails_verify(void)
+{
+  IntersectionIoMapConfig_t ioMap;
+  IntersectionConfigErrorInfo_t errorInfo;
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceGetCandidateIoMapConfig(&s_service,
+                                                               &ioMap));
+  ioMap.outputs[0].function =
+    (uint8_t) INTERSECTION_IO_MAP_OUTPUT_FUNCTION_CHANNEL_GREEN;
+  ioMap.outputs[0].functionIndex = 1U;
+  TEST_ASSERT_TRUE(ConfigurationServiceSetIoMapConfig(&s_service, &ioMap));
+  TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
+
+  errorInfo = ConfigurationServiceGetLastError(&s_service);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_IO_MAP_OUTPUT_DEVICE_TYPE,
+                        errorInfo.type);
+  TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
+}
+
+void test_default_input_io_map_rows_remain_unused_when_family_ids_are_unset(void)
+{
+  IntersectionIoMapConfig_t ioMap;
+
+  TEST_ASSERT_TRUE(ConfigurationServiceGetActiveIoMapConfig(&s_service, &ioMap));
+  TEST_ASSERT_EQUAL_UINT8((uint8_t) INTERSECTION_IO_MAP_DEVICE_UNUSED,
+                          ioMap.inputs[0].deviceType);
+  TEST_ASSERT_EQUAL_UINT16(0U, ioMap.inputs[0].devicePnn);
+  TEST_ASSERT_EQUAL_UINT8(0U, ioMap.inputs[0].devicePtype);
+  TEST_ASSERT_EQUAL_UINT8(
+    (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_UNUSED_INPUT,
+    ioMap.inputs[0].function);
+  TEST_ASSERT_EQUAL_UINT8(1U, ioMap.inputs[0].functionIndex);
+}
+
+void test_invalid_input_io_map_row_fails_verify(void)
+{
+  IntersectionIoMapConfig_t ioMap;
+  IntersectionConfigErrorInfo_t errorInfo;
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceGetCandidateIoMapConfig(&s_service,
+                                                               &ioMap));
+  ioMap.inputs[0].deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_CUSTOM;
+  ioMap.inputs[0].deviceAddr = 1U;
+  ioMap.inputs[0].devicePin = 1U;
+  ioMap.inputs[0].function =
+    (uint8_t) INTERSECTION_IO_MAP_INPUT_FUNCTION_VEHICLE_DETECTOR;
+  ioMap.inputs[0].functionIndex = 1U;
+  TEST_ASSERT_TRUE(ConfigurationServiceSetIoMapConfig(&s_service, &ioMap));
+  TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
+
+  errorInfo = ConfigurationServiceGetLastError(&s_service);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_IO_MAP_INPUT_DEVICE_PNN,
+                        errorInfo.type);
+  TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
+}
+
 int main(void)
 {
   UNITY_BEGIN();
@@ -1175,6 +1272,10 @@ int main(void)
   RUN_TEST(
     test_user_defined_backup_content_description_length_above_limit_fails_verify);
   RUN_TEST(test_reserved_timebase_auxiliary_bits_fail_verify);
+  RUN_TEST(test_io_map_configuration_persists_across_reload);
+  RUN_TEST(test_invalid_io_map_row_fails_verify);
+  RUN_TEST(test_default_input_io_map_rows_remain_unused_when_family_ids_are_unset);
+  RUN_TEST(test_invalid_input_io_map_row_fails_verify);
 
   return UNITY_END();
 }

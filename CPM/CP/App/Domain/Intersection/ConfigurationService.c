@@ -16,6 +16,13 @@ typedef struct
   IntersectionConfig_t config;
 } LoadedSlot_t;
 
+#define CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT 16U
+#define CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT 8U
+#define CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE \
+        (INTERSECTION_IO_MAP_DESCRIPTION_MAX \
+         + (INTERSECTION_IO_MAP_MAX_OUTPUTS \
+            * CONFIGURATION_IO_MAP_OUTPUT_ROW_IMAGE_SIZE))
+
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V2 2UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2 148U
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V3 3UL
@@ -58,7 +65,7 @@ typedef struct
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
-            * INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX * 2U) \
+            * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
@@ -72,7 +79,7 @@ typedef struct
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
-            * INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX * 2U) \
+            * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
@@ -88,7 +95,7 @@ typedef struct
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
-            * INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX * 2U) \
+            * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
@@ -104,8 +111,42 @@ typedef struct
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16 16UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V17 17UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18 18UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V19 19UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V20 20UL
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20 \
+        (4U + (INTERSECTION_PHASE_COUNT_MAX * CONFIGURATION_PHASE_IMAGE_SIZE) \
+         + (INTERSECTION_SEQUENCE_COUNT_MAX * INTERSECTION_RING_COUNT_MAX * 8U) \
+         + 8U \
+         + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
+         + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
+         + (CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT \
+            * CONFIGURATION_VEHICLE_DETECTOR_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT \
+            * CONFIGURATION_PED_DETECTOR_IMAGE_SIZE) \
+         + 8U \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
+         + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
+            * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
+         + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX * 2U) \
+         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
+         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U) \
+         + 2U \
+         + (INTERSECTION_TIMEBASE_ACTION_COUNT_MAX \
+            * CONFIGURATION_TIMEBASE_ACTION_IMAGE_SIZE) \
+         + CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE \
+         + CONFIGURATION_UNIT_IMAGE_SIZE \
+         + (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
+            * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE) \
+         + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE \
+         + CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE)
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19 \
+        (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20 \
+         - CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE)
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18 \
-        (CONFIGURATION_IMAGE_PAYLOAD_SIZE \
+        (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19 \
          - CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE)
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17 \
         (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18 \
@@ -157,6 +198,8 @@ static uint8_t GetCandidateGlobalTimeManagement(
 static uint8_t GetCandidateCabinetEnvironment(
   ConfigurationService_t *service,
   IntersectionCabinetEnvironmentConfig_t *cabinetEnvironment);
+static uint8_t GetCandidateIoMap(ConfigurationService_t *service,
+                                 IntersectionIoMapConfig_t *ioMap);
 static uint8_t GetCandidateUnit(ConfigurationService_t *service,
                                 IntersectionUnitConfig_t *unit);
 static uint8_t GetCandidateRingPlan(ConfigurationService_t *service,
@@ -971,6 +1014,48 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
 
     payload[offset++] = sensor->threshold;
   }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_DESCRIPTION_MAX;
+       itemIndex++)
+  {
+    payload[offset++] = config->ioMap.description[itemIndex];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+       itemIndex++)
+  {
+    const IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[itemIndex];
+
+    payload[offset++] = row->deviceType;
+    WriteLe16(&payload[offset], row->devicePnn);
+    offset += 2U;
+    payload[offset++] = row->devicePtype;
+    payload[offset++] = row->deviceAddr;
+    payload[offset++] = row->devicePin;
+    WriteLe16(&payload[offset], row->functionType);
+    offset += 2U;
+    payload[offset++] = row->functionPtype;
+    payload[offset++] = row->function;
+    payload[offset++] = row->functionIndex;
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+       itemIndex++)
+  {
+    const IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
+
+    payload[offset++] = row->deviceType;
+    WriteLe16(&payload[offset], row->devicePnn);
+    offset += 2U;
+    payload[offset++] = row->devicePtype;
+    payload[offset++] = row->deviceAddr;
+    payload[offset++] = row->devicePin;
+    WriteLe16(&payload[offset], row->functionType);
+    offset += 2U;
+    payload[offset++] = row->functionPtype;
+    payload[offset++] = row->function;
+    payload[offset++] = row->functionIndex;
+  }
 } /* PayloadSerialize */
 
 static void PayloadDeserializeLegacyV2(const uint8_t *payload,
@@ -1504,10 +1589,14 @@ static void PayloadDeserialize(const uint8_t *payload,
   uint8_t overlapIndex;
   uint8_t itemIndex;
   uint8_t currentLayout;
+  uint8_t currentOrLegacyV20Layout;
+  uint8_t currentOrLegacyV19Layout;
   uint8_t currentOrLegacyV18Layout;
   uint8_t extendedPhaseLayout;
   uint8_t currentOrLegacyV16Layout;
   uint8_t multiSequenceLayout;
+  uint8_t vehicleDetectorCountInPayload;
+  uint8_t pedDetectorCountInPayload;
 
   if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2)
       && (payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE))
@@ -1543,7 +1632,13 @@ static void PayloadDeserialize(const uint8_t *payload,
 
   IntersectionConfigInitDefaults(config);
   currentLayout = (uint8_t) (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE);
-  currentOrLegacyV18Layout = (uint8_t) ((currentLayout != 0U)
+  currentOrLegacyV20Layout = (uint8_t) ((currentLayout != 0U)
+                                        || (payloadLength
+                                            == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20));
+  currentOrLegacyV19Layout = (uint8_t) ((currentOrLegacyV20Layout != 0U)
+                                        || (payloadLength
+                                            == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19));
+  currentOrLegacyV18Layout = (uint8_t) ((currentOrLegacyV19Layout != 0U)
                                         || (payloadLength
                                             == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18));
   currentOrLegacyV16Layout = (uint8_t) ((currentOrLegacyV18Layout != 0U)
@@ -1567,6 +1662,14 @@ static void PayloadDeserialize(const uint8_t *payload,
                                        == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V10)
                                    || (payloadLength
                                        == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V9));
+  vehicleDetectorCountInPayload =
+    (uint8_t) ((currentLayout != 0U)
+               ? INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX
+               : CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT);
+  pedDetectorCountInPayload =
+    (uint8_t) ((currentLayout != 0U)
+               ? INTERSECTION_PED_INPUT_COUNT_MAX
+               : CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT);
 
   config->phaseCount = payload[offset++];
   config->ringCount = payload[offset++];
@@ -1865,7 +1968,7 @@ static void PayloadDeserialize(const uint8_t *payload,
       || (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V10))
   {
     for (detectorIndex = 0U;
-         detectorIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
+         detectorIndex < vehicleDetectorCountInPayload;
          detectorIndex++)
     {
       IntersectionVehicleDetectorConfig_t *detector =
@@ -1894,7 +1997,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
 
     for (pedDetectorIndex = 0U;
-         pedDetectorIndex < INTERSECTION_PED_INPUT_COUNT_MAX;
+         pedDetectorIndex < pedDetectorCountInPayload;
          pedDetectorIndex++)
     {
       IntersectionPedestrianDetectorConfig_t *detector =
@@ -1940,7 +2043,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     for (preemptIndex = 0U; preemptIndex < INTERSECTION_PREEMPT_COUNT_MAX;
          preemptIndex++)
     {
-      for (itemIndex = 0U; itemIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
+      for (itemIndex = 0U; itemIndex < vehicleDetectorCountInPayload;
            itemIndex++)
       {
         config->preemptQueueDelayWeights[preemptIndex][itemIndex] =
@@ -2235,7 +2338,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     offset += 2U;
   }
 
-  if (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE)
+  if (currentOrLegacyV19Layout != 0U)
   {
     config->cabinetEnvironment.atccLedMode = payload[offset++];
 
@@ -2292,6 +2395,77 @@ static void PayloadDeserialize(const uint8_t *payload,
       }
 
       sensor->threshold = payload[offset++];
+    }
+  }
+
+  if (currentLayout != 0U)
+  {
+    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_DESCRIPTION_MAX;
+         itemIndex++)
+    {
+      config->ioMap.description[itemIndex] = payload[offset++];
+    }
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+         itemIndex++)
+    {
+      IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[itemIndex];
+
+      row->deviceType = payload[offset++];
+      row->devicePnn = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->devicePtype = payload[offset++];
+      row->deviceAddr = payload[offset++];
+      row->devicePin = payload[offset++];
+      row->functionType = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->functionPtype = payload[offset++];
+      row->function = payload[offset++];
+      row->functionIndex = payload[offset++];
+    }
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+         itemIndex++)
+    {
+      IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
+
+      row->deviceType = payload[offset++];
+      row->devicePnn = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->devicePtype = payload[offset++];
+      row->deviceAddr = payload[offset++];
+      row->devicePin = payload[offset++];
+      row->functionType = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->functionPtype = payload[offset++];
+      row->function = payload[offset++];
+      row->functionIndex = payload[offset++];
+    }
+  }
+  else if (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20)
+  {
+    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_DESCRIPTION_MAX;
+         itemIndex++)
+    {
+      config->ioMap.description[itemIndex] = payload[offset++];
+    }
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+         itemIndex++)
+    {
+      IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
+
+      row->deviceType = payload[offset++];
+      row->devicePnn = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->devicePtype = payload[offset++];
+      row->deviceAddr = payload[offset++];
+      row->devicePin = payload[offset++];
+      row->functionType = ReadLe16(&payload[offset]);
+      offset += 2U;
+      row->functionPtype = payload[offset++];
+      row->function = payload[offset++];
+      row->functionIndex = payload[offset++];
     }
   }
 
@@ -2468,6 +2642,11 @@ static uint8_t MaterializeCandidate(const ConfigurationService_t *service,
   if (service->candidate.cabinetEnvironmentValid != 0U)
   {
     config->cabinetEnvironment = service->candidate.cabinetEnvironment;
+  }
+
+  if (service->candidate.ioMapValid != 0U)
+  {
+    config->ioMap = service->candidate.ioMap;
   }
 
   if (service->candidate.unitValid != 0U)
@@ -2657,6 +2836,10 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
 
   if (!(((header.schemaVersion == CONFIGURATION_IMAGE_SCHEMA_VERSION)
          && (header.payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE))
+        || ((header.schemaVersion
+             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V19)
+            && (header.payloadLength
+                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19))
         || ((header.schemaVersion
              == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18)
             && (header.payloadLength
@@ -2971,6 +3154,23 @@ static uint8_t UpdateCabinetEnvironment(
 
   service->candidate.cabinetEnvironmentValid = 1U;
   service->candidate.cabinetEnvironment = *cabinetEnvironment;
+  service->candidate.dirty = 1U;
+  service->verifyStatus = CONFIGURATION_VERIFY_STATUS_IDLE;
+  SetError(service, INTERSECTION_CONFIG_ERROR_NONE, 0U);
+
+  return 1U;
+}
+
+static uint8_t UpdateIoMap(ConfigurationService_t *service,
+                           const IntersectionIoMapConfig_t *ioMap)
+{
+  if ((service == NULL) || (ioMap == NULL) || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  service->candidate.ioMapValid = 1U;
+  service->candidate.ioMap = *ioMap;
   service->candidate.dirty = 1U;
   service->verifyStatus = CONFIGURATION_VERIFY_STATUS_IDLE;
   SetError(service, INTERSECTION_CONFIG_ERROR_NONE, 0U);
@@ -3437,6 +3637,13 @@ uint8_t ConfigurationServiceGetCandidateCabinetEnvironmentConfig(
   return GetCandidateCabinetEnvironment(service, cabinetEnvironmentConfig);
 }
 
+uint8_t ConfigurationServiceGetCandidateIoMapConfig(
+  ConfigurationService_t *service,
+  IntersectionIoMapConfig_t *ioMapConfig)
+{
+  return GetCandidateIoMap(service, ioMapConfig);
+}
+
 uint8_t ConfigurationServiceGetActiveChannelConfig(
   const ConfigurationService_t *service,
   uint8_t channelIndex,
@@ -3540,6 +3747,20 @@ uint8_t ConfigurationServiceGetActiveCabinetEnvironmentConfig(
   }
 
   *cabinetEnvironmentConfig = service->activeConfig.cabinetEnvironment;
+
+  return 1U;
+}
+
+uint8_t ConfigurationServiceGetActiveIoMapConfig(
+  const ConfigurationService_t *service,
+  IntersectionIoMapConfig_t *ioMapConfig)
+{
+  if ((service == NULL) || (ioMapConfig == NULL))
+  {
+    return 0U;
+  }
+
+  *ioMapConfig = service->activeConfig.ioMap;
 
   return 1U;
 }
@@ -5417,6 +5638,26 @@ static uint8_t GetCandidateCabinetEnvironment(
   return 1U;
 }
 
+static uint8_t GetCandidateIoMap(ConfigurationService_t *service,
+                                 IntersectionIoMapConfig_t *ioMap)
+{
+  IntersectionConfig_t candidateConfig;
+
+  if ((service == NULL) || (ioMap == NULL) || (service->candidate.inUse == 0U))
+  {
+    return 0U;
+  }
+
+  if (MaterializeCandidate(service, &candidateConfig) == 0U)
+  {
+    return 0U;
+  }
+
+  *ioMap = candidateConfig.ioMap;
+
+  return 1U;
+}
+
 static uint8_t GetCandidateUnit(ConfigurationService_t *service,
                                 IntersectionUnitConfig_t *unit)
 {
@@ -6237,6 +6478,18 @@ uint8_t ConfigurationServiceSetCabinetEnvironmentConfig(
   }
 
   return UpdateCabinetEnvironment(service, cabinetEnvironmentConfig);
+}
+
+uint8_t ConfigurationServiceSetIoMapConfig(
+  ConfigurationService_t *service,
+  const IntersectionIoMapConfig_t *ioMapConfig)
+{
+  if (ioMapConfig == NULL)
+  {
+    return 0U;
+  }
+
+  return UpdateIoMap(service, ioMapConfig);
 }
 
 uint8_t ConfigurationServiceSetUnitTimeSourceCommanded(
