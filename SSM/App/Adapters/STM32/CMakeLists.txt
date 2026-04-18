@@ -12,14 +12,11 @@ target_sources(ssm_adapters_stm32 PRIVATE
     AdcCurrentAdapter.c
     CanBusAdapter.c
     TimerAdapter.c
-    # Composition root — one file that owns static adapter contexts and
-    # wires g_*Port globals.
-    ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Bootstrap/main_ssm.c
 )
 
 target_include_directories(ssm_adapters_stm32 PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Inc
-    ${CMAKE_SOURCE_DIR}/Tasks/Inc
+    ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Tasks
 )
 
 target_include_directories(ssm_adapters_stm32 PUBLIC

@@ -76,6 +76,9 @@ else()
     # STM32 adapters (HAL implementations of App/Ports/*)
     add_subdirectory(App/Adapters/STM32)
 
+    # Platform layer — composition root + FreeRTOS task wrappers
+    add_subdirectory(App/Platform/STM32)
+
     # Link directories setup
     target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
         # Add user defined library search paths
@@ -85,15 +88,6 @@ else()
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Core/Src/flash.c
         Core/Src/utilities.c
-        Tasks/Src/can_msg_parser.c
-        Tasks/Src/can_msg_sender.c
-        Tasks/Src/measurement.c
-        Tasks/Src/storage.c
-    )
-
-    # Add include paths
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        Tasks/Inc
     )
 
     # Add project symbols (macros)
@@ -109,6 +103,7 @@ else()
         stm32cubemx
         ssm_domain
         ssm_adapters_stm32
+        ssm_platform_stm32
         # Add user defined libraries
     )
 
