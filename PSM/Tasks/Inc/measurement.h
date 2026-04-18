@@ -1,65 +1,38 @@
 /**
-  ******************************************************************************
-  * @file           : measurement.h
-  * @brief          : Header for signal_monitor.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    Tasks/Inc/measurement.h
+ * @brief   Measurement task public API.
+ *          Domain types live in Domain/MeasurementService.h.
+ *          Adapter wiring lives in App/Platform/STM32/Bootstrap/main_stm32.c.
+ ******************************************************************************
+ */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __SIGNAL_MONITOR_H__
-#define __SIGNAL_MONITOR_H__
+#ifndef TASKS_MEASUREMENT_H
+#define TASKS_MEASUREMENT_H
 
-/* Includes ------------------------------------------------------------------*/
-#include "cmsis_os.h"
-#include "Domain/Measurement.h"
-
-/* Private define ------------------------------------------------------------*/
-
-/* Private macros ------------------------------------------------------------*/
-
-/* Private types -------------------------------------------------------------*/
-
-/* Private function prototypes -----------------------------------------------*/
-
-/* Public define ------------------------------------------------------------*/
-
-/* Public macros ------------------------------------------------------------*/
-
-/* Public types -------------------------------------------------------------*/
-typedef struct _tSPSMRuntime
-{
-    tSMeasurementOffset SOffset;
-	uint8_t fFlashState;
-	uint32_t lFlashPeriod;
-	uint16_t sFlashCntr;
-	uint16_t sFlashStateCntr;
-	uint16_t sCommErrorCntr;
-	uint8_t bNetFrequency;
-	
-    float fNetVoltage;
-    float fRegVIn;
-    float fRegVOut;
-
-    uint16_t sNetVoltage;
-	uint16_t sRegVIn;
-	uint16_t sRegVOut;
-	
-} tSPSMRuntime, *tpSPSMRuntime;
+#include <stdint.h>
 
 /* Public function prototypes -----------------------------------------------*/
+
+/* ISR/DMA-callback setters — write voltage/frequency into adapter contexts.
+ * Defined in App/Platform/STM32/Bootstrap/main_stm32.c which owns the
+ * adapter contexts; declared here so HAL callback forwarders in Core/Src/
+ * can call them by including this header. */
 extern void MeasurementNetVoltageSet(float fVolt);
 extern void MeasurementRegVInSet(float fVIn);
 extern void MeasurementRegVOutSet(float fVOut);
 extern void MeasurementNetFrequencySet(uint8_t bFreq);
-extern void MeasurementPeriodSet(uint8_t bPeriod);
+
+/* Command forwarders — called from CAN parser */
 extern void MeasurementFlashStateSet(uint8_t fState);
-extern void MeasurementFlashStateCntrSet(uint16_t sCntr);
+extern void MeasurementPeriodSet(uint8_t bPeriod);
 extern void MeasurementOffsetSet(uint8_t bOp, uint8_t bVal);
 extern void MeasurementCommCheck(void);
 extern void MeasurementCommCntrReset(void);
+
+/* Called from ADC DMA-complete callback to unblock the task */
 extern void MeasurementThreadFlagSet(void);
 
-#endif /* __SIGNAL_MONITOR_H__ */
+#endif /* TASKS_MEASUREMENT_H */
 
-/************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****__SIGNAL_MONITOR_H__ OF FILE****/
+/************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****END OF FILE****/

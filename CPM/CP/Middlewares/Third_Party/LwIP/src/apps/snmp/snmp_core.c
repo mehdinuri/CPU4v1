@@ -225,6 +225,25 @@ static u8_t snmp_num_mibs                          = 0;
 /* List of known mibs */
 static struct snmp_mib const *const *snmp_mibs = default_mibs;
 
+__attribute__((weak)) u8_t
+snmp_external_get_oid_state(const u32_t *oid, u8_t oid_len)
+{
+  LWIP_UNUSED_ARG(oid);
+  LWIP_UNUSED_ARG(oid_len);
+
+  return 0U;
+}
+
+__attribute__((weak)) void
+snmp_external_bind_node_instance(const u32_t *oid,
+                                 u8_t oid_len,
+                                 struct snmp_node_instance *node_instance)
+{
+  LWIP_UNUSED_ARG(oid);
+  LWIP_UNUSED_ARG(oid_len);
+  LWIP_UNUSED_ARG(node_instance);
+}
+
 /**
  * @ingroup snmp_core
  * Sets the MIBs to use.
@@ -794,6 +813,21 @@ snmp_get_node_instance_from_oid(const u32_t *oid, u8_t oid_len, struct snmp_node
                  oid_len - oid_instance_len,
                  node_instance);
 
+      if (result == SNMP_ERR_NOERROR) {
+        const u8_t managed_state = snmp_external_get_oid_state(oid, oid_len);
+
+        if (managed_state == 1U) {
+          if (node_instance->release_instance != NULL) {
+            node_instance->release_instance(node_instance);
+          }
+          return SNMP_ERR_NOSUCHINSTANCE;
+        }
+
+        if (managed_state == 2U) {
+          snmp_external_bind_node_instance(oid, oid_len, node_instance);
+        }
+      }
+
 #ifdef LWIP_DEBUG
       if (result == SNMP_ERR_NOERROR) {
         if (((node_instance->access & SNMP_NODE_INSTANCE_ACCESS_READ) != 0) && (node_instance->get_value == NULL)) {
@@ -851,6 +885,8 @@ snmp_get_next_node_instance_from_oid(const u32_t *oid, u8_t oid_len, snmp_valida
     /* validate the node; if the node has no further instance or the returned instance is invalid, search for the next in MIB and validate again */
     node_instance->node = mn;
     while (mn != NULL) {
+      struct snmp_obj_id candidate_oid;
+      u8_t managed_state = 0U;
       u8_t result;
 
       /* clear fields which may have values from previous loops */
@@ -869,6 +905,20 @@ snmp_get_next_node_instance_from_oid(const u32_t *oid, u8_t oid_len, snmp_valida
                  node_instance);
 
       if (result == SNMP_ERR_NOERROR) {
+        snmp_oid_assign(&candidate_oid, node_oid->id, node_oid->len);
+        snmp_oid_append(&candidate_oid,
+                        node_instance->instance_oid.id,
+                        node_instance->instance_oid.len);
+        managed_state = snmp_external_get_oid_state(candidate_oid.id,
+                                                    candidate_oid.len);
+
+        if (managed_state == 1U) {
+          if (node_instance->release_instance != NULL) {
+            node_instance->release_instance(node_instance);
+          }
+          continue;
+        }
+
 #ifdef LWIP_DEBUG
         if (((node_instance->access & SNMP_NODE_INSTANCE_ACCESS_READ) != 0) && (node_instance->get_value == NULL)) {
           LWIP_DEBUGF(SNMP_DEBUG, ("SNMP inconsistent access: node is readable but no get_value function is specified\n"));
@@ -882,7 +932,12 @@ snmp_get_next_node_instance_from_oid(const u32_t *oid, u8_t oid_len, snmp_valida
         if ((validate_node_instance_method == NULL) ||
             (validate_node_instance_method(node_instance, validate_node_instance_arg) == SNMP_ERR_NOERROR)) {
           /* node_oid "returns" the full result OID (including the instance part) */
-          snmp_oid_append(node_oid, node_instance->instance_oid.id, node_instance->instance_oid.len);
+          snmp_oid_assign(node_oid, candidate_oid.id, candidate_oid.len);
+          if (managed_state == 2U) {
+            snmp_external_bind_node_instance(node_oid->id,
+                                             node_oid->len,
+                                             node_instance);
+          }
           break;
         }
 

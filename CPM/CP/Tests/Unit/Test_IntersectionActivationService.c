@@ -313,11 +313,8 @@ void test_activation_service_rejects_unsupported_runtime_config(void)
   IntersectionConfig_t unsupportedConfig = MakeControllerConfig();
   IntersectionActivationStatus_t status;
 
-  unsupportedConfig.preempts[0].control = 1U;
-  unsupportedConfig.preempts[0].sequenceNumber = 1U;
-  unsupportedConfig.preempts[0].exitType =
-    (uint8_t) INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES;
-  unsupportedConfig.preempts[0].link = 1U;
+  unsupportedConfig.channels[0].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP;
 
   TEST_ASSERT_FALSE(IntersectionActivationServiceStageCommittedConfig(
     &s_activationService,
@@ -328,6 +325,28 @@ void test_activation_service_rejects_unsupported_runtime_config(void)
   TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_STATE_FAILED, status.state);
   TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_ERROR_UNSUPPORTED_RUNTIME,
                         status.error);
+}
+
+void test_activation_service_accepts_preempt_sequence_number_within_max_sequences(
+  void)
+{
+  IntersectionConfig_t stagedConfig = MakeControllerConfig();
+  IntersectionActivationStatus_t status;
+
+  stagedConfig.preempts[0].control = 0x10U;
+  stagedConfig.preempts[0].sequenceNumber = 1U;
+  stagedConfig.preempts[0].exitType =
+    (uint8_t) INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_COORD;
+
+  TEST_ASSERT_TRUE(IntersectionActivationServiceStageCommittedConfig(
+    &s_activationService,
+    &stagedConfig,
+    2U));
+  TEST_ASSERT_TRUE(
+    IntersectionActivationServiceGetStatus(&s_activationService, &status));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_STATE_STAGED, status.state);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_ACTIVATION_ERROR_NONE, status.error);
+  TEST_ASSERT_EQUAL_UINT16(2U, status.pendingSetId);
 }
 
 void test_controller_soft_reload_switches_live_plan_and_epochs(void)
@@ -391,6 +410,8 @@ int main(void)
   UNITY_BEGIN();
   RUN_TEST(test_activation_service_load_committed_live_plan_sets_live_status);
   RUN_TEST(test_activation_service_rejects_unsupported_runtime_config);
+  RUN_TEST(
+    test_activation_service_accepts_preempt_sequence_number_within_max_sequences);
   RUN_TEST(test_controller_soft_reload_switches_live_plan_and_epochs);
 
   return UNITY_END();

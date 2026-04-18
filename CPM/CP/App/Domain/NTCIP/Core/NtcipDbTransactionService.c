@@ -237,21 +237,19 @@ static void PopulateVerifyErrorFromConfig(NtcipDbTransactionService_t *service,
 
       case INTERSECTION_CONFIG_ERROR_PREEMPT_LINK:
       {
-        CopyErrorString(service, "preemptLink is not supported by runtime");
+        CopyErrorString(service, "preemptLink is invalid");
         break;
       }
 
       case INTERSECTION_CONFIG_ERROR_PREEMPT_SEQUENCE_NUMBER:
       {
-        CopyErrorString(service,
-                        "preemptSequenceNumber is not supported by runtime");
+        CopyErrorString(service, "preemptSequenceNumber is invalid");
         break;
       }
 
       case INTERSECTION_CONFIG_ERROR_PREEMPT_EXIT_TYPE:
       {
-        CopyErrorString(service,
-                        "preemptExitType is not supported by runtime");
+        CopyErrorString(service, "preemptExitType is invalid");
         break;
       }
 

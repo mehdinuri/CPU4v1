@@ -41,6 +41,7 @@ static void TickUntilPhaseInterval(uint8_t phaseNumber,
 {
   uint32_t tickIndex;
   uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+  char message[96];
 
   for (tickIndex = 0U; tickIndex < maxTicks; tickIndex++)
   {
@@ -52,7 +53,12 @@ static void TickUntilPhaseInterval(uint8_t phaseNumber,
     IntersectionEngineTick(&s_engine);
   }
 
-  TEST_FAIL_MESSAGE("phase interval did not reach expected state");
+  (void) snprintf(message,
+                  sizeof(message),
+                  "phase interval did not reach expected state (phase=%u interval=%d)",
+                  (unsigned int) phaseNumber,
+                  (int) GetRuntime()->phases[phaseIndex].interval);
+  TEST_FAIL_MESSAGE(message);
 }
 
 static void TickUntilPedInterval(uint8_t phaseNumber,
@@ -138,6 +144,32 @@ static void TickUntilRingStage(uint8_t ringNumber,
   }
 
   TEST_FAIL_MESSAGE("ring stage did not reach expected value");
+}
+
+static void TickUntilPreemptState(uint8_t preemptNumber,
+                                  IntersectionPreemptState_t state,
+                                  uint32_t maxTicks)
+{
+  uint32_t tickIndex;
+  uint8_t preemptIndex = (uint8_t) (preemptNumber - 1U);
+  char message[96];
+
+  for (tickIndex = 0U; tickIndex < maxTicks; tickIndex++)
+  {
+    if (GetRuntime()->preemptStates[preemptIndex] == state)
+    {
+      return;
+    }
+
+    IntersectionEngineTick(&s_engine);
+  }
+
+  (void) snprintf(message,
+                  sizeof(message),
+                  "preempt state did not reach expected value (preempt=%u state=%d)",
+                  (unsigned int) preemptNumber,
+                  (int) GetRuntime()->preemptStates[preemptIndex]);
+  TEST_FAIL_MESSAGE(message);
 }
 
 static IntersectionConfig_t MakeTwoPhasePerRingConfig(void)
@@ -433,11 +465,14 @@ void test_remote_preempt_control_drives_runtime_state_and_status_group(void)
 
   config = MakeTwoPhasePerRingConfig();
   config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
   config.preempts[0].trackGreenSeconds = 1U;
   config.preempts[0].dwellGreenSeconds = 1U;
   config.preempts[0].minimumDurationSeconds = 1U;
   config.preempts[0].enterYellowChangeDs = 0U;
   config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].trackYellowChangeDs = 0U;
+  config.preempts[0].trackRedClearDs = 0U;
   config.preempts[0].trackPhases.length = 1U;
   config.preempts[0].trackPhases.values[0] = 2U;
   config.preempts[0].dwellPhases.length = 1U;
@@ -475,6 +510,540 @@ void test_remote_preempt_control_drives_runtime_state_and_status_group(void)
                                                            &statusGroup));
   TEST_ASSERT_EQUAL_UINT8(0x00U, statusGroup);
 } /* test_remote_preempt_control_drives_runtime_state_and_status_group */
+
+void test_preempt_entry_outputs_follow_enter_yellow_and_red_clear(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 20U;
+  config.preempts[0].enterRedClearDs = 10U;
+  config.preempts[0].dwellPhases.length = 1U;
+  config.preempts[0].dwellPhases.values[0] = 2U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_ENTRY_STARTED,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[0].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[2].interval);
+
+  TickUntilPhaseInterval(1U, INTERSECTION_PHASE_INTERVAL_RED_CLEAR, 250U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_ENTRY_STARTED,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED_CLEAR,
+                        runtime->phases[0].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED_CLEAR,
+                        runtime->phases[2].interval);
+
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_DWELL,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+} /* test_preempt_entry_outputs_follow_enter_yellow_and_red_clear */
+
+void test_preempt_track_clear_advances_through_advanced_preempt(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].trackGreenSeconds = 1U;
+  config.preempts[0].trackYellowChangeDs = 20U;
+  config.preempts[0].trackRedClearDs = 10U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].trackPhases.length = 1U;
+  config.preempts[0].trackPhases.values[0] = 2U;
+  config.preempts[0].dwellPhases.length = 1U;
+  config.preempts[0].dwellPhases.values[0] = 2U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_TRACK_SERVICE,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+
+  TickUntilPreemptState(1U,
+                        INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT,
+                        150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[1].interval);
+
+  TickUntilPhaseInterval(2U, INTERSECTION_PHASE_INTERVAL_RED_CLEAR, 250U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED_CLEAR,
+                        runtime->phases[1].interval);
+
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_DWELL,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+} /* test_preempt_track_clear_advances_through_advanced_preempt */
+
+void test_preempt_link_activates_higher_priority_preempt_call(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 1U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].trackYellowChangeDs = 0U;
+  config.preempts[0].trackRedClearDs = 0U;
+  config.preempts[0].trackPhases.length = 1U;
+  config.preempts[0].trackPhases.values[0] = 2U;
+  config.preempts[0].dwellPhases.length = 1U;
+  config.preempts[0].dwellPhases.values[0] = 2U;
+
+  config.preempts[1].control = 0x10U;
+  config.preempts[1].minimumGreenSeconds = 0U;
+  config.preempts[1].minimumWalkSeconds = 0U;
+  config.preempts[1].enterPedClearSeconds = 0U;
+  config.preempts[1].trackGreenSeconds = 0U;
+  config.preempts[1].dwellGreenSeconds = 1U;
+  config.preempts[1].minimumDurationSeconds = 1U;
+  config.preempts[1].enterYellowChangeDs = 0U;
+  config.preempts[1].enterRedClearDs = 0U;
+  config.preempts[1].dwellPhases.length = 1U;
+  config.preempts[1].dwellPhases.values[0] = 4U;
+  config.preempts[1].link = 1U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 2U, 1U));
+  IntersectionEngineTick(&s_engine);
+
+  TickUntilPreemptState(2U, INTERSECTION_PREEMPT_STATE_DWELL, 150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(2U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[3].interval);
+
+  TickUntilPreemptState(2U, INTERSECTION_PREEMPT_STATE_LINK_ACTIVE, 150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_LINK_ACTIVE,
+                        runtime->preemptStates[1]);
+
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_TRACK_SERVICE, 150U);
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(1U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_LINK_ACTIVE,
+                        runtime->preemptStates[1]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 2U, 0U));
+  TickForTicks(250U);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_NOT_ACTIVE,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_NOT_ACTIVE,
+                        runtime->preemptStates[1]);
+} /* test_preempt_link_activates_higher_priority_preempt_call */
+
+void test_preempt_exit_phases_transfer_runtime_to_configured_exit_phases(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 2U;
+  config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].exitPhases.length = 2U;
+  config.preempts[0].exitPhases.values[0] = 1U;
+  config.preempts[0].exitPhases.values[1] = 3U;
+  config.preempts[0].exitType = INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 0U));
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_EXIT_STARTED, 150U);
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_NOT_ACTIVE,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[0].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[1].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[0].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[2].interval);
+} /* test_preempt_exit_phases_transfer_runtime_to_configured_exit_phases */
+
+void test_preempt_queue_delay_recovery_enters_highest_weighted_demand_phase(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 3U;
+  config.preempts[0].exitType =
+    INTERSECTION_PREEMPT_EXIT_TYPE_QUEUE_DELAY_RECOVERY;
+  config.preemptQueueDelayWeights[0][1] = 200U;
+  config.preemptQueueDelayWeights[0][3] = 500U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+  TEST_ASSERT_TRUE(IntersectionEngineSetVehicleDetectorInput(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetVehicleDetectorInput(&s_engine, 4U, 1U));
+  TickForTicks(5U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 0U));
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_EXIT_STARTED, 150U);
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_RED_REST,
+                        runtime->rings[0].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[1].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[3].interval);
+} /* test_preempt_queue_delay_recovery_enters_highest_weighted_demand_phase */
+
+void test_preempt_queue_delay_recovery_falls_back_to_longest_waiting_phase(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 3U;
+  config.preempts[0].exitType =
+    INTERSECTION_PREEMPT_EXIT_TYPE_QUEUE_DELAY_RECOVERY;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+  TEST_ASSERT_TRUE(IntersectionEngineSetVehicleDetectorInput(&s_engine, 2U, 1U));
+  TickForTicks(50U);
+  TEST_ASSERT_TRUE(IntersectionEngineSetVehicleDetectorInput(&s_engine, 4U, 1U));
+  TickForTicks(5U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 0U));
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_EXIT_STARTED, 150U);
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[0].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_RED_REST,
+                        runtime->rings[1].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+} /* test_preempt_queue_delay_recovery_falls_back_to_longest_waiting_phase */
+
+void test_preempt_short_service_enters_first_short_service_phase(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+
+  config = MakeTwoPhasePerRingConfig();
+  config.phases[0].minGreenDs = 20U;
+  config.phases[2].minGreenDs = 10U;
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 2U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 2U;
+  config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].exitType = INTERSECTION_PREEMPT_EXIT_TYPE_SHORT_SERVICE;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TickForTicks(150U);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 150U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 0U));
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_EXIT_STARTED, 150U);
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[0].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_RED_REST,
+                        runtime->rings[1].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[0].interval);
+} /* test_preempt_short_service_enters_first_short_service_phase */
+
+void test_preempt_exit_coord_returns_to_current_coordination_cycle_position(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  uint8_t phaseIndex;
+
+  config = MakeTwoPhasePerRingConfig();
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.coordination.patterns[0].cycleTimeSeconds = 60U;
+  config.coordination.patterns[0].offsetTimeSeconds = 0U;
+  config.coordination.patterns[0].splitNumber = 1U;
+  config.coordination.splits[0][0].timeSeconds = 20U;
+  config.coordination.splits[0][1].timeSeconds = 20U;
+  config.coordination.splits[0][2].timeSeconds = 20U;
+  config.coordination.splits[0][3].timeSeconds = 20U;
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 1U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 3U;
+  config.preempts[0].exitType = INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_COORD;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  TEST_ASSERT_TRUE(IntersectionEngineSetSystemPatternControl(&s_engine, 1U));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+  TickForTicks(2500U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 0U));
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_EXIT_STARTED, 150U);
+  IntersectionEngineTick(&s_engine);
+
+  runtime = IntersectionEngineGetRuntime(&s_engine);
+  TEST_ASSERT_EQUAL_UINT8(0U, runtime->preemptStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONTROL_MODE_COORDINATED, runtime->mode);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[0].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_RING_STAGE_GREEN,
+                        runtime->rings[1].stage);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[3].interval);
+} /* test_preempt_exit_coord_returns_to_current_coordination_cycle_position */
+
+void test_preempt_flash_dwell_ignores_cycling_phase_programming(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  uint8_t phaseIndex;
+
+  config = MakeThreePhasePerRingConfig();
+
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].minGreenDs = 1U;
+    config.phases[phaseIndex].yellowChangeDs = 1U;
+    config.phases[phaseIndex].redClearDs = 1U;
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.preempts[0].control = 0x18U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 5U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].cyclingPhases.length = 2U;
+  config.preempts[0].cyclingPhases.values[0] = 2U;
+  config.preempts[0].cyclingPhases.values[1] = 5U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 5U, 1U));
+  TickForTicks(200U);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_DWELL,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[0].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_YELLOW,
+                        runtime->phases[3].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED,
+                        runtime->phases[1].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED,
+                        runtime->phases[4].interval);
+} /* test_preempt_flash_dwell_ignores_cycling_phase_programming */
+
+void test_preempt_cycling_phases_begin_after_dwell_interval(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  uint8_t activePhaseNumber = 0U;
+  uint8_t phaseIndex;
+
+  config = MakeThreePhasePerRingConfig();
+
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].minGreenDs = 1U;
+    config.phases[phaseIndex].yellowChangeDs = 1U;
+    config.phases[phaseIndex].redClearDs = 1U;
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 5U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].cyclingPhases.length = 2U;
+  config.preempts[0].cyclingPhases.values[0] = 2U;
+  config.preempts[0].cyclingPhases.values[1] = 5U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 5U, 1U));
+  TickForTicks(50U);
+
+  TEST_ASSERT_TRUE(IntersectionEngineGetActivePhaseForRing(&s_engine,
+                                                           1U,
+                                                           &activePhaseNumber));
+  TEST_ASSERT_EQUAL_UINT8(1U, activePhaseNumber);
+  TEST_ASSERT_TRUE(IntersectionEngineGetActivePhaseForRing(&s_engine,
+                                                           2U,
+                                                           &activePhaseNumber));
+  TEST_ASSERT_EQUAL_UINT8(4U, activePhaseNumber);
+
+  TickUntilActivePhase(1U, 2U, 200U);
+  TickUntilActivePhase(2U, 5U, 200U);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_DWELL,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[1].interval);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
+                        runtime->phases[4].interval);
+} /* test_preempt_cycling_phases_begin_after_dwell_interval */
 
 void test_system_pattern_command_activates_coordination_status(void)
 {
@@ -2685,6 +3254,16 @@ int main(void)
   RUN_TEST(test_system_flash_command_forces_flash_output_image);
   RUN_TEST(test_programmed_automatic_flash_entry_and_exit_phases_follow_ts2_sequence);
   RUN_TEST(test_remote_preempt_control_drives_runtime_state_and_status_group);
+  RUN_TEST(test_preempt_entry_outputs_follow_enter_yellow_and_red_clear);
+  RUN_TEST(test_preempt_track_clear_advances_through_advanced_preempt);
+  RUN_TEST(test_preempt_link_activates_higher_priority_preempt_call);
+  RUN_TEST(test_preempt_exit_phases_transfer_runtime_to_configured_exit_phases);
+  RUN_TEST(test_preempt_queue_delay_recovery_enters_highest_weighted_demand_phase);
+  RUN_TEST(test_preempt_queue_delay_recovery_falls_back_to_longest_waiting_phase);
+  RUN_TEST(test_preempt_short_service_enters_first_short_service_phase);
+  RUN_TEST(test_preempt_exit_coord_returns_to_current_coordination_cycle_position);
+  RUN_TEST(test_preempt_flash_dwell_ignores_cycling_phase_programming);
+  RUN_TEST(test_preempt_cycling_phases_begin_after_dwell_interval);
   RUN_TEST(test_phase_call_does_not_hold_green_past_gap_timer);
   RUN_TEST(test_volume_density_reduces_current_gap_after_tbr);
   RUN_TEST(test_phase_startup_phase_not_on_holds_red_until_ring_demand);

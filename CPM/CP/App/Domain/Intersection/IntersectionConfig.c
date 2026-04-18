@@ -1688,13 +1688,6 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
       continue;
     }
 
-    if (preempt->link != 0U)
-    {
-      SetError(errorInfo, INTERSECTION_CONFIG_ERROR_PREEMPT_LINK, objectIndex);
-
-      return 0U;
-    }
-
     if ((preempt->sequenceNumber != 0U) && (preempt->sequenceNumber != 1U))
     {
       SetError(errorInfo,
@@ -1704,15 +1697,6 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
       return 0U;
     }
 
-    if (preempt->exitType
-        != (uint8_t) INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES)
-    {
-      SetError(errorInfo,
-               INTERSECTION_CONFIG_ERROR_PREEMPT_EXIT_TYPE,
-               objectIndex);
-
-      return 0U;
-    }
   }
 
   return 1U;

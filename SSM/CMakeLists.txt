@@ -55,6 +55,7 @@ if(BUILD_TARGET STREQUAL "Host")
     include(cmake/unity.cmake)
 
     add_subdirectory(App/Domain)
+    add_subdirectory(App/Adapters/Mock)
     add_subdirectory(Tests)
 
 # ---------------------------------------------------------------------------
@@ -69,6 +70,12 @@ else()
     # CubeMX-generated HAL, FreeRTOS, and all application sources
     add_subdirectory(cmake/stm32cubemx)
 
+    # Domain layer (pure computation, no HAL/FreeRTOS)
+    add_subdirectory(App/Domain)
+
+    # STM32 adapters (HAL implementations of App/Ports/*)
+    add_subdirectory(App/Adapters/STM32)
+
     # Link directories setup
     target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
         # Add user defined library search paths
@@ -76,7 +83,6 @@ else()
 
     # Add sources to executable
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        Core/Src/can_util.c
         Core/Src/flash.c
         Core/Src/utilities.c
         Tasks/Src/can_msg_parser.c
@@ -101,7 +107,11 @@ else()
     # Add linked libraries
     target_link_libraries(${CMAKE_PROJECT_NAME}
         stm32cubemx
+        ssm_domain
+        ssm_adapters_stm32
         # Add user defined libraries
     )
 
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+        ADDITIONAL_CLEAN_FILES ${CMAKE_PROJECT_NAME}.map)
 endif()

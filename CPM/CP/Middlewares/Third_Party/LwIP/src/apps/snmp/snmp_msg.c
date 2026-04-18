@@ -77,6 +77,40 @@ void *snmp_write_callback_arg;
 snmp_inform_callback_fct snmp_inform_callback;
 void *snmp_inform_callback_arg;
 
+static const struct snmp_request *spCurrentRequest;
+
+u8_t snmp_get_current_request_identity(snmp_request_identity_t *identity)
+{
+  if ((identity == NULL) || (spCurrentRequest == NULL))
+  {
+    return 0U;
+  }
+
+  memset(identity, 0, sizeof(*identity));
+  identity->version = spCurrentRequest->version;
+
+  if (spCurrentRequest->source_ip != NULL)
+  {
+    MEMCPY(&identity->source_ip,
+           spCurrentRequest->source_ip,
+           sizeof(identity->source_ip));
+  }
+
+#if LWIP_SNMP_V3
+  if (spCurrentRequest->version == SNMP_VERSION_3)
+  {
+    identity->security_name = spCurrentRequest->msg_user_name;
+    identity->security_name_len = spCurrentRequest->msg_user_name_len;
+    return 1U;
+  }
+#endif
+
+  identity->security_name = spCurrentRequest->community;
+  identity->security_name_len = spCurrentRequest->community_strlen;
+
+  return 1U;
+}
+
 #if LWIP_SNMP_CONFIGURE_VERSIONS
 
 static u8_t v1_enabled = 1;
@@ -298,6 +332,8 @@ snmp_receive(void *handle, struct pbuf *p, const ip_addr_t *source_ip, u16_t por
 
   err = snmp_parse_inbound_frame(&request);
   if (err == ERR_OK) {
+    spCurrentRequest = &request;
+
     if (request.request_type == SNMP_ASN1_CONTEXT_PDU_GET_RESP) {
       if (request.error_status == SNMP_ERR_NOERROR) {
         /* If callback function has been defined call it. */
@@ -306,6 +342,7 @@ snmp_receive(void *handle, struct pbuf *p, const ip_addr_t *source_ip, u16_t por
         }
       }
       /* stop further handling of GET RESP PDU, we are an agent */
+      spCurrentRequest = NULL;
       return;
     }
     err = snmp_prepare_outbound_frame(&request);
@@ -402,6 +439,8 @@ snmp_receive(void *handle, struct pbuf *p, const ip_addr_t *source_ip, u16_t por
     if (request.outbound_pbuf != NULL) {
       pbuf_free(request.outbound_pbuf);
     }
+
+    spCurrentRequest = NULL;
   }
 }
 

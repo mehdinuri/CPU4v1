@@ -22,6 +22,14 @@ Add_Unity_Test(Test_PhaseObjects Test_PhaseObjects.c)
 Add_Unity_Test(Test_ClockObjects Test_ClockObjects.c)
 Add_Unity_Test(Test_NtcipDbTransactionService Test_NtcipDbTransactionService.c)
 Add_Unity_Test(Test_NtcipObjectDirectory Test_NtcipObjectDirectory.c)
+Add_Unity_Test(Test_LWIPSNMPAdapter
+               Test_LWIPSNMPAdapter.c
+               ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/LWIPSNMPAdapter.c)
+target_include_directories(Test_LWIPSNMPAdapter PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32
+    ${CMAKE_SOURCE_DIR}/App/Domain
+    ${CMAKE_SOURCE_DIR}/App/Domain/Intersection
+)
 Add_Unity_Test(Test_PersistencePort  Test_PersistencePort.c)
 Add_Unity_Test(Test_LogRepository    Test_LogRepository.c)
 Add_Unity_Test(Test_RTCPort          Test_RTCPort.c)

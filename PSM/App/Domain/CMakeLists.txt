@@ -5,9 +5,11 @@ add_library(PSM_Domain STATIC)
 
 target_sources(PSM_Domain PRIVATE
     Measurement.c
+    MeasurementService.c
 )
 
 # Public include: callers use #include "Domain/Measurement.h"
+# Also exposes App/Config/ (EepromMap.h) and App/Ports/ transitively.
 target_include_directories(PSM_Domain
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
 )

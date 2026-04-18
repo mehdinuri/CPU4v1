@@ -50,6 +50,7 @@
 #include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "Adapters/STM32/LWIPSNMPAdapter.h"
+#include "Adapters/STM32/LWIPSNMPBridge.h"
 #include "lwip/sys.h"
 #include <string.h>
 
@@ -79,6 +80,7 @@ static void BindDomainSnmpAdapter(void)
                                        &g_intersectionActivationService);
   LWIPSNMPAdapterBindUnitAlarmPort(&s_lwipSnmpAdapterCtx, &g_unitAlarmPort);
   LWIPSNMPAdapterBindUnitClockPort(&s_lwipSnmpAdapterCtx, &g_unitClockPort);
+  LWIPSNMPBridgeBindAdapter(&s_lwipSnmpAdapterCtx);
 }
 
 static const struct snmp_mib *SaMibs[] = { &mib2, &kgm, &asc,

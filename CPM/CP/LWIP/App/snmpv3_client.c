@@ -41,16 +41,12 @@
 #include <string.h>
 
 #include "MCS.h"
+#include "PersistencePorts.h"
 
 #if LWIP_SNMP && LWIP_SNMP_V3
 
-#define LWIP_SNMP_V3_MAX_USERS 2
-
-#define LWIP_SNMP_V3_RESERVED_USERNAME "teknotel"
-#define LWIP_SNMP_V3_RESERVED_AUTH_KEY "auth@Tek96"
-#define LWIP_SNMP_V3_RESERVED_AUTH_KEY_LEN 10
-#define LWIP_SNMP_V3_RESERVED_PRIV_KEY "priv@Tek96"
-#define LWIP_SNMP_V3_RESERVED_PRIV_KEY_LEN 10
+#define LWIP_SNMP_V3_MAX_USERS 1
+#define SNMPV3_PERSIST_ERASED_WORD 0xFFFFFFFFUL
 
 struct user_table_entry
 {
@@ -68,9 +64,78 @@ static u8_t snmpv3_engineid_len;
 
 static u32_t enginetime = 0;
 
-/* In this implementation engineboots is volatile. In a real world application
- * this value should be stored in non-volatile memory.*/
 static u32_t engineboots = 0;
+static uint8_t s_engineBootsInitialized = 0U;
+
+static snmpv3_auth_algo_t PreferredAuthAlgo(void)
+{
+#if LWIP_SNMP_V3_CRYPTO
+  return SNMP_V3_AUTH_ALGO_SHA;
+#else
+  return SNMP_V3_AUTH_ALGO_INVAL;
+#endif
+}
+
+static snmpv3_priv_algo_t PreferredPrivAlgo(snmpv3_auth_algo_t authAlgo)
+{
+#if LWIP_SNMP_V3_CRYPTO
+  if (authAlgo != SNMP_V3_AUTH_ALGO_INVAL)
+  {
+    return SNMP_V3_PRIV_ALGO_AES;
+  }
+#else
+  LWIP_UNUSED_ARG(authAlgo);
+#endif
+
+  return SNMP_V3_PRIV_ALGO_INVAL;
+}
+
+static u32_t LoadPersistedEngineBoots(void)
+{
+  u32_t boots = 0U;
+
+  if (PersistenceRead(&g_persistencePort,
+                      PERSIST_OBJECT_SNMPV3_STATE,
+                      0U,
+                      &boots,
+                      sizeof(boots)) == FALSE)
+  {
+    return 0U;
+  }
+
+  if (boots == SNMPV3_PERSIST_ERASED_WORD)
+  {
+    return 0U;
+  }
+
+  return boots;
+}
+
+static void StorePersistedEngineBoots(u32_t boots)
+{
+  (void) PersistenceWrite(&g_persistencePort,
+                          PERSIST_OBJECT_SNMPV3_STATE,
+                          0U,
+                          &boots,
+                          sizeof(boots));
+}
+
+static void InitializeEngineBootsOnce(void)
+{
+  if (s_engineBootsInitialized != 0U)
+  {
+    return;
+  }
+
+  engineboots = LoadPersistedEngineBoots();
+  if (engineboots < SNMPV3_PERSIST_ERASED_WORD)
+  {
+    engineboots++;
+  }
+
+  snmpv3_set_engine_boots(engineboots);
+  s_engineBootsInitialized = 1U;
+}
 
 static void snmpv3_init_user_table(void)
 {
@@ -80,11 +145,6 @@ static void snmpv3_init_user_table(void)
   strcpy(user_table[0].username, MCSGetSNMPv3Username());
   user_table[0].auth_algo = SNMP_V3_AUTH_ALGO_INVAL;
   user_table[0].priv_algo = SNMP_V3_PRIV_ALGO_INVAL;
-
-  /* Add reserved user */
-  strcpy(user_table[1].username, LWIP_SNMP_V3_RESERVED_USERNAME);
-  user_table[1].auth_algo = SNMP_V3_AUTH_ALGO_INVAL;
-  user_table[1].priv_algo = SNMP_V3_PRIV_ALGO_INVAL;
 }
 
 /**
@@ -461,6 +521,7 @@ u32_t snmpv3_get_engine_boots(void)
 void snmpv3_set_engine_boots(u32_t boots)
 {
   engineboots = boots;
+  StorePersistedEngineBoots(boots);
 }
 
 /**
@@ -486,27 +547,24 @@ void snmpv3_reset_engine_time(void)
  */
 void SNMPv3Init(void)
 {
+  const char *username = MCSGetSNMPv3Username();
+  const snmpv3_auth_algo_t authAlgo = PreferredAuthAlgo();
+  const snmpv3_priv_algo_t privAlgo = PreferredPrivAlgo(authAlgo);
+
+  InitializeEngineBootsOnce();
   snmpv3_set_engine_id(MCSGetSNMPv3EngineID(), strlen(MCSGetSNMPv3EngineID()));
 
   snmpv3_init_user_table();
 
-  snmpv3_set_user_auth_algo(MCSGetSNMPv3Username(), SNMP_V3_AUTH_ALGO_MD5);
-  snmpv3_set_user_auth_key(MCSGetSNMPv3Username(), MCSGetSNMPv3AuthPassword());
-  snmpv3_set_user_priv_algo(MCSGetSNMPv3Username(), SNMP_V3_PRIV_ALGO_DES);
-  snmpv3_set_user_priv_key(MCSGetSNMPv3Username(), MCSGetSNMPv3PrivPassword());
-
-  snmpv3_set_user_auth_algo(LWIP_SNMP_V3_RESERVED_USERNAME,
-                            SNMP_V3_AUTH_ALGO_MD5);
-  snmpv3_set_user_auth_key(LWIP_SNMP_V3_RESERVED_USERNAME,
-                           LWIP_SNMP_V3_RESERVED_AUTH_KEY);
-  snmpv3_set_user_priv_algo(LWIP_SNMP_V3_RESERVED_USERNAME,
-                            SNMP_V3_PRIV_ALGO_DES);
-  snmpv3_set_user_priv_key(LWIP_SNMP_V3_RESERVED_USERNAME,
-                           LWIP_SNMP_V3_RESERVED_PRIV_KEY);
+  snmpv3_set_user_auth_algo(username, authAlgo);
+  snmpv3_set_user_auth_key(username, MCSGetSNMPv3AuthPassword());
+  snmpv3_set_user_priv_algo(username, privAlgo);
+  snmpv3_set_user_priv_key(username, MCSGetSNMPv3PrivPassword());
 
   /* Start the engine time timer */
   snmpv3_reset_engine_time();
-  snmpv3_enginetime_timer(NULL);
+  sys_untimeout(snmpv3_enginetime_timer, NULL);
+  sys_timeout(1000, snmpv3_enginetime_timer, NULL);
 }
 
 #endif /* LWIP_SNMP && LWIP_SNMP_V3 */

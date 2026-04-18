@@ -70,7 +70,7 @@ typedef struct _tSFDCANTxMsg
 	
 } tSFDCANTxMsg, *tpSFDCANTxMsg;
 
-typedef struct _tSPSMMeasurement
+typedef struct __attribute__((packed)) _tSPSMMeasurement
 {
 	uint8_t bACLow : 8;
 	uint8_t b24V1Low : 8;
@@ -88,7 +88,7 @@ typedef struct _tSPSMMeasurement
 
 } tSPSMMeasurement, *tpSPSMMeasurement;
 
-typedef struct _tSFlashSync
+typedef struct __attribute__((packed)) _tSFlashSync
 {
 	uint8_t bFlashSync : 1;
 	uint8_t bReserved : 7;

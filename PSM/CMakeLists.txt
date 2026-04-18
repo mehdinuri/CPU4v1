@@ -54,6 +54,8 @@ if(BUILD_TARGET STREQUAL "Host")
     include(cmake/unity.cmake)
 
     add_subdirectory(App/Domain)
+    add_subdirectory(App/Adapters/Mock)
+    add_subdirectory(App/Platform/Host)
     add_subdirectory(Tests)
 
 # ---------------------------------------------------------------------------
@@ -71,7 +73,11 @@ else()
     # Domain layer (pure computation, no HAL/FreeRTOS)
     add_subdirectory(App/Domain)
 
-    # Application task sources
+    # Platform layer — adapter wiring, global ports, ISR setters
+    add_subdirectory(App/Platform/STM32)
+
+    # Application task sources — adapter .c files are now compiled inside
+    # PSM_Platform_STM32 (App/Platform/STM32/CMakeLists.txt).
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         Tasks/Src/measurement.c
         Tasks/Src/can_msg_parser.c
@@ -91,6 +97,7 @@ else()
     target_link_libraries(${CMAKE_PROJECT_NAME}
         stm32cubemx
         PSM_Domain
+        PSM_Platform_STM32
 
         # Add user defined libraries
     )

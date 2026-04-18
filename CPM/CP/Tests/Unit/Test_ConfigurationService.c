@@ -436,9 +436,8 @@ void test_unsupported_channel_control_type_fails_runtime_support_verify(void)
   TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
 }
 
-void test_unsupported_preempt_exit_type_fails_runtime_support_verify(void)
+void test_supported_preempt_exit_type_passes_runtime_support_verify(void)
 {
-  IntersectionConfigErrorInfo_t errorInfo;
   const uint8_t trackPhases[] = { 2U };
   const uint8_t exitPhases[] = { 1U };
 
@@ -457,12 +456,7 @@ void test_unsupported_preempt_exit_type_fails_runtime_support_verify(void)
                      &s_service,
                      0U,
                      INTERSECTION_PREEMPT_EXIT_TYPE_SHORT_SERVICE));
-  TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
-
-  errorInfo = ConfigurationServiceGetLastError(&s_service);
-  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_PREEMPT_EXIT_TYPE,
-                        errorInfo.type);
-  TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
 }
 
 void test_phase_maximum_initial_below_minimum_green_fails_verify(void)
@@ -984,7 +978,7 @@ int main(void)
   RUN_TEST(test_single_sequence_cap_rejects_pattern_and_preempt_sequence_numbers);
   RUN_TEST(test_out_of_range_input_mapping_fails_verify);
   RUN_TEST(test_unsupported_channel_control_type_fails_runtime_support_verify);
-  RUN_TEST(test_unsupported_preempt_exit_type_fails_runtime_support_verify);
+  RUN_TEST(test_supported_preempt_exit_type_passes_runtime_support_verify);
   RUN_TEST(test_phase_maximum_initial_below_minimum_green_fails_verify);
   RUN_TEST(test_extended_phase_configuration_persists_across_reload);
   RUN_TEST(test_detector_configuration_persists_across_reload);

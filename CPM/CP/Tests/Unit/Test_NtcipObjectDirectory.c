@@ -477,9 +477,17 @@ static const uint32_t kPreemptControlOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 2U, 1U
 };
+static const uint32_t kPreemptLinkOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 3U, 1U
+};
 static const uint32_t kPreemptMinimumDurationOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 5U, 1U
+};
+static const uint32_t kPreemptMinimumGreenOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 6U, 1U
 };
 static const uint32_t kPreemptTrackGreenOid[] =
 {
@@ -500,6 +508,10 @@ static const uint32_t kPreemptEnterYellowChangeOid[] =
 static const uint32_t kPreemptEnterRedClearOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 23U, 1U
+};
+static const uint32_t kPreemptSequenceNumberOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 2U, 1U, 26U, 1U
 };
 static const uint32_t kPreemptExitTypeOid[] =
 {
@@ -2103,7 +2115,21 @@ void test_preempt_objects_route_transactional_config_and_runtime_status(void)
   NtcipValueSetUnsigned32(&value, 1U);
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectorySetValue(&s_directory,
+                                                     kPreemptLinkOid,
+                                                     15U,
+                                                     &request,
+                                                     &value));
+  NtcipValueSetUnsigned32(&value, 1U);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectorySetValue(&s_directory,
                                                      kPreemptMinimumDurationOid,
+                                                     15U,
+                                                     &request,
+                                                     &value));
+  NtcipValueSetUnsigned32(&value, 0U);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectorySetValue(&s_directory,
+                                                     kPreemptMinimumGreenOid,
                                                      15U,
                                                      &request,
                                                      &value));
@@ -2121,6 +2147,13 @@ void test_preempt_objects_route_transactional_config_and_runtime_status(void)
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectorySetValue(&s_directory,
                                                      kPreemptTrackPhaseOid,
+                                                     15U,
+                                                     &request,
+                                                     &value));
+  NtcipValueSetUnsigned32(&value, 1U);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectorySetValue(&s_directory,
+                                                     kPreemptSequenceNumberOid,
                                                      15U,
                                                      &request,
                                                      &value));
@@ -2190,6 +2223,20 @@ void test_preempt_objects_route_transactional_config_and_runtime_status(void)
   TEST_ASSERT_EQUAL_UINT8_ARRAY(gateDescription,
                                 value.data.octetString.bytes,
                                 value.data.octetString.length);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kPreemptLinkOid,
+                                                15U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kPreemptSequenceNumberOid,
+                                                15U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
                                                 kPreemptGateStatusOid,
@@ -2881,7 +2928,7 @@ void test_unit_control_object_rejects_reserved_bit_and_drives_runtime_demands(
   TEST_ASSERT_EQUAL_UINT32(0xFFU, value.data.unsigned32);
 }
 
-void test_preempt_verify_rejects_unsupported_exit_type(void)
+void test_preempt_verify_accepts_short_service_exit_type(void)
 {
   NtcipRequestContext_t request = { 0x9999U, 0U, 0U };
   NtcipValue_t value;
@@ -2927,7 +2974,7 @@ void test_preempt_verify_rejects_unsupported_exit_type(void)
                                                 13U,
                                                 NULL,
                                                 &value));
-  TEST_ASSERT_EQUAL_UINT32(NTCIP_DB_VERIFY_STATUS_DONE_WITH_ERROR,
+  TEST_ASSERT_EQUAL_UINT32(NTCIP_DB_VERIFY_STATUS_DONE_WITH_NO_ERROR,
                            value.data.unsigned32);
 }
 
@@ -3750,7 +3797,7 @@ void test_unit_control_status_reports_interconnect_and_backup(void)
   TEST_ASSERT_EQUAL_UINT32(8U, value.data.unsigned32);
 }
 
-void test_remote_command_lockout_silently_ignores_all_sets_except_unlock(void)
+void test_remote_command_lockout_denies_all_sets_except_unlock(void)
 {
   NtcipRequestContext_t request = { 0xA1A1U, 0U, 0U };
   NtcipValue_t value;
@@ -3764,13 +3811,13 @@ void test_remote_command_lockout_silently_ignores_all_sets_except_unlock(void)
                                                      &value));
 
   NtcipValueSetUnsigned32(&value, 1U);
-  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_NO_ACCESS,
                         NtcipObjectDirectorySetTest(&s_directory,
                                                     kSystemPatternControlOid,
                                                     13U,
                                                     NULL,
                                                     &value));
-  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_NO_ACCESS,
                         NtcipObjectDirectorySetValue(&s_directory,
                                                      kSystemPatternControlOid,
                                                      13U,
@@ -3785,13 +3832,13 @@ void test_remote_command_lockout_silently_ignores_all_sets_except_unlock(void)
   TEST_ASSERT_EQUAL_UINT32(254U, value.data.unsigned32);
 
   NtcipValueSetUnsigned32(&value, 13U);
-  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_NO_ACCESS,
                         NtcipObjectDirectorySetTest(&s_directory,
                                                     kPhaseMinimumGreenOid,
                                                     15U,
                                                     &request,
                                                     &value));
-  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_NO_ACCESS,
                         NtcipObjectDirectorySetValue(&s_directory,
                                                      kPhaseMinimumGreenOid,
                                                      15U,
@@ -3806,7 +3853,7 @@ void test_remote_command_lockout_silently_ignores_all_sets_except_unlock(void)
   TEST_ASSERT_EQUAL_UINT32(5U, value.data.unsigned32);
 
   NtcipValueSetUnsigned32(&value, 0x06U);
-  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_NO_ACCESS,
                         NtcipObjectDirectorySetValue(&s_directory,
                                                      kUnitControlOid,
                                                      13U,
@@ -3918,10 +3965,10 @@ int main(void)
   RUN_TEST(test_remote_manual_control_objects_require_mode_and_follow_runtime_timer);
   RUN_TEST(test_matching_set_oid_resets_user_defined_backup_timer);
   RUN_TEST(test_special_function_output_objects_follow_runtime_control_and_timebase);
-  RUN_TEST(test_remote_command_lockout_silently_ignores_all_sets_except_unlock);
+  RUN_TEST(test_remote_command_lockout_denies_all_sets_except_unlock);
   RUN_TEST(test_coord_operational_mode_write_requires_transaction);
   RUN_TEST(test_preempt_objects_route_transactional_config_and_runtime_status);
-  RUN_TEST(test_preempt_verify_rejects_unsupported_exit_type);
+  RUN_TEST(test_preempt_verify_accepts_short_service_exit_type);
 
   return UNITY_END();
 }

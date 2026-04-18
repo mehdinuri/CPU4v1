@@ -1,20 +1,21 @@
 /* USER CODE BEGIN Header */
+
 /**
-  ******************************************************************************
-  * File Name          : app_freertos.c
-  * Description        : Code for freertos applications
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * File Name          : app_freertos.c
+ * Description        : Code for freertos applications
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
@@ -30,6 +31,7 @@
 #include "storage.h"
 #include "iwdg.h"
 #include "utilities.h"
+#include "Platform/STM32/Bootstrap/HardwarePorts.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,8 +46,8 @@ typedef StaticMemPool_t osStaticMemPoolDef_t;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MAINTAINANCE_TASK_MAX_TIMEOUT 3000
-#define MAINTAINANCE_MAX_TASK_FAILURES 3
+#define MAINTENANCE_TASK_MAX_TIMEOUT 3000
+#define MAINTENANCE_MAX_TASK_FAILURES 3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -88,21 +90,21 @@ const osMemoryPoolAttr_t StorageReqsMemPool_attributes = {
   .mp_size = sizeof(StorageReqsMemPoolBuf)
 };
 /* USER CODE END Variables */
-/* Definitions for MaitenanceTask */
-osThreadId_t MaitenanceTaskHandle;
-uint32_t MaitenanceTaskBuf[ 256 ];
-osStaticThreadDef_t MaitenanceTaskCtrlBlk;
-const osThreadAttr_t MaitenanceTask_attributes = {
-  .name = "MaitenanceTask",
-  .stack_mem = &MaitenanceTaskBuf[0],
-  .stack_size = sizeof(MaitenanceTaskBuf),
-  .cb_mem = &MaitenanceTaskCtrlBlk,
-  .cb_size = sizeof(MaitenanceTaskCtrlBlk),
+/* Definitions for MaintenanceTask */
+osThreadId_t MaintenanceTaskHandle;
+uint32_t MaintenanceTaskBuf[256];
+osStaticThreadDef_t MaintenanceTaskCtrlBlk;
+const osThreadAttr_t MaintenanceTask_attributes = {
+  .name = "MaintenanceTask",
+  .stack_mem = &MaintenanceTaskBuf[0],
+  .stack_size = sizeof(MaintenanceTaskBuf),
+  .cb_mem = &MaintenanceTaskCtrlBlk,
+  .cb_size = sizeof(MaintenanceTaskCtrlBlk),
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for CANMsgParserTask */
 osThreadId_t CANMsgParserTaskHandle;
-uint32_t CANMsgParserTaskBuf[ 512 ];
+uint32_t CANMsgParserTaskBuf[512];
 osStaticThreadDef_t CANMsgParserTaskCtrlBlk;
 const osThreadAttr_t CANMsgParserTask_attributes = {
   .name = "CANMsgParserTask",
@@ -114,7 +116,7 @@ const osThreadAttr_t CANMsgParserTask_attributes = {
 };
 /* Definitions for CANMsgSenderTask */
 osThreadId_t CANMsgSenderTaskHandle;
-uint32_t CANMsgSenderTaskBuf[ 512 ];
+uint32_t CANMsgSenderTaskBuf[512];
 osStaticThreadDef_t CANMsgSenderTaskCtrlBlk;
 const osThreadAttr_t CANMsgSenderTask_attributes = {
   .name = "CANMsgSenderTask",
@@ -126,7 +128,7 @@ const osThreadAttr_t CANMsgSenderTask_attributes = {
 };
 /* Definitions for MeasurementTask */
 osThreadId_t MeasurementTaskHandle;
-uint32_t MeasurementTaskBuf[ 256 ];
+uint32_t MeasurementTaskBuf[256];
 osStaticThreadDef_t MeasurementTaskCtrlBlk;
 const osThreadAttr_t MeasurementTask_attributes = {
   .name = "MeasurementTask",
@@ -138,7 +140,7 @@ const osThreadAttr_t MeasurementTask_attributes = {
 };
 /* Definitions for StorageTask */
 osThreadId_t StorageTaskHandle;
-uint32_t StorageTaskBuf[ 512 ];
+uint32_t StorageTaskBuf[512];
 osStaticThreadDef_t StorageTaskCtrlBlk;
 const osThreadAttr_t StorageTask_attributes = {
   .name = "StorageTask",
@@ -150,7 +152,7 @@ const osThreadAttr_t StorageTask_attributes = {
 };
 /* Definitions for CANRxReqsQueue */
 osMessageQueueId_t CANRxReqsQueueHandle;
-uint8_t CANRxReqsQueueBuf[ 32 * sizeof( tpSFDCANRxMsg ) ];
+uint8_t CANRxReqsQueueBuf[32 * sizeof(tpSFDCANRxMsg)];
 osStaticMessageQDef_t CANRxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
   .name = "CANRxReqsQueue",
@@ -161,7 +163,7 @@ const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
 };
 /* Definitions for CANTxReqsQueue */
 osMessageQueueId_t CANTxReqsQueueHandle;
-uint8_t CANTxReqsQueueBuf[ 32 * sizeof( tpSFDCANTxMsg ) ];
+uint8_t CANTxReqsQueueBuf[32 * sizeof(tpSFDCANTxMsg)];
 osStaticMessageQDef_t CANTxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
   .name = "CANTxReqsQueue",
@@ -172,7 +174,7 @@ const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
 };
 /* Definitions for StorageReqsQueue */
 osMessageQueueId_t StorageReqsQueueHandle;
-uint8_t StorageReqsQueueBuf[ 16 * sizeof( tpSStorageReq ) ];
+uint8_t StorageReqsQueueBuf[16 * sizeof(tpSStorageReq)];
 osStaticMessageQDef_t StorageReqsQueueCtrlBlk;
 const osMessageQueueAttr_t StorageReqsQueue_attributes = {
   .name = "StorageReqsQueue",
@@ -180,22 +182,6 @@ const osMessageQueueAttr_t StorageReqsQueue_attributes = {
   .cb_size = sizeof(StorageReqsQueueCtrlBlk),
   .mq_mem = &StorageReqsQueueBuf,
   .mq_size = sizeof(StorageReqsQueueBuf)
-};
-/* Definitions for CurrentMutex */
-osMutexId_t CurrentMutexHandle;
-osStaticMutexDef_t CurrentMutexCtrlBlk;
-const osMutexAttr_t CurrentMutex_attributes = {
-  .name = "CurrentMutex",
-  .cb_mem = &CurrentMutexCtrlBlk,
-  .cb_size = sizeof(CurrentMutexCtrlBlk),
-};
-/* Definitions for OutputStatesMutex */
-osMutexId_t OutputStatesMutexHandle;
-osStaticMutexDef_t OutputStatesMutexCtrlBlk;
-const osMutexAttr_t OutputStatesMutex_attributes = {
-  .name = "OutputStatesMutex",
-  .cb_mem = &OutputStatesMutexCtrlBlk,
-  .cb_size = sizeof(OutputStatesMutexCtrlBlk),
 };
 /* Definitions for MaintenanceEvent */
 osEventFlagsId_t MaintenanceEventHandle;
@@ -211,7 +197,7 @@ const osEventFlagsAttr_t MaintenanceEvent_attributes = {
 
 /* USER CODE END FunctionPrototypes */
 
-void MaitenanceTaskFunc(void *argument);
+void MaintenanceTaskFunc(void *argument);
 extern void CANMsgParserTaskFunc(void *argument);
 extern void CANMsgSenderTaskFunc(void *argument);
 extern void MeasurementTaskFunc(void *argument);
@@ -222,81 +208,81 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 /* Hook prototypes */
 void configureTimerForRunTimeStats(void);
 unsigned long getRunTimeCounterValue(void);
+
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
 
 /* USER CODE BEGIN 1 */
 /* Functions needed when configGENERATE_RUN_TIME_STATS is on */
 __weak void configureTimerForRunTimeStats(void)
 {
-
 }
 
 __weak unsigned long getRunTimeCounterValue(void)
 {
-return 0;
+  return 0;
 }
+
 /* USER CODE END 1 */
 
 /* USER CODE BEGIN 4 */
 void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
 {
-   /* Run time stack overflow checking is performed if
-   configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
-   called if a stack overflow is detected. */
-	Error_Handler();
+  /* Run time stack overflow checking is performed if
+   *  configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
+   *  called if a stack overflow is detected. */
+  Error_Handler();
 }
+
 /* USER CODE END 4 */
 
 /**
-  * @brief  FreeRTOS initialization
-  * @param  None
-  * @retval None
-  */
-void MX_FREERTOS_Init(void) {
+ * @brief  FreeRTOS initialization
+ * @param  None
+ * @retval None
+ */
+void MX_FREERTOS_Init(void)
+{
   /* USER CODE BEGIN Init */
-	/* add memory pools, ... */
-	/* creation of CANRxReqsMemPool */
-	CANRxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(tSFDCANRxMsg), &CANRxReqsMemPool_attributes);
+  /* add memory pools, ... */
+  /* creation of CANRxReqsMemPool */
+  CANRxReqsMemPoolHandle = osMemoryPoolNew(32,
+                                           sizeof(tSFDCANRxMsg),
+                                           &CANRxReqsMemPool_attributes);
 
-	/* creation of CANTxReqsMemPool */
-  CANTxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(tSFDCANTxMsg), &CANTxReqsMemPool_attributes);
+  /* creation of CANTxReqsMemPool */
+  CANTxReqsMemPoolHandle = osMemoryPoolNew(32,
+                                           sizeof(tSFDCANTxMsg),
+                                           &CANTxReqsMemPool_attributes);
 
   /* creation of NewMeasurementsMemPool */
-  StorageReqsMemPoolHandle = osMemoryPoolNew (16, sizeof(tSStorageReq), &StorageReqsMemPool_attributes);
-	
-	if (CANRxReqsMemPoolHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (CANTxReqsMemPoolHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (StorageReqsMemPoolHandle == NULL)
-	{
-		Error_Handler();
-	}
+  StorageReqsMemPoolHandle = osMemoryPoolNew(16,
+                                             sizeof(tSStorageReq),
+                                             &StorageReqsMemPool_attributes);
+
+  if (CANRxReqsMemPoolHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (CANTxReqsMemPoolHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (StorageReqsMemPoolHandle == NULL)
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END Init */
-  /* Create the mutex(es) */
-  /* creation of CurrentMutex */
-  CurrentMutexHandle = osMutexNew(&CurrentMutex_attributes);
-
-  /* creation of OutputStatesMutex */
-  OutputStatesMutexHandle = osMutexNew(&OutputStatesMutex_attributes);
-
   /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-	if (CurrentMutexHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (OutputStatesMutexHandle == NULL)
-	{
-		Error_Handler();
-	}
+
+  /* The former CurrentMutex and OutputStatesMutex are gone. The ADC/TIM4
+   * ISR paths no longer depend on osMutex (which would have been UB from
+   * ISR context); task-vs-ISR shared state is protected with
+   * taskENTER_CRITICAL on the task side and a double-buffer in the
+   * AdcCurrentAdapter.
+   */
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -309,74 +295,91 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of CANRxReqsQueue */
-  CANRxReqsQueueHandle = osMessageQueueNew (32, sizeof(tpSFDCANRxMsg), &CANRxReqsQueue_attributes);
+  CANRxReqsQueueHandle = osMessageQueueNew(32,
+                                           sizeof(tpSFDCANRxMsg),
+                                           &CANRxReqsQueue_attributes);
 
   /* creation of CANTxReqsQueue */
-  CANTxReqsQueueHandle = osMessageQueueNew (32, sizeof(tpSFDCANTxMsg), &CANTxReqsQueue_attributes);
+  CANTxReqsQueueHandle = osMessageQueueNew(32,
+                                           sizeof(tpSFDCANTxMsg),
+                                           &CANTxReqsQueue_attributes);
 
   /* creation of StorageReqsQueue */
-  StorageReqsQueueHandle = osMessageQueueNew (16, sizeof(tpSStorageReq), &StorageReqsQueue_attributes);
+  StorageReqsQueueHandle = osMessageQueueNew(16,
+                                             sizeof(tpSStorageReq),
+                                             &StorageReqsQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-	if (CANRxReqsQueueHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (CANTxReqsQueueHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (StorageReqsQueueHandle == NULL)
-	{
-		Error_Handler();
-	}
+  if (CANRxReqsQueueHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (CANTxReqsQueueHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (StorageReqsQueueHandle == NULL)
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of MaitenanceTask */
-  MaitenanceTaskHandle = osThreadNew(MaitenanceTaskFunc, NULL, &MaitenanceTask_attributes);
+  /* creation of MaintenanceTask */
+  MaintenanceTaskHandle = osThreadNew(MaintenanceTaskFunc,
+                                      NULL,
+                                      &MaintenanceTask_attributes);
 
   /* creation of CANMsgParserTask */
-  CANMsgParserTaskHandle = osThreadNew(CANMsgParserTaskFunc, NULL, &CANMsgParserTask_attributes);
+  CANMsgParserTaskHandle = osThreadNew(CANMsgParserTaskFunc,
+                                       NULL,
+                                       &CANMsgParserTask_attributes);
 
   /* creation of CANMsgSenderTask */
-  CANMsgSenderTaskHandle = osThreadNew(CANMsgSenderTaskFunc, NULL, &CANMsgSenderTask_attributes);
+  CANMsgSenderTaskHandle = osThreadNew(CANMsgSenderTaskFunc,
+                                       NULL,
+                                       &CANMsgSenderTask_attributes);
 
   /* creation of MeasurementTask */
-  MeasurementTaskHandle = osThreadNew(MeasurementTaskFunc, NULL, &MeasurementTask_attributes);
+  MeasurementTaskHandle = osThreadNew(MeasurementTaskFunc,
+                                      NULL,
+                                      &MeasurementTask_attributes);
 
   /* creation of StorageTask */
-  StorageTaskHandle = osThreadNew(StorageTaskFunc, NULL, &StorageTask_attributes);
+  StorageTaskHandle = osThreadNew(StorageTaskFunc, NULL,
+                                  &StorageTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-	if (MaitenanceTaskHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (CANMsgParserTaskHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (CANMsgSenderTaskHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (MeasurementTaskHandle == NULL)
-	{
-		Error_Handler();
-	}
-	
-	if (StorageTaskHandle == NULL)
-	{
-		Error_Handler();
-	}
+  if (MaintenanceTaskHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (CANMsgParserTaskHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (CANMsgSenderTaskHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (MeasurementTaskHandle == NULL)
+  {
+    Error_Handler();
+  }
+
+  if (StorageTaskHandle == NULL)
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END RTOS_THREADS */
 
   /* creation of MaintenanceEvent */
@@ -384,78 +387,84 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
-	if (MaintenanceEventHandle == NULL)
-	{
-		Error_Handler();
-	}
+  if (MaintenanceEventHandle == NULL)
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END RTOS_EVENTS */
+} /* MX_FREERTOS_Init */
 
-}
+/* USER CODE BEGIN Header_MaintenanceTaskFunc */
 
-/* USER CODE BEGIN Header_MaitenanceTaskFunc */
 /**
-  * @brief  Function implementing the MaitenanceTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_MaitenanceTaskFunc */
-void MaitenanceTaskFunc(void *argument)
+ * @brief  Function implementing the MaintenanceTask thread.
+ * @param  argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_MaintenanceTaskFunc */
+void MaintenanceTaskFunc(void *argument)
 {
-  /* USER CODE BEGIN MaitenanceTaskFunc */
-	UNUSED(argument);
-	
-	osDelay(1000);
-#ifndef DEBUG
-	MX_IWDG_Init();
-	uint32_t lActiveTaskFlags = 0;
-	uint8_t bTaskFailures = 0;
-#endif
+  /* USER CODE BEGIN MaintenanceTaskFunc */
+  UNUSED(argument);
+
+  /* MX_IWDG_Init() is now called from main() before osKernelStart so the
+   * watchdog is already ticking when this task first runs. The refresh
+   * cadence stays this task's responsibility (see Watchdog_Refresh below).
+   */
+  #ifndef DEBUG
+  uint32_t lActiveTaskFlags = 0;
+  uint8_t bTaskFailures = 0;
+  #endif
 
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
     #ifndef DEBUG
-		osEventFlagsClear(MaintenanceEventHandle, EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE);
-		uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
-																			 EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE,
-																			 osFlagsWaitAll,
-																			 MAINTAINANCE_TASK_MAX_TIMEOUT);
-		if (lFlags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
-		{
-			if (lActiveTaskFlags != lFlags)
-			{
-				lActiveTaskFlags = lFlags;
-			}
+    osEventFlagsClear(MaintenanceEventHandle,
+                      EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE);
+    uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
+                                       EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE,
+                                       osFlagsWaitAll,
+                                       MAINTENANCE_TASK_MAX_TIMEOUT);
 
-			if (bTaskFailures++ > MAINTAINANCE_MAX_TASK_FAILURES)
-			{
-				bTaskFailures = 0;
-				
-				Error_Handler();
-			}
-		}
-		else
-		{
-			lActiveTaskFlags = lFlags;
-			bTaskFailures = 0;
-		}
-		
-		IWDGRefresh();
-#else
+    if (lFlags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
+    {
+      if (lActiveTaskFlags != lFlags)
+      {
+        lActiveTaskFlags = lFlags;
+      }
+
+      if (bTaskFailures++ > MAINTENANCE_MAX_TASK_FAILURES)
+      {
+        bTaskFailures = 0;
+
+        Error_Handler();
+      }
+    }
+    else
+    {
+      lActiveTaskFlags = lFlags;
+      bTaskFailures = 0;
+    }
+
+    Watchdog_Refresh(&g_WatchdogPort);
+    #else  /* ifndef DEBUG */
     osDelay(10);
-#endif
+    #endif /* ifndef DEBUG */
   }
-  /* USER CODE END MaitenanceTaskFunc */
-}
+
+  /* USER CODE END MaintenanceTaskFunc */
+} /* MaintenanceTaskFunc */
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 void MaintenanceTaskSignal(uint32_t ulSignal)
 {
-	if (MaintenanceEventHandle != NULL)
-	{
-		osEventFlagsSet(MaintenanceEventHandle, ulSignal);
-	}
+  if (MaintenanceEventHandle != NULL)
+  {
+    osEventFlagsSet(MaintenanceEventHandle, ulSignal);
+  }
 }
-/* USER CODE END Application */
 
+/* USER CODE END Application */

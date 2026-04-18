@@ -1,17 +1,32 @@
-# SSM Domain - pure C11, no HAL / FreeRTOS. Host + STM32 both consume.
-# Domain sources are extracted from Tasks/ as logic is decoupled from the HAL.
+# ssm_domain library — pure C11, NO HAL/FreeRTOS includes allowed.
+# All functions take explicit parameters; no global mutable state.
 
-add_library(ssm_domain INTERFACE)
+add_library(ssm_domain STATIC)
 
-target_include_directories(ssm_domain INTERFACE
-    ${CMAKE_SOURCE_DIR}/Core/Inc
-    ${CMAKE_SOURCE_DIR}/Tasks/Inc
-    ${CMAKE_SOURCE_DIR}/App
-    ${CMAKE_SOURCE_DIR}/App/Domain
+target_sources(ssm_domain PRIVATE
+    SignalOutput.c
+    SignalOutputImageBuilder.c
+    SignalFlashConfig.c
+    CurrentMeasurement.c
+    SignalSampleAccumulator.c
+    Crc32.c
+    FlashSyncWatchdog.c
+    OutputVerify.c
+    VoltageCurrentFrame.c
 )
 
-if(BUILD_TARGET STREQUAL "Host")
-    target_compile_options(ssm_domain INTERFACE
-        $<$<CONFIG:Debug>:-fprofile-arcs -ftest-coverage>
-    )
-endif()
+# Public include: callers use #include "Domain/SignalOutput.h"
+target_include_directories(ssm_domain
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+# Strict warnings enforced for all Domain code
+target_compile_options(ssm_domain PRIVATE
+    -Wall -Wextra -Werror -Wpedantic
+    -Wno-unused-parameter
+)
+
+# Coverage instrumentation — only for Host Debug builds
+target_compile_options(ssm_domain PRIVATE
+    $<$<AND:$<CONFIG:Debug>,$<STREQUAL:${BUILD_TARGET},Host>>:-fprofile-arcs -ftest-coverage>
+)

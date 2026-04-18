@@ -30,6 +30,7 @@
 #include "storage.h"
 #include "iwdg.h"
 #include "utilities.h"
+#include "HardwarePorts.h"
 
 /* USER CODE END Includes */
 
@@ -45,8 +46,10 @@ typedef StaticMemPool_t osStaticMemPoolDef_t;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MAINTAINANCE_TASK_MAX_TIMEOUT 3000
-#define MAINTAINANCE_MAX_TASK_FAILURES 3
+/* After this many consecutive missed maintenance signals the system resets.
+ * Combined with MAINTENANCE_TASK_TIMEOUT_MS = 500 ms, worst-case detection
+ * latency = 2 * 500 ms = 1000 ms (< NEMA TS2 2 s requirement). */
+#define MAINTENANCE_MAX_TASK_FAILURES 2
 
 /* USER CODE END PD */
 
@@ -90,16 +93,16 @@ const osMemoryPoolAttr_t StorageReqsMemPool_attributes = {
   .mp_size = sizeof(StorageReqsMemPoolBuf)
 };
 /* USER CODE END Variables */
-/* Definitions for MaitenanceTask */
-osThreadId_t MaitenanceTaskHandle;
-uint32_t MaitenanceTaskBuf[ 512 ];
-osStaticThreadDef_t MaitenanceTaskCtrlBlk;
-const osThreadAttr_t MaitenanceTask_attributes = {
-  .name = "MaitenanceTask",
-  .stack_mem = &MaitenanceTaskBuf[0],
-  .stack_size = sizeof(MaitenanceTaskBuf),
-  .cb_mem = &MaitenanceTaskCtrlBlk,
-  .cb_size = sizeof(MaitenanceTaskCtrlBlk),
+/* Definitions for MaintenanceTask */
+osThreadId_t MaintenanceTaskHandle;
+uint32_t MaintenanceTaskBuf[ 512 ];
+osStaticThreadDef_t MaintenanceTaskCtrlBlk;
+const osThreadAttr_t MaintenanceTask_attributes = {
+  .name = "MaintenanceTask",
+  .stack_mem = &MaintenanceTaskBuf[0],
+  .stack_size = sizeof(MaintenanceTaskBuf),
+  .cb_mem = &MaintenanceTaskCtrlBlk,
+  .cb_size = sizeof(MaintenanceTaskCtrlBlk),
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for CANMsgParserTask */
@@ -126,7 +129,8 @@ const osThreadAttr_t CANMsgSenderTask_attributes = {
   .cb_size = sizeof(CANMsgSenderTaskCtrlBlk),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for MeasurementTask */
+/* Definitions for MeasurementTask — above-normal priority so I2C latency
+ * in StorageTask or CAN queue processing cannot delay measurement cycles. */
 osThreadId_t MeasurementTaskHandle;
 uint32_t MeasurementTaskBuf[ 512 ];
 osStaticThreadDef_t MeasurementTaskCtrlBlk;
@@ -136,7 +140,7 @@ const osThreadAttr_t MeasurementTask_attributes = {
   .stack_size = sizeof(MeasurementTaskBuf),
   .cb_mem = &MeasurementTaskCtrlBlk,
   .cb_size = sizeof(MeasurementTaskCtrlBlk),
-  .priority = (osPriority_t) osPriorityNormal,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for StorageTask */
 osThreadId_t StorageTaskHandle;
@@ -183,14 +187,11 @@ const osMessageQueueAttr_t StorageReqsQueue_attributes = {
   .mq_mem = &StorageReqsQueueBuf,
   .mq_size = sizeof(StorageReqsQueueBuf)
 };
-/* Definitions for VoltagesMutex */
-osMutexId_t VoltagesMutexHandle;
-osStaticMutexDef_t VoltagesMutexCtrlBlk;
-const osMutexAttr_t VoltagesMutex_attributes = {
-  .name = "VoltagesMutex",
-  .cb_mem = &VoltagesMutexCtrlBlk,
-  .cb_size = sizeof(VoltagesMutexCtrlBlk),
-};
+/* VoltagesMutex removed: the voltage struct is now owned by VoltageSensorAdapterCtx_t
+ * (App/Adapters/STM32/VoltageSensorAdapter.h).  Each float field is written atomically
+ * from ISR (Cortex-M4 word-aligned write) and read by MeasurementTask after
+ * THREAD_FLAGS_MEASUREMENT_DONE signals that all ISR writes have completed.
+ * No mutex is needed; the flag acts as a release barrier. */
 /* Definitions for MaintenanceEvent */
 osEventFlagsId_t MaintenanceEventHandle;
 osStaticEventGroupDef_t MaintenanceEventCtrlBlk;
@@ -205,7 +206,7 @@ const osEventFlagsAttr_t MaintenanceEvent_attributes = {
 
 /* USER CODE END FunctionPrototypes */
 
-void MaitenanceTaskFunc(void *argument);
+void MaintenanceTaskFunc(void *argument);
 extern void CANMsgParserTaskFunc(void *argument);
 extern void CANMsgSenderTaskFunc(void *argument);
 extern void MeasurementTaskFunc(void *argument);
@@ -248,6 +249,11 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  /* Wire hardware adapters and create global port instances.
+   * Must run before any task starts so that MeasurementTask and other
+   * tasks can use the global ports immediately on first execution. */
+  MainApplication_Init();
+
 	/* add memory pools, ... */
 	/* creation of CANRxReqsMemPool */
 	CANRxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(tSFDCANRxMsg), &CANRxReqsMemPool_attributes);
@@ -273,16 +279,8 @@ void MX_FREERTOS_Init(void) {
 		Error_Handler();
 	}
   /* USER CODE END Init */
-  /* Create the mutex(es) */
-  /* creation of VoltagesMutex */
-  VoltagesMutexHandle = osMutexNew(&VoltagesMutex_attributes);
-
   /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-	if (VoltagesMutexHandle == NULL)
-	{
-		Error_Handler();
-	}
+  /* No mutexes required — see VoltagesMutex removal comment above. */
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -322,8 +320,8 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* creation of MaitenanceTask */
-  MaitenanceTaskHandle = osThreadNew(MaitenanceTaskFunc, NULL, &MaitenanceTask_attributes);
+  /* creation of MaintenanceTask */
+  MaintenanceTaskHandle = osThreadNew(MaintenanceTaskFunc, NULL, &MaintenanceTask_attributes);
 
   /* creation of CANMsgParserTask */
   CANMsgParserTaskHandle = osThreadNew(CANMsgParserTaskFunc, NULL, &CANMsgParserTask_attributes);
@@ -339,7 +337,7 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-	if (MaitenanceTaskHandle == NULL)
+	if (MaintenanceTaskHandle == NULL)
 	{
 		Error_Handler();
 	}
@@ -378,19 +376,21 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_MaitenanceTaskFunc */
+/* USER CODE BEGIN Header_MaintenanceTaskFunc */
 /**
-  * @brief  Function implementing the MaitenanceTask thread.
+  * @brief  Function implementing the MaintenanceTask thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_MaitenanceTaskFunc */
-void MaitenanceTaskFunc(void *argument)
+/* USER CODE END Header_MaintenanceTaskFunc */
+void MaintenanceTaskFunc(void *argument)
 {
-  /* USER CODE BEGIN MaitenanceTaskFunc */
+  /* USER CODE BEGIN MaintenanceTaskFunc */
 	UNUSED(argument);
-	
-	osDelay(1000);
+
+	/* Brief delay for all tasks to enter their main loops.
+	 * 200 ms is sufficient; the old 1000 ms left the system unprotected. */
+	osDelay(200);
 #ifndef DEBUG
 	MX_IWDG_Init();
 	uint32_t lActiveTaskFlags = 0;
@@ -404,7 +404,7 @@ void MaitenanceTaskFunc(void *argument)
 		uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
 																			 EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE,
 																			 osFlagsWaitAll,
-																			 MAINTAINANCE_TASK_MAX_TIMEOUT);
+																			 MAINTENANCE_TASK_TIMEOUT_MS);
 		if (lFlags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
 		{
 			if (lActiveTaskFlags != lFlags)
@@ -412,7 +412,7 @@ void MaitenanceTaskFunc(void *argument)
 				lActiveTaskFlags = lFlags;
 			}
 
-			if (bTaskFailures++ > MAINTAINANCE_MAX_TASK_FAILURES)
+			if (bTaskFailures++ > MAINTENANCE_MAX_TASK_FAILURES)
 			{
 				bTaskFailures = 0;
 				
@@ -430,7 +430,7 @@ void MaitenanceTaskFunc(void *argument)
     osDelay(10);
 #endif
   }
-  /* USER CODE END MaitenanceTaskFunc */
+  /* USER CODE END MaintenanceTaskFunc */
 }
 
 /* Private application code --------------------------------------------------*/

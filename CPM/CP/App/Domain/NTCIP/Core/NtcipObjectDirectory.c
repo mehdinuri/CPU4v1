@@ -26,6 +26,20 @@ static uint8_t OidPrefixMatches(const uint32_t *oid,
   return 1U;
 }
 
+static uint8_t DescriptorPrefixMatches(const uint32_t *oid,
+                                       uint8_t oidLength,
+                                       const NtcipObjectDescriptor_t *descriptor)
+{
+  if ((oid == NULL) || (descriptor == NULL) || (descriptor->oid == NULL)
+      || (descriptor->kind != NTCIP_OBJECT_KIND_TABLE_COLUMN)
+      || (oidLength < descriptor->oidLength))
+  {
+    return 0U;
+  }
+
+  return OidPrefixMatches(oid, descriptor);
+}
+
 static uint8_t DescriptorMatches(const uint32_t *oid,
                                  uint8_t oidLength,
                                  const NtcipObjectDescriptor_t *descriptor,
@@ -199,6 +213,37 @@ uint8_t NtcipObjectDirectoryResolve(const NtcipObjectDirectory_t *directory,
   return 0U;
 }
 
+uint8_t NtcipObjectDirectoryMatchesPrefix(
+  const NtcipObjectDirectory_t *directory,
+  const uint32_t *oid,
+  uint8_t oidLength)
+{
+  uint8_t groupIndex;
+
+  if ((directory == NULL) || (oid == NULL))
+  {
+    return 0U;
+  }
+
+  for (groupIndex = 0U; groupIndex < directory->groupCount; groupIndex++)
+  {
+    const NtcipObjectGroup_t *group = &directory->groups[groupIndex];
+    uint16_t objectIndex;
+
+    for (objectIndex = 0U; objectIndex < group->descriptorCount; objectIndex++)
+    {
+      if (DescriptorPrefixMatches(oid,
+                                  oidLength,
+                                  &group->descriptors[objectIndex]) != 0U)
+      {
+        return 1U;
+      }
+    }
+  }
+
+  return 0U;
+}
+
 NtcipError_t NtcipObjectDirectoryGet(const NtcipObjectDirectory_t *directory,
                                      const uint32_t *oid,
                                      uint8_t oidLength,
@@ -269,7 +314,7 @@ NtcipError_t NtcipObjectDirectorySetTest(
                                   resolvedObject.descriptor,
                                   value) == 0U))
   {
-    return NTCIP_ERROR_OK;
+    return NTCIP_ERROR_NO_ACCESS;
   }
 
   if (resolvedObject.descriptor->access != NTCIP_ACCESS_READ_WRITE)
@@ -329,7 +374,7 @@ NtcipError_t NtcipObjectDirectorySetValue(
                                   resolvedObject.descriptor,
                                   value) == 0U))
   {
-    return NTCIP_ERROR_OK;
+    return NTCIP_ERROR_NO_ACCESS;
   }
 
   if (resolvedObject.descriptor->access != NTCIP_ACCESS_READ_WRITE)

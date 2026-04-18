@@ -74,6 +74,13 @@ typedef enum {
   SNMP_VB_ENUMERATOR_ERR_INVALIDLENGTH = 3
 } snmp_vb_enumerator_err_t;
 
+typedef struct snmp_request_identity {
+  u8_t version;
+  ip_addr_t source_ip;
+  const u8_t *security_name;
+  u16_t security_name_len;
+} snmp_request_identity_t;
+
 void snmp_vb_enumerator_init(struct snmp_varbind_enumerator *enumerator, struct pbuf *p, u16_t offset, u16_t length);
 snmp_vb_enumerator_err_t snmp_vb_enumerator_get_next(struct snmp_varbind_enumerator *enumerator, struct snmp_varbind *varbind);
 
@@ -173,6 +180,7 @@ extern void *snmp_traps_handle;
 void snmp_receive(void *handle, struct pbuf *p, const ip_addr_t *source_ip, u16_t port);
 err_t snmp_sendto(void *handle, struct pbuf *p, const ip_addr_t *dst, u16_t port);
 u8_t snmp_get_local_ip_for_dst(void *handle, const ip_addr_t *dst, ip_addr_t *result);
+u8_t snmp_get_current_request_identity(snmp_request_identity_t *identity);
 err_t snmp_varbind_length(struct snmp_varbind *varbind, struct snmp_varbind_len *len);
 err_t snmp_append_outbound_varbind(struct snmp_pbuf_stream *pbuf_stream, struct snmp_varbind *varbind);
 

@@ -169,6 +169,9 @@ typedef enum
 #define EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL \
         EEPROM_STORAGE_ADDR_SERVER_SETTINGS + (sizeof(tSServerSettings))
 
+#define EEPROM_STORAGE_ADDR_SNMPV3_STATE \
+        EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL + 64U
+
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  public methods */
 extern void MSMInit(IFlashStoragePort_t *flashPort,

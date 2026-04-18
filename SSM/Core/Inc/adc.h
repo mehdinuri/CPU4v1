@@ -1,21 +1,22 @@
 /* USER CODE BEGIN Header */
+
 /**
-  ******************************************************************************
-  * @file    adc.h
-  * @brief   This file contains all the function prototypes for
-  *          the adc.c file
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    adc.h
+ * @brief   This file contains all the function prototypes for
+ *          the adc.c file
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __ADC_H__
@@ -45,6 +46,15 @@ void MX_ADC2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 extern void ADCSGCurrentMeasurementStart(void);
+
+/**
+ * @brief Task-context processor: compute RMS + auto-range + publish the
+ *        most recently completed DMA half. No-op if no half has been
+ *        signalled since the last call. Must run from a task (allocates
+ *        FPU context, calls sqrtf, touches the double-buffer adapter).
+ */
+extern void ADCSGCurrentProcessLatestHalf(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
@@ -52,4 +62,3 @@ extern void ADCSGCurrentMeasurementStart(void);
 #endif
 
 #endif /* __ADC_H__ */
-

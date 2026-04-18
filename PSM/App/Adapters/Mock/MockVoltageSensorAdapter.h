@@ -1,0 +1,25 @@
+/**
+ ******************************************************************************
+ * @file    Adapters/Mock/MockVoltageSensorAdapter.h
+ * @brief   Mock adapter for IVoltageSensorPort — configurable float values.
+ ******************************************************************************
+ */
+
+#ifndef ADAPTERS_MOCK_MOCKVOLTAGESENSORADAPTER_H
+#define ADAPTERS_MOCK_MOCKVOLTAGESENSORADAPTER_H
+
+#include "Ports/IVoltageSensorPort.h"
+
+typedef struct
+{
+  float fNetVoltage; /* pre-set by test to simulate AC grid voltage  */
+  float fRegVIn;     /* pre-set by test to simulate DC Vin           */
+  float fRegVOut;    /* pre-set by test to simulate DC Vout          */
+} MockVoltageSensorAdapterCtx_t;
+
+void                   MockVoltageSensorAdapterInit(MockVoltageSensorAdapterCtx_t *ctx);
+IVoltageSensorPort_t   MockVoltageSensorAdapterCreatePort(MockVoltageSensorAdapterCtx_t *ctx);
+
+#endif /* ADAPTERS_MOCK_MOCKVOLTAGESENSORADAPTER_H */
+
+/************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

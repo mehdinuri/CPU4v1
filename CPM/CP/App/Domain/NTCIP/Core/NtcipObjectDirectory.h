@@ -110,6 +110,10 @@ uint8_t NtcipObjectDirectoryResolve(const NtcipObjectDirectory_t *directory,
                                     const uint32_t *oid,
                                     uint8_t oidLength,
                                     NtcipResolvedObject_t *resolvedObject);
+uint8_t NtcipObjectDirectoryMatchesPrefix(
+  const NtcipObjectDirectory_t *directory,
+  const uint32_t *oid,
+  uint8_t oidLength);
 NtcipError_t NtcipObjectDirectoryGet(const NtcipObjectDirectory_t *directory,
                                      const uint32_t *oid,
                                      uint8_t oidLength,

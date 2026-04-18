@@ -1,10 +1,10 @@
 /**
-  ******************************************************************************
-  * @file           : utilities.h
-  * @brief          : Header for utilities.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : utilities.h
+ * @brief          : Header for utilities.c file.
+ *                   This file contains the common defines of the application.
+ ******************************************************************************
+ */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __UTILITIES_H__
@@ -38,11 +38,11 @@
 #define SET_BIT_VALUE(x, i) (x = (x | (1 << i)))
 #define CLEAR_BIT_VALUE(x, i) (x = ~((~x) | (1 << i)))
 
-#define GET_MOST_SIG_BIT(x) ((unsigned char)((x & 0xFF00) >> 8))
-#define GET_LEASTT_SIG_BIT(x) ((unsigned char)(x & 0x00FF))
-	
+#define GET_MOST_SIG_BIT(x) ((unsigned char) ((x & 0xFF00) >> 8))
+#define GET_LEASTT_SIG_BIT(x) ((unsigned char) (x & 0x00FF))
+
 #define ONE_MILLI_SECOND 1
-#define ONE_DECI_SECOND	10
+#define ONE_DECI_SECOND 10
 #define ONE_CENTI_SECOND 100
 #define ONE_SECOND 1000
 
@@ -81,18 +81,39 @@
 
 #define THREAD_FLAGS_STORAGE_REQ_PROCESS_OK FLAG_BIT_0
 #define THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR FLAG_BIT_1
-#define THREAD_FLAGS_STORAGE_REQ_PROCESS_ALL (THREAD_FLAGS_STORAGE_REQ_PROCESS_OK | \
-				THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR
-				
-#define	THREAD_FLAGS_MEASUREMENT_DONE FLAG_BIT_0
+#define THREAD_FLAGS_STORAGE_REQ_PROCESS_ALL ( \
+          THREAD_FLAGS_STORAGE_REQ_PROCESS_OK | \
+          THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR
 
-#define EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIIVE FLAG_BIT_0
-#define EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIIVE
+#define THREAD_FLAGS_MEASUREMENT_DONE FLAG_BIT_0
+
+#define EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIVE FLAG_BIT_0
+
+/* Raised when MeasurementTask hits N consecutive ADC-flag timeouts and
+ * forces the signal outputs to the safe (off) state. Consumed by a future
+ * maintenance-task fault handler; set today so the bit is captured before
+ * the watchdog reset happens.
+ */
+#define EVENT_FLAGS_MAINTENANCE_MEASUREMENT_FAULT FLAG_BIT_16
+
+/* Raised when flash mode is active but the PSM sync frames have stopped
+ * arriving (FlashSyncWatchdog has gone stale). The measurement task forces
+ * all outputs off while this condition persists.
+ */
+#define EVENT_FLAGS_MAINTENANCE_FLASHSYNC_STALE FLAG_BIT_17
+
+/* Raised by the post-write OutputVerify service when any signal channel
+ * has disagreed (commanded vs observed) for more consecutive cycles than
+ * OUTPUT_VERIFY_FAULT_THRESHOLD. Sticky: stays set until operator action.
+ */
+#define EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT FLAG_BIT_18
+#define EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE \
+        EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIVE
 
 /* Public macros ------------------------------------------------------------*/
 
 /* Public types -------------------------------------------------------------*/
-extern osThreadId_t MaitenanceTaskHandle;
+extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t CANMsgParserTaskHandle;
 extern osThreadId_t CANMsgSenderTaskHandle;
 extern osThreadId_t MeasurementTaskHandle;
@@ -106,15 +127,13 @@ extern osMemoryPoolId_t CANRxReqsMemPoolHandle;
 extern osMemoryPoolId_t CANTxReqsMemPoolHandle;
 extern osMemoryPoolId_t StorageReqsMemPoolHandle;
 
-extern osMutexId_t CurrentMutexHandle;
-extern osMutexId_t OutputStatesMutexHandle;
-
 extern osEventFlagsId_t MaintenanceEventHandle;
 
 extern const uint32_t laUtilsBitValues[32];
 
 extern void MaintenanceTaskSignal(uint32_t ulSignal);
 extern void vUtilsRefreshWatchdogs(void);
+
 /* Public function prototypes -----------------------------------------------*/
 
 #endif /* __UTILITIES_H__ */

@@ -59,6 +59,11 @@ static void EnterBarrierWait(IntersectionEngine_t *engine,
                              uint8_t pendingPosition);
 static void TickInactivePedStates(IntersectionEngine_t *engine);
 static void TryStartAdvancePedWalks(IntersectionEngine_t *engine);
+static void TickControllerRings(IntersectionEngine_t *engine);
+static uint8_t PreemptCyclingPhaseAllowed(const IntersectionEngine_t *engine,
+                                          uint8_t phaseIndex);
+static uint8_t PreemptCyclingPedAllowed(const IntersectionEngine_t *engine,
+                                        uint8_t phaseIndex);
 
 typedef enum
 {
@@ -66,6 +71,14 @@ typedef enum
   INTERSECTION_AUTOMATIC_FLASH_STATE_ENTRY,
   INTERSECTION_AUTOMATIC_FLASH_STATE_FLASHING
 } IntersectionAutomaticFlashState_t;
+
+typedef struct
+{
+  uint8_t valid;
+  uint8_t position;
+  IntersectionRingStage_t stage;
+  uint32_t elapsedTicks;
+} IntersectionPreemptExitRecoveryTarget_t;
 
 static uint16_t PhaseWalkTicks(const IntersectionEngine_t *engine,
                                uint8_t phaseIndex)
@@ -1104,12 +1117,43 @@ static uint8_t PreemptModeActive(const IntersectionEngine_t *engine)
                         < INTERSECTION_PREEMPT_COUNT_MAX));
 }
 
-static uint8_t PreemptInputIsPresent(const IntersectionEngine_t *engine,
-                                     uint8_t preemptIndex)
+static uint8_t PreemptBaseDemandIsPresent(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex)
 {
   return (uint8_t) ((engine->runtime.preemptInputStatus[preemptIndex] != 0U)
                     || (engine->runtime.preemptControlState[preemptIndex]
                         != 0U));
+}
+
+static void ClearLinkedPreemptCall(IntersectionEngine_t *engine)
+{
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  engine->linkedPreemptSourceIndex = 0xFFU;
+  engine->linkedPreemptTargetIndex = 0xFFU;
+}
+
+static uint8_t LinkedPreemptCallIsPresent(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex)
+{
+  if ((engine == NULL)
+      || (engine->linkedPreemptSourceIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (engine->linkedPreemptTargetIndex != preemptIndex))
+  {
+    return 0U;
+  }
+
+  return PreemptBaseDemandIsPresent(engine, engine->linkedPreemptSourceIndex);
+}
+
+static uint8_t PreemptInputIsPresent(const IntersectionEngine_t *engine,
+                                     uint8_t preemptIndex)
+{
+  return (uint8_t) ((PreemptBaseDemandIsPresent(engine, preemptIndex) != 0U)
+                    || (LinkedPreemptCallIsPresent(engine, preemptIndex) != 0U));
 }
 
 static uint8_t PreemptIsEnabled(const IntersectionEngine_t *engine,
@@ -1148,6 +1192,17 @@ static uint8_t PreemptAllRedFlashOnMaxPresence(
                     != 0U);
 }
 
+static uint8_t PreemptStateIsServicing(IntersectionPreemptState_t state)
+{
+  return (uint8_t) ((state == INTERSECTION_PREEMPT_STATE_ENTRY_STARTED)
+                    || (state == INTERSECTION_PREEMPT_STATE_TRACK_SERVICE)
+                    || (state == INTERSECTION_PREEMPT_STATE_DWELL)
+                    || (state == INTERSECTION_PREEMPT_STATE_LINK_ACTIVE)
+                    || (state == INTERSECTION_PREEMPT_STATE_EXIT_STARTED)
+                    || (state == INTERSECTION_PREEMPT_STATE_MAX_PRESENCE)
+                    || (state == INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT));
+}
+
 static uint8_t PreemptPriorityGroup(const IntersectionEngine_t *engine,
                                     uint8_t preemptIndex)
 {
@@ -1163,6 +1218,70 @@ static uint8_t PreemptPriorityGroup(const IntersectionEngine_t *engine,
   }
 
   return group;
+}
+
+static uint8_t ResolveLinkedPreemptTarget(const IntersectionEngine_t *engine,
+                                          uint8_t sourcePreemptIndex,
+                                          uint8_t *targetPreemptIndex)
+{
+  uint8_t configuredLink;
+  uint8_t resolvedTarget;
+
+  if ((engine == NULL) || (targetPreemptIndex == NULL)
+      || (sourcePreemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  configuredLink = engine->config.preempts[sourcePreemptIndex].link;
+
+  if ((configuredLink == 0U)
+      || (configuredLink > INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  resolvedTarget = (uint8_t) (configuredLink - 1U);
+
+  if ((resolvedTarget == sourcePreemptIndex)
+      || (PreemptIsEnabled(engine, resolvedTarget) == 0U)
+      || (PreemptPriorityGroup(engine, resolvedTarget)
+          >= PreemptPriorityGroup(engine, sourcePreemptIndex)))
+  {
+    return 0U;
+  }
+
+  *targetPreemptIndex = resolvedTarget;
+
+  return 1U;
+}
+
+static void RefreshLinkedPreemptCall(IntersectionEngine_t *engine)
+{
+  uint8_t expectedTarget = 0xFFU;
+
+  if ((engine == NULL)
+      || (engine->linkedPreemptSourceIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (engine->linkedPreemptTargetIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return;
+  }
+
+  if ((PreemptBaseDemandIsPresent(engine, engine->linkedPreemptSourceIndex)
+       == 0U)
+      || (ResolveLinkedPreemptTarget(engine,
+                                     engine->linkedPreemptSourceIndex,
+                                     &expectedTarget)
+          == 0U)
+      || (expectedTarget != engine->linkedPreemptTargetIndex))
+  {
+    ClearLinkedPreemptCall(engine);
+
+    return;
+  }
+
+  engine->runtime.preemptStates[engine->linkedPreemptSourceIndex] =
+    INTERSECTION_PREEMPT_STATE_LINK_ACTIVE;
 }
 
 static int16_t SelectPreemptCandidate(const IntersectionEngine_t *engine)
@@ -1192,34 +1311,20 @@ static int16_t SelectPreemptCandidate(const IntersectionEngine_t *engine)
     }
   }
 
-  return selected;
-}
-
-static uint16_t MaxPhaseMinGreenTicks(const IntersectionEngine_t *engine,
-                                      const IntersectionPhaseReferenceList_t *
-                                      phases)
-{
-  uint16_t maxTicks = 0U;
-  uint8_t index;
-
-  if ((engine == NULL) || (phases == NULL))
+  if ((engine != NULL)
+      && (engine->activePreemptIndex < INTERSECTION_PREEMPT_COUNT_MAX)
+      && (PreemptStateIsServicing(
+            engine->runtime.preemptStates[engine->activePreemptIndex]) != 0U))
   {
-    return 0U;
-  }
+    uint8_t activeGroup = PreemptPriorityGroup(engine, engine->activePreemptIndex);
 
-  for (index = 0U; index < phases->length; index++)
-  {
-    uint8_t phaseIndex = (uint8_t) (phases->values[index] - 1U);
-
-    if ((phases->values[index] != 0U)
-        && (phaseIndex < engine->config.phaseCount)
-        && (engine->minGreenTicks[phaseIndex] > maxTicks))
+    if ((selected < 0) || (selectedGroup >= activeGroup))
     {
-      maxTicks = engine->minGreenTicks[phaseIndex];
+      return (int16_t) engine->activePreemptIndex;
     }
   }
 
-  return maxTicks;
+  return selected;
 }
 
 static void ClearPreemptPhaseOutputs(IntersectionEngine_t *engine)
@@ -1808,6 +1913,11 @@ static uint8_t PhaseHasPedDemand(const IntersectionEngine_t *engine,
                              ? RingSystemPedRecycleActive(engine, ringIndex)
                              : 0U;
 
+  if (PreemptCyclingPedAllowed(engine, phaseIndex) == 0U)
+  {
+    return 0U;
+  }
+
   if ((PhaseSystemPedOmitActive(engine, phaseIndex) != 0U)
       && (phaseRuntime->pedServiceActive == 0U)
       && (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_DONT_WALK))
@@ -1838,6 +1948,11 @@ static uint8_t PhaseHasBaseDemand(const IntersectionEngine_t *engine,
   phaseRuntime = &engine->runtime.phases[phaseIndex];
   phaseConfig = &engine->config.phases[phaseIndex];
   split = GetActiveSplit(engine, phaseIndex);
+
+  if (PreemptCyclingPhaseAllowed(engine, phaseIndex) == 0U)
+  {
+    return 0U;
+  }
 
   if ((PhaseSplitModeIsOmitted(split) != 0U)
       || (PhaseSystemPhaseOmitActive(engine, phaseIndex) != 0U))
@@ -1871,6 +1986,11 @@ static uint8_t PhaseHasVehicleServiceDemand(const IntersectionEngine_t *engine,
   phaseRuntime = &engine->runtime.phases[phaseIndex];
   phaseConfig = &engine->config.phases[phaseIndex];
   split = GetActiveSplit(engine, phaseIndex);
+
+  if (PreemptCyclingPhaseAllowed(engine, phaseIndex) == 0U)
+  {
+    return 0U;
+  }
 
   if ((PhaseSplitModeIsOmitted(split) != 0U)
       || (PhaseSystemPhaseOmitActive(engine, phaseIndex) != 0U))
@@ -2030,6 +2150,33 @@ static uint8_t PhaseHasDemand(const IntersectionEngine_t *engine,
 {
   return (uint8_t) ((PhaseHasBaseDemand(engine, phaseIndex) != 0U)
                     || (PhaseHasSoftRecallDemand(engine, phaseIndex) != 0U));
+}
+
+static void RefreshPhaseDemandWaitTimes(IntersectionEngine_t *engine)
+{
+  uint8_t phaseIndex;
+
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  for (phaseIndex = 0U; phaseIndex < engine->config.phaseCount; phaseIndex++)
+  {
+    if ((PhaseHasDemand(engine, phaseIndex) != 0U)
+        && (engine->runtime.phases[phaseIndex].interval
+            == INTERSECTION_PHASE_INTERVAL_RED))
+    {
+      if (engine->phaseDemandWaitTicks[phaseIndex] < UINT32_MAX)
+      {
+        engine->phaseDemandWaitTicks[phaseIndex]++;
+      }
+    }
+    else
+    {
+      engine->phaseDemandWaitTicks[phaseIndex] = 0U;
+    }
+  }
 }
 
 static void ResetCoordinationCycleFaultDiagnostics(IntersectionEngine_t *engine)
@@ -3391,6 +3538,1252 @@ static void ForceControllerRedRest(IntersectionEngine_t *engine)
   }
 }
 
+static uint16_t MinUInt16(uint16_t left, uint16_t right)
+{
+  return (left < right) ? left : right;
+}
+
+static uint32_t MaxUInt32(uint32_t left, uint32_t right)
+{
+  return (left > right) ? left : right;
+}
+
+static uint32_t RemainingTicks(uint32_t requiredTicks, uint32_t elapsedTicks)
+{
+  return (requiredTicks > elapsedTicks) ? (requiredTicks - elapsedTicks) : 0U;
+}
+
+static void CapturePreemptEntrySnapshot(IntersectionEngine_t *engine)
+{
+  uint8_t phaseIndex;
+
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  for (phaseIndex = 0U; phaseIndex < INTERSECTION_PHASE_COUNT_MAX; phaseIndex++)
+  {
+    engine->preemptEntryPhaseIntervals[phaseIndex] =
+      engine->runtime.phases[phaseIndex].interval;
+    engine->preemptEntryPedIntervals[phaseIndex] =
+      engine->runtime.phases[phaseIndex].pedInterval;
+    engine->preemptEntryPhaseElapsedTicks[phaseIndex] =
+      engine->runtime.phases[phaseIndex].intervalElapsedTicks;
+    engine->preemptEntryPedElapsedTicks[phaseIndex] =
+      engine->runtime.phases[phaseIndex].pedIntervalElapsedTicks;
+  }
+}
+
+static uint32_t PreemptEntryWalkTicks(const IntersectionEngine_t *engine,
+                                      uint8_t preemptIndex,
+                                      uint8_t phaseIndex)
+{
+  uint32_t requiredTicks;
+
+  if ((engine == NULL)
+      || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (engine->preemptEntryPedIntervals[phaseIndex]
+          != INTERSECTION_PED_INTERVAL_WALK))
+  {
+    return 0U;
+  }
+
+  requiredTicks = MinUInt16(PhaseCurrentWalkTicks(engine, phaseIndex),
+                            engine->preemptMinimumWalkTicks[preemptIndex]);
+
+  return RemainingTicks(requiredTicks,
+                        engine->preemptEntryPedElapsedTicks[phaseIndex]);
+}
+
+static uint32_t PreemptEntryPedClearTicks(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex,
+                                          uint8_t phaseIndex)
+{
+  uint32_t requiredTicks;
+
+  if ((engine == NULL)
+      || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (engine->preemptEntryPedIntervals[phaseIndex]
+          == INTERSECTION_PED_INTERVAL_DONT_WALK))
+  {
+    return 0U;
+  }
+
+  requiredTicks = MinUInt16(PhaseCurrentPedClearTicks(engine, phaseIndex),
+                            engine->preemptEnterPedClearTicks[preemptIndex]);
+
+  if (engine->preemptEntryPedIntervals[phaseIndex]
+      == INTERSECTION_PED_INTERVAL_CLEAR)
+  {
+    return RemainingTicks(requiredTicks,
+                          engine->preemptEntryPedElapsedTicks[phaseIndex]);
+  }
+
+  return requiredTicks;
+}
+
+static uint32_t PreemptEntryGreenTicks(const IntersectionEngine_t *engine,
+                                       uint8_t preemptIndex,
+                                       uint8_t phaseIndex)
+{
+  uint32_t requiredTicks;
+  uint32_t walkTicks;
+
+  if ((engine == NULL)
+      || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (engine->preemptEntryPhaseIntervals[phaseIndex]
+          != INTERSECTION_PHASE_INTERVAL_GREEN))
+  {
+    return 0U;
+  }
+
+  requiredTicks = MinUInt16(engine->minGreenTicks[phaseIndex],
+                            engine->preemptMinimumGreenTicks[preemptIndex]);
+  requiredTicks = RemainingTicks(requiredTicks,
+                                 engine->preemptEntryPhaseElapsedTicks[phaseIndex]);
+  walkTicks = PreemptEntryWalkTicks(engine, preemptIndex, phaseIndex);
+
+  return MaxUInt32(requiredTicks, walkTicks);
+}
+
+static uint32_t PreemptEntryYellowTicks(const IntersectionEngine_t *engine,
+                                        uint8_t preemptIndex,
+                                        uint8_t phaseIndex)
+{
+  uint32_t requiredTicks;
+
+  if ((engine == NULL)
+      || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  requiredTicks = MinUInt16(engine->yellowTicks[phaseIndex],
+                            engine->preemptEnterYellowTicks[preemptIndex]);
+
+  if (engine->preemptEntryPhaseIntervals[phaseIndex]
+      == INTERSECTION_PHASE_INTERVAL_GREEN)
+  {
+    return requiredTicks;
+  }
+
+  if (engine->preemptEntryPhaseIntervals[phaseIndex]
+      == INTERSECTION_PHASE_INTERVAL_YELLOW)
+  {
+    return RemainingTicks(requiredTicks,
+                          engine->preemptEntryPhaseElapsedTicks[phaseIndex]);
+  }
+
+  return 0U;
+}
+
+static uint32_t PreemptEntryRedClearTicks(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex,
+                                          uint8_t phaseIndex)
+{
+  uint32_t requiredTicks;
+
+  if ((engine == NULL)
+      || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  requiredTicks = MinUInt16(engine->redClearTicks[phaseIndex],
+                            engine->preemptEnterRedClearTicks[preemptIndex]);
+
+  if ((engine->preemptEntryPhaseIntervals[phaseIndex]
+       == INTERSECTION_PHASE_INTERVAL_GREEN)
+      || (engine->preemptEntryPhaseIntervals[phaseIndex]
+          == INTERSECTION_PHASE_INTERVAL_YELLOW))
+  {
+    return requiredTicks;
+  }
+
+  if (engine->preemptEntryPhaseIntervals[phaseIndex]
+      == INTERSECTION_PHASE_INTERVAL_RED_CLEAR)
+  {
+    return RemainingTicks(requiredTicks,
+                          engine->preemptEntryPhaseElapsedTicks[phaseIndex]);
+  }
+
+  return 0U;
+}
+
+static uint32_t PreemptEntryVehicleCompleteTicks(const IntersectionEngine_t *engine,
+                                                 uint8_t preemptIndex,
+                                                 uint8_t phaseIndex)
+{
+  uint32_t greenTicks = PreemptEntryGreenTicks(engine, preemptIndex, phaseIndex);
+  uint32_t yellowTicks = PreemptEntryYellowTicks(engine, preemptIndex, phaseIndex);
+  uint32_t redClearTicks = PreemptEntryRedClearTicks(engine,
+                                                     preemptIndex,
+                                                     phaseIndex);
+
+  switch (engine->preemptEntryPhaseIntervals[phaseIndex])
+  {
+      case INTERSECTION_PHASE_INTERVAL_GREEN:
+      {
+        return greenTicks + yellowTicks + redClearTicks;
+      }
+
+      case INTERSECTION_PHASE_INTERVAL_YELLOW:
+      {
+        return yellowTicks + redClearTicks;
+      }
+
+      case INTERSECTION_PHASE_INTERVAL_RED_CLEAR:
+      {
+        return redClearTicks;
+      }
+
+      case INTERSECTION_PHASE_INTERVAL_RED:
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint32_t PreemptEntryPedCompleteTicks(const IntersectionEngine_t *engine,
+                                             uint8_t preemptIndex,
+                                             uint8_t phaseIndex)
+{
+  uint32_t walkTicks = PreemptEntryWalkTicks(engine, preemptIndex, phaseIndex);
+  uint32_t pedClearTicks = PreemptEntryPedClearTicks(engine,
+                                                     preemptIndex,
+                                                     phaseIndex);
+
+  if (engine->preemptEntryPedIntervals[phaseIndex] == INTERSECTION_PED_INTERVAL_WALK)
+  {
+    return walkTicks + pedClearTicks;
+  }
+
+  if (engine->preemptEntryPedIntervals[phaseIndex]
+      == INTERSECTION_PED_INTERVAL_CLEAR)
+  {
+    return pedClearTicks;
+  }
+
+  return 0U;
+}
+
+static uint32_t PreemptEntryCompleteTicks(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex)
+{
+  uint8_t phaseIndex;
+  uint32_t requiredTicks = 0U;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  for (phaseIndex = 0U; phaseIndex < engine->config.phaseCount; phaseIndex++)
+  {
+    uint32_t phaseTicks = MaxUInt32(
+      PreemptEntryVehicleCompleteTicks(engine, preemptIndex, phaseIndex),
+      PreemptEntryPedCompleteTicks(engine, preemptIndex, phaseIndex));
+
+    if (phaseTicks > requiredTicks)
+    {
+      requiredTicks = phaseTicks;
+    }
+  }
+
+  return requiredTicks;
+}
+
+static void ApplyEntryPreemptOutputs(IntersectionEngine_t *engine,
+                                     uint8_t preemptIndex)
+{
+  uint8_t phaseIndex;
+  uint32_t elapsedTicks;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return;
+  }
+
+  elapsedTicks = (engine->preemptStageTicks > 0U)
+                 ? (engine->preemptStageTicks - 1U)
+                 : 0U;
+
+  for (phaseIndex = 0U; phaseIndex < engine->config.phaseCount; phaseIndex++)
+  {
+    uint32_t greenTicks = PreemptEntryGreenTicks(engine, preemptIndex, phaseIndex);
+    uint32_t yellowTicks = PreemptEntryYellowTicks(engine,
+                                                   preemptIndex,
+                                                   phaseIndex);
+    uint32_t redClearTicks = PreemptEntryRedClearTicks(engine,
+                                                       preemptIndex,
+                                                       phaseIndex);
+    uint32_t walkTicks = PreemptEntryWalkTicks(engine, preemptIndex, phaseIndex);
+    uint32_t pedClearTicks = PreemptEntryPedClearTicks(engine,
+                                                       preemptIndex,
+                                                       phaseIndex);
+
+    switch (engine->preemptEntryPhaseIntervals[phaseIndex])
+    {
+        case INTERSECTION_PHASE_INTERVAL_GREEN:
+        {
+          if (elapsedTicks < greenTicks)
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_GREEN;
+          }
+          else if (elapsedTicks < (greenTicks + yellowTicks))
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_YELLOW;
+          }
+          else if (elapsedTicks < (greenTicks + yellowTicks + redClearTicks))
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_RED_CLEAR;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PHASE_INTERVAL_YELLOW:
+        {
+          if (elapsedTicks < yellowTicks)
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_YELLOW;
+          }
+          else if (elapsedTicks < (yellowTicks + redClearTicks))
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_RED_CLEAR;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PHASE_INTERVAL_RED_CLEAR:
+        {
+          if (elapsedTicks < redClearTicks)
+          {
+            engine->runtime.phases[phaseIndex].interval =
+              INTERSECTION_PHASE_INTERVAL_RED_CLEAR;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PHASE_INTERVAL_RED:
+        default:
+        {
+          break;
+        }
+    }
+
+    switch (engine->preemptEntryPedIntervals[phaseIndex])
+    {
+        case INTERSECTION_PED_INTERVAL_WALK:
+        {
+          if (elapsedTicks < walkTicks)
+          {
+            engine->runtime.phases[phaseIndex].pedInterval =
+              INTERSECTION_PED_INTERVAL_WALK;
+            engine->runtime.phases[phaseIndex].pedServiceActive = 1U;
+          }
+          else if (elapsedTicks < (walkTicks + pedClearTicks))
+          {
+            engine->runtime.phases[phaseIndex].pedInterval =
+              INTERSECTION_PED_INTERVAL_CLEAR;
+            engine->runtime.phases[phaseIndex].pedServiceActive = 1U;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PED_INTERVAL_CLEAR:
+        {
+          if (elapsedTicks < pedClearTicks)
+          {
+            engine->runtime.phases[phaseIndex].pedInterval =
+              INTERSECTION_PED_INTERVAL_CLEAR;
+            engine->runtime.phases[phaseIndex].pedServiceActive = 1U;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_PED_INTERVAL_DONT_WALK:
+        default:
+        {
+          break;
+        }
+    }
+  }
+}
+
+static uint16_t PreemptTrackYellowTicks(const IntersectionEngine_t *engine,
+                                        uint8_t preemptIndex,
+                                        uint8_t phaseIndex)
+{
+  if ((engine == NULL) || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  return MinUInt16(engine->yellowTicks[phaseIndex],
+                   engine->preemptTrackYellowTicks[preemptIndex]);
+}
+
+static uint16_t PreemptTrackRedClearTicks(const IntersectionEngine_t *engine,
+                                          uint8_t preemptIndex,
+                                          uint8_t phaseIndex)
+{
+  if ((engine == NULL) || (phaseIndex >= engine->config.phaseCount)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  return MinUInt16(engine->redClearTicks[phaseIndex],
+                   engine->preemptTrackRedClearTicks[preemptIndex]);
+}
+
+static uint32_t PreemptTrackClearCompleteTicks(
+  const IntersectionEngine_t *engine,
+  const IntersectionPhaseReferenceList_t *phases,
+  uint8_t preemptIndex)
+{
+  uint8_t index;
+  uint32_t requiredTicks = 0U;
+
+  if ((engine == NULL) || (phases == NULL)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < phases->length; index++)
+  {
+    uint8_t phaseNumber = phases->values[index];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+
+    if ((phaseNumber == 0U) || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    {
+      uint32_t phaseTicks =
+        (uint32_t) PreemptTrackYellowTicks(engine, preemptIndex, phaseIndex)
+        + (uint32_t) PreemptTrackRedClearTicks(engine, preemptIndex, phaseIndex);
+
+      if (phaseTicks > requiredTicks)
+      {
+        requiredTicks = phaseTicks;
+      }
+    }
+  }
+
+  return requiredTicks;
+}
+
+static void ApplyAdvancedPreemptOutputs(IntersectionEngine_t *engine,
+                                        const IntersectionPreemptConfig_t *preempt,
+                                        uint8_t preemptIndex)
+{
+  uint8_t index;
+  uint32_t elapsedTicks;
+
+  if ((engine == NULL) || (preempt == NULL)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return;
+  }
+
+  elapsedTicks = (engine->preemptStageTicks > 0U)
+                 ? (engine->preemptStageTicks - 1U)
+                 : 0U;
+
+  for (index = 0U; index < preempt->trackPhases.length; index++)
+  {
+    uint8_t phaseNumber = preempt->trackPhases.values[index];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+    uint16_t yellowTicks;
+    uint16_t redClearTicks;
+
+    if ((phaseNumber == 0U) || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    yellowTicks = PreemptTrackYellowTicks(engine, preemptIndex, phaseIndex);
+    redClearTicks = PreemptTrackRedClearTicks(engine, preemptIndex, phaseIndex);
+
+    if (elapsedTicks < yellowTicks)
+    {
+      engine->runtime.phases[phaseIndex].interval =
+        INTERSECTION_PHASE_INTERVAL_YELLOW;
+    }
+    else if (elapsedTicks < ((uint32_t) yellowTicks + (uint32_t) redClearTicks))
+    {
+      engine->runtime.phases[phaseIndex].interval =
+        INTERSECTION_PHASE_INTERVAL_RED_CLEAR;
+    }
+  }
+}
+
+static void CapturePreemptShortServiceCandidates(IntersectionEngine_t *engine,
+                                                 uint8_t preemptIndex)
+{
+  const IntersectionPreemptConfig_t *preempt;
+  uint32_t entryCompleteTicks;
+  uint8_t phaseIndex;
+  uint8_t index;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return;
+  }
+
+  for (phaseIndex = 0U; phaseIndex < INTERSECTION_PHASE_COUNT_MAX; phaseIndex++)
+  {
+    engine->preemptShortServiceOrder[phaseIndex] = UINT32_MAX;
+  }
+
+  preempt = &engine->config.preempts[preemptIndex];
+  entryCompleteTicks = PreemptEntryCompleteTicks(engine, preemptIndex);
+
+  for (phaseIndex = 0U; phaseIndex < engine->config.phaseCount; phaseIndex++)
+  {
+    uint32_t greenTicks = PreemptEntryGreenTicks(engine, preemptIndex, phaseIndex);
+
+    if ((engine->preemptEntryPhaseIntervals[phaseIndex]
+         == INTERSECTION_PHASE_INTERVAL_GREEN)
+        && (greenTicks != 0U))
+    {
+      engine->preemptShortServiceOrder[phaseIndex] = greenTicks;
+    }
+  }
+
+  if ((engine->preemptTrackGreenTicks[preemptIndex] == 0U)
+      || (engine->preemptTrackGreenTicks[preemptIndex]
+          > engine->preemptMinimumGreenTicks[preemptIndex]))
+  {
+    return;
+  }
+
+  for (index = 0U; index < preempt->trackPhases.length; index++)
+  {
+    uint8_t phaseNumber = preempt->trackPhases.values[index];
+
+    if ((phaseNumber == 0U) || (phaseNumber > engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    phaseIndex = (uint8_t) (phaseNumber - 1U);
+
+    if (engine->preemptShortServiceOrder[phaseIndex]
+        > (entryCompleteTicks + engine->preemptTrackGreenTicks[preemptIndex]))
+    {
+      engine->preemptShortServiceOrder[phaseIndex] =
+        entryCompleteTicks + engine->preemptTrackGreenTicks[preemptIndex];
+    }
+  }
+}
+
+static uint8_t FindRingPositionForPhase(const IntersectionEngine_t *engine,
+                                        uint8_t phaseIndex,
+                                        uint8_t *ringIndex,
+                                        uint8_t *position)
+{
+  uint8_t localRingIndex;
+
+  if ((engine == NULL) || (phaseIndex >= engine->config.phaseCount))
+  {
+    return 0U;
+  }
+
+  for (localRingIndex = 0U;
+       localRingIndex < engine->config.ringCount;
+       localRingIndex++)
+  {
+    const IntersectionRingPlan_t *ringPlan = &engine->config.rings[localRingIndex];
+    uint8_t localPosition;
+
+    for (localPosition = 0U; localPosition < ringPlan->phaseCount;
+         localPosition++)
+    {
+      if (ringPlan->phaseOrder[localPosition] != phaseIndex)
+      {
+        continue;
+      }
+
+      if (ringIndex != NULL)
+      {
+        *ringIndex = localRingIndex;
+      }
+
+      if (position != NULL)
+      {
+        *position = localPosition;
+      }
+
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t PhaseReferenceListContainsPhase(
+  const IntersectionPhaseReferenceList_t *list,
+  uint8_t phaseIndex)
+{
+  uint8_t index;
+  uint8_t phaseNumber = (uint8_t) (phaseIndex + 1U);
+
+  if (list == NULL)
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < list->length; index++)
+  {
+    if (list->values[index] == phaseNumber)
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t PhaseReferenceListContainsRingPhase(
+  const IntersectionEngine_t *engine,
+  const IntersectionPhaseReferenceList_t *list,
+  uint8_t ringIndex)
+{
+  uint8_t index;
+
+  if ((engine == NULL) || (list == NULL) || (ringIndex >= engine->config.ringCount))
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < list->length; index++)
+  {
+    uint8_t phaseNumber = list->values[index];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+    uint8_t phaseRingIndex = 0U;
+
+    if ((phaseNumber == 0U)
+        || (phaseIndex >= engine->config.phaseCount)
+        || (PhaseRingIndex(engine, phaseIndex, &phaseRingIndex) == 0U))
+    {
+      continue;
+    }
+
+    if (phaseRingIndex == ringIndex)
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t PreemptCyclingConfigured(const IntersectionEngine_t *engine,
+                                        uint8_t preemptIndex)
+{
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  return (uint8_t) ((PreemptFlashDwell(engine, preemptIndex) == 0U)
+                    && (engine->config.preempts[preemptIndex].cyclingPhases.length
+                        != 0U));
+}
+
+static uint8_t PreemptCyclingRunning(const IntersectionEngine_t *engine,
+                                     uint8_t preemptIndex)
+{
+  return (uint8_t) ((engine != NULL)
+                    && (preemptIndex < INTERSECTION_PREEMPT_COUNT_MAX)
+                    && (engine->preemptCyclingInitialized != 0U)
+                    && (engine->activePreemptIndex == preemptIndex)
+                    && (engine->runtime.preemptStates[preemptIndex]
+                        == INTERSECTION_PREEMPT_STATE_DWELL)
+                    && (PreemptCyclingConfigured(engine, preemptIndex) != 0U));
+}
+
+static uint8_t PreemptCyclingPhaseAllowed(const IntersectionEngine_t *engine,
+                                          uint8_t phaseIndex)
+{
+  uint8_t preemptIndex;
+  uint8_t ringIndex = 0U;
+
+  if ((engine == NULL) || (phaseIndex >= engine->config.phaseCount)
+      || (engine->preemptCyclingDemandFilterActive == 0U))
+  {
+    return 1U;
+  }
+
+  preemptIndex = engine->activePreemptIndex;
+
+  if (PreemptCyclingRunning(engine, preemptIndex) == 0U)
+  {
+    return 1U;
+  }
+
+  if (PhaseRingIndex(engine, phaseIndex, &ringIndex) == 0U)
+  {
+    return 0U;
+  }
+
+  if (PhaseReferenceListContainsRingPhase(
+        engine,
+        &engine->config.preempts[preemptIndex].cyclingPhases,
+        ringIndex) == 0U)
+  {
+    return PhaseReferenceListContainsPhase(
+      &engine->config.preempts[preemptIndex].dwellPhases,
+      phaseIndex);
+  }
+
+  return PhaseReferenceListContainsPhase(
+    &engine->config.preempts[preemptIndex].cyclingPhases,
+    phaseIndex);
+}
+
+static uint8_t PreemptCyclingPedAllowed(const IntersectionEngine_t *engine,
+                                        uint8_t phaseIndex)
+{
+  uint8_t preemptIndex;
+  uint8_t ringIndex = 0U;
+
+  if ((engine == NULL) || (phaseIndex >= engine->config.phaseCount)
+      || (engine->preemptCyclingDemandFilterActive == 0U))
+  {
+    return 1U;
+  }
+
+  preemptIndex = engine->activePreemptIndex;
+
+  if (PreemptCyclingRunning(engine, preemptIndex) == 0U)
+  {
+    return 1U;
+  }
+
+  if (PhaseRingIndex(engine, phaseIndex, &ringIndex) == 0U)
+  {
+    return 0U;
+  }
+
+  if (PhaseReferenceListContainsRingPhase(
+        engine,
+        &engine->config.preempts[preemptIndex].cyclingPeds,
+        ringIndex) == 0U)
+  {
+    return PhaseReferenceListContainsPhase(
+      &engine->config.preempts[preemptIndex].dwellPeds,
+      phaseIndex);
+  }
+
+  return PhaseReferenceListContainsPhase(
+    &engine->config.preempts[preemptIndex].cyclingPeds,
+    phaseIndex);
+}
+
+static uint8_t FindConfiguredCyclingPositionForRing(
+  const IntersectionEngine_t *engine,
+  uint8_t preemptIndex,
+  uint8_t ringIndex,
+  uint8_t demandOnly,
+  uint8_t *position)
+{
+  const IntersectionRingPlan_t *ringPlan;
+  uint8_t ringPosition;
+
+  if ((engine == NULL) || (position == NULL)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (ringIndex >= engine->config.ringCount))
+  {
+    return 0U;
+  }
+
+  ringPlan = &engine->config.rings[ringIndex];
+
+  for (ringPosition = 0U; ringPosition < ringPlan->phaseCount; ringPosition++)
+  {
+    uint8_t phaseIndex = ringPlan->phaseOrder[ringPosition];
+
+    if (PhaseReferenceListContainsPhase(
+          &engine->config.preempts[preemptIndex].cyclingPhases,
+          phaseIndex) == 0U)
+    {
+      continue;
+    }
+
+    if ((demandOnly != 0U) && (PhaseHasDemand(engine, phaseIndex) == 0U))
+    {
+      continue;
+    }
+
+    *position = ringPosition;
+
+    return 1U;
+  }
+
+  return 0U;
+}
+
+static uint8_t FindConfiguredDwellPositionForRing(const IntersectionEngine_t *engine,
+                                                  uint8_t preemptIndex,
+                                                  uint8_t ringIndex,
+                                                  uint8_t *position)
+{
+  const IntersectionRingPlan_t *ringPlan;
+  uint8_t ringPosition;
+
+  if ((engine == NULL) || (position == NULL)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (ringIndex >= engine->config.ringCount))
+  {
+    return 0U;
+  }
+
+  ringPlan = &engine->config.rings[ringIndex];
+
+  for (ringPosition = 0U; ringPosition < ringPlan->phaseCount; ringPosition++)
+  {
+    if (PhaseReferenceListContainsPhase(
+          &engine->config.preempts[preemptIndex].dwellPhases,
+          ringPlan->phaseOrder[ringPosition]) != 0U)
+    {
+      *position = ringPosition;
+
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static void InitializePreemptExitRecoveryTargets(
+  const IntersectionEngine_t *engine,
+  IntersectionPreemptExitRecoveryTarget_t *targets)
+{
+  uint8_t ringIndex;
+
+  if ((engine == NULL) || (targets == NULL))
+  {
+    return;
+  }
+
+  for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+  {
+    targets[ringIndex].valid = 0U;
+    targets[ringIndex].position = 0U;
+    targets[ringIndex].stage = INTERSECTION_RING_STAGE_RED_REST;
+    targets[ringIndex].elapsedTicks = 0U;
+  }
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    targets[ringIndex].valid = 1U;
+    targets[ringIndex].position = engine->runtime.rings[ringIndex].activePosition;
+  }
+}
+
+static uint32_t QueueDelayDemandScoreForPhase(const IntersectionEngine_t *engine,
+                                              uint8_t preemptIndex,
+                                              uint8_t phaseIndex)
+{
+  uint32_t score = 0U;
+  uint8_t detectorIndex;
+  uint8_t phaseNumber;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (phaseIndex >= engine->config.phaseCount))
+  {
+    return 0U;
+  }
+
+  phaseNumber = (uint8_t) (phaseIndex + 1U);
+
+  for (detectorIndex = 0U;
+       detectorIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
+       detectorIndex++)
+  {
+    if ((engine->config.vehicleDetectors[detectorIndex].callPhase != phaseNumber)
+        || (engine->runtime.vehicleDetectors[detectorIndex].recognitionActive
+            == 0U))
+    {
+      continue;
+    }
+
+    score += engine->config.preemptQueueDelayWeights[preemptIndex][detectorIndex];
+  }
+
+  return score;
+}
+
+static uint8_t SelectQueueDelayRecoveryPhase(const IntersectionEngine_t *engine,
+                                             uint8_t preemptIndex,
+                                             uint8_t *phaseIndex)
+{
+  uint8_t bestPhaseIndex = 0xFFU;
+  uint32_t bestScore = 0U;
+  uint32_t bestWaitTicks = 0U;
+  uint8_t candidatePhaseIndex;
+
+  if ((engine == NULL) || (phaseIndex == NULL)
+      || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  for (candidatePhaseIndex = 0U;
+       candidatePhaseIndex < engine->config.phaseCount;
+       candidatePhaseIndex++)
+  {
+    uint32_t candidateScore;
+    uint32_t candidateWaitTicks;
+
+    if (PhaseHasDemand(engine, candidatePhaseIndex) == 0U)
+    {
+      continue;
+    }
+
+    candidateScore = QueueDelayDemandScoreForPhase(engine,
+                                                   preemptIndex,
+                                                   candidatePhaseIndex);
+    candidateWaitTicks = engine->phaseDemandWaitTicks[candidatePhaseIndex];
+
+    if ((bestPhaseIndex == 0xFFU)
+        || (candidateScore > bestScore)
+        || ((candidateScore == bestScore)
+            && (candidateWaitTicks > bestWaitTicks))
+        || ((candidateScore == bestScore)
+            && (candidateWaitTicks == bestWaitTicks)
+            && (candidatePhaseIndex < bestPhaseIndex)))
+    {
+      bestPhaseIndex = candidatePhaseIndex;
+      bestScore = candidateScore;
+      bestWaitTicks = candidateWaitTicks;
+    }
+  }
+
+  if (bestPhaseIndex >= engine->config.phaseCount)
+  {
+    return 0U;
+  }
+
+  *phaseIndex = bestPhaseIndex;
+
+  return 1U;
+}
+
+static uint8_t SelectShortServicePhase(const IntersectionEngine_t *engine,
+                                       uint8_t *phaseIndex)
+{
+  uint8_t bestPhaseIndex = 0xFFU;
+  uint8_t candidatePhaseIndex;
+  uint32_t bestOrder = UINT32_MAX;
+
+  if ((engine == NULL) || (phaseIndex == NULL))
+  {
+    return 0U;
+  }
+
+  for (candidatePhaseIndex = 0U;
+       candidatePhaseIndex < engine->config.phaseCount;
+       candidatePhaseIndex++)
+  {
+    uint32_t candidateOrder = engine->preemptShortServiceOrder[candidatePhaseIndex];
+
+    if ((candidateOrder == UINT32_MAX)
+        || (candidateOrder > bestOrder)
+        || ((candidateOrder == bestOrder)
+            && (bestPhaseIndex != 0xFFU)
+            && (candidatePhaseIndex > bestPhaseIndex)))
+    {
+      continue;
+    }
+
+    bestPhaseIndex = candidatePhaseIndex;
+    bestOrder = candidateOrder;
+  }
+
+  if (bestPhaseIndex >= engine->config.phaseCount)
+  {
+    return 0U;
+  }
+
+  *phaseIndex = bestPhaseIndex;
+
+  return 1U;
+}
+
+static uint8_t SelectConfiguredExitPhaseTarget(
+  const IntersectionEngine_t *engine,
+  const IntersectionPreemptConfig_t *preempt,
+  uint8_t ringIndex,
+  IntersectionPreemptExitRecoveryTarget_t *target)
+{
+  uint8_t listIndex;
+
+  if ((engine == NULL) || (preempt == NULL) || (target == NULL)
+      || (ringIndex >= engine->config.ringCount))
+  {
+    return 0U;
+  }
+
+  for (listIndex = 0U; listIndex < preempt->exitPhases.length; listIndex++)
+  {
+    uint8_t phaseNumber = preempt->exitPhases.values[listIndex];
+    uint8_t phaseIndex;
+    uint8_t position;
+
+    if ((phaseNumber == 0U) || (phaseNumber > engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    phaseIndex = (uint8_t) (phaseNumber - 1U);
+
+    if ((engine->config.phases[phaseIndex].ring != ringIndex)
+        || (FindRingPositionForPhase(engine, phaseIndex, NULL, &position) == 0U))
+    {
+      continue;
+    }
+
+    target->valid = 1U;
+    target->position = position;
+    target->stage = INTERSECTION_RING_STAGE_GREEN;
+    target->elapsedTicks = 0U;
+
+    return 1U;
+  }
+
+  return 0U;
+}
+
+static uint8_t SelectCoordinatedExitTarget(
+  const IntersectionEngine_t *engine,
+  uint8_t ringIndex,
+  IntersectionPreemptExitRecoveryTarget_t *target)
+{
+  const IntersectionPatternConfig_t *pattern;
+  const IntersectionRingPlan_t *ringPlan;
+  uint32_t cycleTicks;
+  uint32_t offsetTicks;
+  uint32_t syncTicks;
+  uint32_t localTicks;
+  uint32_t elapsedTicks = 0U;
+  uint8_t patternStatus;
+  uint8_t splitIndex;
+  uint8_t position;
+
+  if ((engine == NULL) || (target == NULL)
+      || (ringIndex >= engine->config.ringCount))
+  {
+    return 0U;
+  }
+
+  patternStatus = engine->runtime.coordPatternStatus;
+
+  if ((patternStatus == 0U) || (patternStatus > INTERSECTION_PATTERN_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  pattern = &engine->config.coordination.patterns[patternStatus - 1U];
+
+  if ((pattern->splitNumber == 0U)
+      || (pattern->splitNumber > INTERSECTION_SPLIT_COUNT_MAX)
+      || (pattern->cycleTimeSeconds == 0U)
+      || (pattern->offsetTimeSeconds >= pattern->cycleTimeSeconds))
+  {
+    return 0U;
+  }
+
+  ringPlan = &engine->config.rings[ringIndex];
+  splitIndex = (uint8_t) (pattern->splitNumber - 1U);
+  cycleTicks = (uint32_t) pattern->cycleTimeSeconds * 100U;
+  offsetTicks = (uint32_t) pattern->offsetTimeSeconds * 100U;
+  syncTicks = engine->coordSyncTicks % cycleTicks;
+  localTicks = (syncTicks + cycleTicks - (offsetTicks % cycleTicks)) % cycleTicks;
+
+  for (position = 0U; position < ringPlan->phaseCount; position++)
+  {
+    uint8_t phaseIndex = ringPlan->phaseOrder[position];
+    uint32_t splitTicks =
+      (uint32_t) engine->config.coordination.splits[splitIndex][phaseIndex].
+      timeSeconds * 100U;
+
+    if (splitTicks == 0U)
+    {
+      continue;
+    }
+
+    if (localTicks < (elapsedTicks + splitTicks))
+    {
+      uint32_t offsetIntoPhase = localTicks - elapsedTicks;
+      uint32_t yellowTicks = engine->yellowTicks[phaseIndex];
+      uint32_t redClearTicks = engine->redClearTicks[phaseIndex];
+      uint32_t greenTicks = (splitTicks > (yellowTicks + redClearTicks))
+                            ? (splitTicks - yellowTicks - redClearTicks)
+                            : 0U;
+
+      target->valid = 1U;
+      target->position = position;
+
+      if (offsetIntoPhase < greenTicks)
+      {
+        target->stage = INTERSECTION_RING_STAGE_GREEN;
+        target->elapsedTicks = offsetIntoPhase;
+      }
+      else if (offsetIntoPhase < (greenTicks + yellowTicks))
+      {
+        target->stage = INTERSECTION_RING_STAGE_YELLOW;
+        target->elapsedTicks = offsetIntoPhase - greenTicks;
+      }
+      else if (offsetIntoPhase < (greenTicks + yellowTicks + redClearTicks))
+      {
+        target->stage = INTERSECTION_RING_STAGE_RED_CLEAR;
+        target->elapsedTicks = offsetIntoPhase - greenTicks - yellowTicks;
+      }
+      else
+      {
+        target->stage = INTERSECTION_RING_STAGE_RED_REST;
+        target->elapsedTicks = 0U;
+      }
+
+      return 1U;
+    }
+
+    elapsedTicks += splitTicks;
+  }
+
+  if (ringPlan->phaseCount == 0U)
+  {
+    return 0U;
+  }
+
+  target->valid = 1U;
+  target->position = (uint8_t) (ringPlan->phaseCount - 1U);
+  target->stage = INTERSECTION_RING_STAGE_RED_REST;
+  target->elapsedTicks = 0U;
+
+  return 1U;
+}
+
+static void ApplyRingExitRecoveryTarget(
+  IntersectionEngine_t *engine,
+  uint8_t ringIndex,
+  const IntersectionPreemptExitRecoveryTarget_t *target)
+{
+  const IntersectionRingPlan_t *ringPlan;
+  IntersectionRingRuntime_t *ringRuntime;
+  uint8_t position;
+  uint8_t phaseIndex;
+
+  if ((engine == NULL) || (target == NULL)
+      || (ringIndex >= engine->config.ringCount))
+  {
+    return;
+  }
+
+  ringPlan = &engine->config.rings[ringIndex];
+  ringRuntime = &engine->runtime.rings[ringIndex];
+  position = target->position;
+
+  if ((target->valid == 0U) || (position >= ringPlan->phaseCount))
+  {
+    position = ringRuntime->activePosition;
+  }
+
+  if (position >= ringPlan->phaseCount)
+  {
+    position = 0U;
+  }
+
+  phaseIndex = ringPlan->phaseOrder[position];
+
+  switch (target->stage)
+  {
+      case INTERSECTION_RING_STAGE_GREEN:
+      {
+        StartRingGreenStage(engine, ringIndex, position, 0U);
+        ringRuntime->stageElapsedTicks = target->elapsedTicks;
+        engine->runtime.phases[phaseIndex].intervalElapsedTicks =
+          target->elapsedTicks;
+        break;
+      }
+
+      case INTERSECTION_RING_STAGE_YELLOW:
+      {
+        SetRingPhasesRed(engine, ringIndex);
+        ringRuntime->activePosition = position;
+        ringRuntime->pendingPosition = position;
+        ringRuntime->activePhaseIndex = phaseIndex;
+        ringRuntime->barrierWaiting = 0U;
+        ringRuntime->stage = INTERSECTION_RING_STAGE_YELLOW;
+        ringRuntime->statusCode = INTERSECTION_RING_STATUS_YELLOW_CHANGE;
+        ringRuntime->terminationReasonBits = INTERSECTION_RING_TERMINATION_NONE;
+        ringRuntime->stageElapsedTicks = target->elapsedTicks;
+        engine->runtime.phases[phaseIndex].interval =
+          INTERSECTION_PHASE_INTERVAL_YELLOW;
+        engine->runtime.phases[phaseIndex].intervalElapsedTicks =
+          target->elapsedTicks;
+        engine->runtime.phases[phaseIndex].callLatched = 0U;
+        engine->runtime.phases[phaseIndex].next = 0U;
+        EndPhasePedService(engine, phaseIndex);
+        break;
+      }
+
+      case INTERSECTION_RING_STAGE_RED_CLEAR:
+      {
+        SetRingPhasesRed(engine, ringIndex);
+        ringRuntime->activePosition = position;
+        ringRuntime->pendingPosition = position;
+        ringRuntime->activePhaseIndex = phaseIndex;
+        ringRuntime->barrierWaiting = 0U;
+        ringRuntime->stage = INTERSECTION_RING_STAGE_RED_CLEAR;
+        ringRuntime->statusCode = INTERSECTION_RING_STATUS_RED_CLEARANCE;
+        ringRuntime->terminationReasonBits = INTERSECTION_RING_TERMINATION_NONE;
+        ringRuntime->stageElapsedTicks = target->elapsedTicks;
+        engine->runtime.phases[phaseIndex].interval =
+          INTERSECTION_PHASE_INTERVAL_RED_CLEAR;
+        engine->runtime.phases[phaseIndex].intervalElapsedTicks =
+          target->elapsedTicks;
+        engine->runtime.phases[phaseIndex].callLatched = 0U;
+        engine->runtime.phases[phaseIndex].next = 0U;
+        EndPhasePedService(engine, phaseIndex);
+        StartPhaseRedRevertTimer(engine, phaseIndex);
+        break;
+      }
+
+      case INTERSECTION_RING_STAGE_WAIT_BARRIER:
+      case INTERSECTION_RING_STAGE_RED_REST:
+      default:
+      {
+        SetRingRedRestStage(engine, ringIndex, position);
+        break;
+      }
+  }
+}
+
 static void SetPreemptStateDefaults(IntersectionEngine_t *engine)
 {
   uint8_t index;
@@ -3406,18 +4799,214 @@ static void SetPreemptStateDefaults(IntersectionEngine_t *engine)
   engine->runtime.preemptStatus = 0U;
 }
 
+static void ApplyDwellPreemptOutputs(IntersectionEngine_t *engine,
+                                     const IntersectionPreemptConfig_t *preempt,
+                                     uint8_t preemptIndex)
+{
+  if ((engine == NULL) || (preempt == NULL))
+  {
+    return;
+  }
+
+  if (PreemptFlashDwell(engine, preemptIndex) != 0U)
+  {
+    ApplyPhaseListInterval(engine,
+                           &preempt->dwellPhases,
+                           INTERSECTION_PHASE_INTERVAL_YELLOW);
+    ApplyOverlapListAspect(engine,
+                           &preempt->dwellOverlaps,
+                           INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW);
+  }
+  else
+  {
+    ApplyPhaseListInterval(engine,
+                           &preempt->dwellPhases,
+                           INTERSECTION_PHASE_INTERVAL_GREEN);
+    ApplyPedListInterval(engine,
+                         &preempt->dwellPeds,
+                         INTERSECTION_PED_INTERVAL_WALK);
+    ApplyOverlapListAspect(engine,
+                           &preempt->dwellOverlaps,
+                           INTERSECTION_OUTPUT_ASPECT_GREEN);
+  }
+}
+
+static void ResetPreemptCyclingRuntime(IntersectionEngine_t *engine)
+{
+  if (engine == NULL)
+  {
+    return;
+  }
+
+  engine->preemptCyclingInitialized = 0U;
+  engine->preemptCyclingDemandFilterActive = 0U;
+}
+
+static void InitializePreemptCyclingRuntime(IntersectionEngine_t *engine,
+                                            uint8_t preemptIndex)
+{
+  uint8_t ringIndex;
+  uint8_t phaseIndex;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (PreemptCyclingConfigured(engine, preemptIndex) == 0U)
+      || (engine->preemptCyclingInitialized != 0U))
+  {
+    return;
+  }
+
+  for (phaseIndex = 0U; phaseIndex < engine->config.phaseCount; phaseIndex++)
+  {
+    ResetPhasePedState(engine, phaseIndex);
+  }
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    uint8_t position = 0U;
+    uint8_t useDwellPosition = FindConfiguredDwellPositionForRing(engine,
+                                                                  preemptIndex,
+                                                                  ringIndex,
+                                                                  &position);
+    uint8_t phaseInCyclingPeds;
+    uint8_t phasePositionFound = useDwellPosition;
+
+    if (phasePositionFound == 0U)
+    {
+      phasePositionFound = FindConfiguredCyclingPositionForRing(engine,
+                                                                preemptIndex,
+                                                                ringIndex,
+                                                                1U,
+                                                                &position);
+    }
+
+    if (phasePositionFound == 0U)
+    {
+      phasePositionFound = FindConfiguredCyclingPositionForRing(engine,
+                                                                preemptIndex,
+                                                                ringIndex,
+                                                                0U,
+                                                                &position);
+    }
+
+    if (phasePositionFound == 0U)
+    {
+      SetRingRedRestStage(engine, ringIndex, 0U);
+      continue;
+    }
+
+    StartRingGreenStage(engine, ringIndex, position, 0U);
+    phaseIndex = engine->runtime.rings[ringIndex].activePhaseIndex;
+    phaseInCyclingPeds = PhaseReferenceListContainsPhase(
+      &engine->config.preempts[preemptIndex].cyclingPeds,
+      phaseIndex);
+
+    if (useDwellPosition != 0U)
+    {
+      engine->runtime.rings[ringIndex].stageElapsedTicks = engine->preemptStageTicks;
+      engine->runtime.phases[phaseIndex].intervalElapsedTicks =
+        engine->preemptStageTicks;
+    }
+
+    if (phaseInCyclingPeds == 0U)
+    {
+      ResetPhasePedState(engine, phaseIndex);
+    }
+  }
+
+  engine->preemptCyclingInitialized = 1U;
+}
+
+static void TickPreemptCyclingRuntime(IntersectionEngine_t *engine,
+                                      uint8_t preemptIndex)
+{
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX)
+      || (PreemptCyclingConfigured(engine, preemptIndex) == 0U))
+  {
+    return;
+  }
+
+  InitializePreemptCyclingRuntime(engine, preemptIndex);
+  engine->preemptCyclingDemandFilterActive = 1U;
+  TickControllerRings(engine);
+  TickInactivePedStates(engine);
+  engine->preemptCyclingDemandFilterActive = 0U;
+}
+
+static void ApplyPreemptCyclingOverlapOutputs(
+  IntersectionEngine_t *engine,
+  const IntersectionPreemptConfig_t *preempt)
+{
+  uint8_t ringIndex;
+  uint8_t dwellOverlapActive = 0U;
+  uint8_t cyclingOverlapActive = 0U;
+
+  if ((engine == NULL) || (preempt == NULL))
+  {
+    return;
+  }
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    const IntersectionRingRuntime_t *ringRuntime = &engine->runtime.rings[
+      ringIndex];
+    uint8_t phaseIndex = ringRuntime->activePhaseIndex;
+
+    if ((ringRuntime->stage != INTERSECTION_RING_STAGE_GREEN)
+        || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    if (PhaseReferenceListContainsPhase(&preempt->dwellPhases, phaseIndex) != 0U)
+    {
+      dwellOverlapActive = 1U;
+    }
+
+    if (PhaseReferenceListContainsPhase(&preempt->cyclingPhases, phaseIndex)
+        != 0U)
+    {
+      cyclingOverlapActive = 1U;
+    }
+  }
+
+  if (dwellOverlapActive != 0U)
+  {
+    ApplyOverlapListAspect(engine,
+                           &preempt->dwellOverlaps,
+                           INTERSECTION_OUTPUT_ASPECT_GREEN);
+  }
+
+  if (cyclingOverlapActive != 0U)
+  {
+    ApplyOverlapListAspect(engine,
+                           &preempt->cyclingOverlaps,
+                           INTERSECTION_OUTPUT_ASPECT_GREEN);
+  }
+}
+
 static void ApplyActivePreemptOutputs(IntersectionEngine_t *engine)
 {
   const IntersectionPreemptConfig_t *preempt;
   IntersectionPreemptState_t state;
+  uint8_t preemptIndex;
 
   if (PreemptModeActive(engine) == 0U)
   {
     return;
   }
 
-  preempt = &engine->config.preempts[engine->activePreemptIndex];
-  state = engine->runtime.preemptStates[engine->activePreemptIndex];
+  preemptIndex = engine->activePreemptIndex;
+  preempt = &engine->config.preempts[preemptIndex];
+  state = engine->runtime.preemptStates[preemptIndex];
+
+  if ((state == INTERSECTION_PREEMPT_STATE_DWELL)
+      && (PreemptCyclingRunning(engine, preemptIndex) != 0U))
+  {
+    ClearPreemptOverlapOutputs(engine);
+    ApplyPreemptCyclingOverlapOutputs(engine, preempt);
+
+    return;
+  }
 
   ClearPreemptPhaseOutputs(engine);
   ClearPreemptOverlapOutputs(engine);
@@ -3435,45 +5024,22 @@ static void ApplyActivePreemptOutputs(IntersectionEngine_t *engine)
         break;
       }
 
-      case INTERSECTION_PREEMPT_STATE_DWELL:
+      case INTERSECTION_PREEMPT_STATE_ENTRY_STARTED:
       {
-        if (PreemptFlashDwell(engine, engine->activePreemptIndex) != 0U)
-        {
-          ApplyPhaseListInterval(engine,
-                                 &preempt->dwellPhases,
-                                 INTERSECTION_PHASE_INTERVAL_YELLOW);
-          ApplyPhaseListInterval(engine,
-                                 &preempt->cyclingPhases,
-                                 INTERSECTION_PHASE_INTERVAL_YELLOW);
-          ApplyOverlapListAspect(engine,
-                                 &preempt->dwellOverlaps,
-                                 INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW);
-          ApplyOverlapListAspect(engine,
-                                 &preempt->cyclingOverlaps,
-                                 INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW);
-        }
-        else
-        {
-          ApplyPhaseListInterval(engine,
-                                 &preempt->dwellPhases,
-                                 INTERSECTION_PHASE_INTERVAL_GREEN);
-          ApplyPhaseListInterval(engine,
-                                 &preempt->cyclingPhases,
-                                 INTERSECTION_PHASE_INTERVAL_GREEN);
-          ApplyPedListInterval(engine,
-                               &preempt->dwellPeds,
-                               INTERSECTION_PED_INTERVAL_WALK);
-          ApplyPedListInterval(engine,
-                               &preempt->cyclingPeds,
-                               INTERSECTION_PED_INTERVAL_WALK);
-          ApplyOverlapListAspect(engine,
-                                 &preempt->dwellOverlaps,
-                                 INTERSECTION_OUTPUT_ASPECT_GREEN);
-          ApplyOverlapListAspect(engine,
-                                 &preempt->cyclingOverlaps,
-                                 INTERSECTION_OUTPUT_ASPECT_GREEN);
-        }
+        ApplyEntryPreemptOutputs(engine, preemptIndex);
+        break;
+      }
 
+      case INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT:
+      {
+        ApplyAdvancedPreemptOutputs(engine, preempt, preemptIndex);
+        break;
+      }
+
+      case INTERSECTION_PREEMPT_STATE_DWELL:
+      case INTERSECTION_PREEMPT_STATE_LINK_ACTIVE:
+      {
+        ApplyDwellPreemptOutputs(engine, preempt, preemptIndex);
         break;
       }
 
@@ -3504,14 +5070,24 @@ static void ApplyActivePreemptOutputs(IntersectionEngine_t *engine)
         break;
       }
 
-      case INTERSECTION_PREEMPT_STATE_ENTRY_STARTED:
-      case INTERSECTION_PREEMPT_STATE_LINK_ACTIVE:
-      case INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT:
       case INTERSECTION_PREEMPT_STATE_OTHER:
       case INTERSECTION_PREEMPT_STATE_NOT_ACTIVE:
       case INTERSECTION_PREEMPT_STATE_NOT_ACTIVE_WITH_CALL:
       default:
       {
+        if ((state == INTERSECTION_PREEMPT_STATE_NOT_ACTIVE_WITH_CALL)
+            && (engine->linkedPreemptTargetIndex == preemptIndex)
+            && (engine->linkedPreemptSourceIndex
+                < INTERSECTION_PREEMPT_COUNT_MAX))
+        {
+          const IntersectionPreemptConfig_t *linkedPreempt =
+            &engine->config.preempts[engine->linkedPreemptSourceIndex];
+
+          ApplyDwellPreemptOutputs(engine,
+                                   linkedPreempt,
+                                   engine->linkedPreemptSourceIndex);
+        }
+
         break;
       }
   } /* switch */
@@ -3519,28 +5095,138 @@ static void ApplyActivePreemptOutputs(IntersectionEngine_t *engine)
 
 static void ResetPreemptRuntime(IntersectionEngine_t *engine)
 {
+  uint8_t phaseIndex;
+
   engine->activePreemptIndex = 0xFFU;
   engine->preemptStageTicks = 0U;
   engine->preemptPresenceTicks = 0U;
+  ResetPreemptCyclingRuntime(engine);
+  ClearLinkedPreemptCall(engine);
+
+  for (phaseIndex = 0U; phaseIndex < INTERSECTION_PHASE_COUNT_MAX; phaseIndex++)
+  {
+    engine->preemptShortServiceOrder[phaseIndex] = UINT32_MAX;
+  }
+
   SetPreemptStateDefaults(engine);
+}
+
+static uint8_t BeginPreemptExitRecovery(IntersectionEngine_t *engine,
+                                        uint8_t preemptIndex)
+{
+  const IntersectionPreemptConfig_t *preempt;
+  IntersectionPreemptExitRecoveryTarget_t targets[INTERSECTION_RING_COUNT_MAX];
+  uint8_t selectedPhaseIndex = 0xFFU;
+  uint8_t ringIndex;
+
+  if ((engine == NULL) || (preemptIndex >= INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  preempt = &engine->config.preempts[preemptIndex];
+  InitializePreemptExitRecoveryTargets(engine, targets);
+
+  switch ((IntersectionPreemptExitType_t) preempt->exitType)
+  {
+      case INTERSECTION_PREEMPT_EXIT_TYPE_QUEUE_DELAY_RECOVERY:
+      {
+        uint8_t targetPosition = 0U;
+
+        if ((SelectQueueDelayRecoveryPhase(engine,
+                                           preemptIndex,
+                                           &selectedPhaseIndex) != 0U)
+            && (FindRingPositionForPhase(engine,
+                                         selectedPhaseIndex,
+                                         &ringIndex,
+                                         &targetPosition) != 0U))
+        {
+          targets[ringIndex].valid = 1U;
+          targets[ringIndex].position = targetPosition;
+          targets[ringIndex].stage = INTERSECTION_RING_STAGE_GREEN;
+          targets[ringIndex].elapsedTicks = 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_PREEMPT_EXIT_TYPE_SHORT_SERVICE:
+      {
+        uint8_t targetPosition = 0U;
+
+        if ((SelectShortServicePhase(engine, &selectedPhaseIndex) != 0U)
+            && (FindRingPositionForPhase(engine,
+                                         selectedPhaseIndex,
+                                         &ringIndex,
+                                         &targetPosition) != 0U))
+        {
+          targets[ringIndex].valid = 1U;
+          targets[ringIndex].position = targetPosition;
+          targets[ringIndex].stage = INTERSECTION_RING_STAGE_GREEN;
+          targets[ringIndex].elapsedTicks = 0U;
+        }
+
+        break;
+      }
+
+      case INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_COORD:
+      {
+        for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+        {
+          (void) SelectCoordinatedExitTarget(engine,
+                                             ringIndex,
+                                             &targets[ringIndex]);
+        }
+
+        break;
+      }
+
+      case INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES:
+      default:
+      {
+        for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+        {
+          (void) SelectConfiguredExitPhaseTarget(engine,
+                                                 preempt,
+                                                 ringIndex,
+                                                 &targets[ringIndex]);
+        }
+
+        break;
+      }
+  }
+
+  for (ringIndex = 0U; ringIndex < engine->config.ringCount; ringIndex++)
+  {
+    ApplyRingExitRecoveryTarget(engine, ringIndex, &targets[ringIndex]);
+  }
+
+  ResetPreemptRuntime(engine);
+  UpdateCoordinationRuntime(engine);
+
+  return 1U;
 }
 
 static void StartPreempt(IntersectionEngine_t *engine, uint8_t preemptIndex)
 {
   const IntersectionPreemptConfig_t *preempt =
     &engine->config.preempts[preemptIndex];
+  uint32_t entryTicks;
 
   engine->activePreemptIndex = preemptIndex;
   engine->preemptStageTicks = 0U;
   engine->preemptPresenceTicks = 0U;
+  ResetPreemptCyclingRuntime(engine);
+  CapturePreemptEntrySnapshot(engine);
+  CapturePreemptShortServiceCandidates(engine, preemptIndex);
   SetPreemptStateDefaults(engine);
   engine->runtime.preemptStatus = (uint8_t) (preemptIndex + 1U);
   engine->runtime.preemptStates[preemptIndex] =
     INTERSECTION_PREEMPT_STATE_ENTRY_STARTED;
   engine->runtime.mode = INTERSECTION_CONTROL_MODE_PREEMPT;
+  entryTicks = PreemptEntryCompleteTicks(engine, preemptIndex);
 
-  if (((uint32_t) preempt->enterYellowChangeDs
-       + (uint32_t) preempt->enterRedClearDs) == 0U)
+  if (entryTicks == 0U)
   {
     if ((preempt->trackGreenSeconds != 0U)
         && (preempt->trackPhases.length != 0U))
@@ -3554,11 +5240,16 @@ static void StartPreempt(IntersectionEngine_t *engine, uint8_t preemptIndex)
         INTERSECTION_PREEMPT_STATE_DWELL;
     }
   }
+
+  RefreshLinkedPreemptCall(engine);
 }
 
 static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
 {
   int16_t candidateIndex;
+  uint8_t hadActiveState = 0U;
+  uint8_t activePreemptIndex = 0xFFU;
+  IntersectionPreemptState_t activeState = INTERSECTION_PREEMPT_STATE_NOT_ACTIVE;
 
   if (engine == NULL)
   {
@@ -3571,18 +5262,37 @@ static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
     engine->activePreemptIndex = 0xFFU;
     engine->preemptStageTicks = 0U;
     engine->preemptPresenceTicks = 0U;
+    ResetPreemptCyclingRuntime(engine);
+    ClearLinkedPreemptCall(engine);
 
     return 0U;
   }
 
-  candidateIndex = SelectPreemptCandidate(engine);
+  if (engine->activePreemptIndex < INTERSECTION_PREEMPT_COUNT_MAX)
+  {
+    activePreemptIndex = engine->activePreemptIndex;
+    activeState = engine->runtime.preemptStates[activePreemptIndex];
+    hadActiveState = PreemptStateIsServicing(activeState);
+  }
+
   SetPreemptStateDefaults(engine);
+  RefreshLinkedPreemptCall(engine);
+
+  if ((hadActiveState != 0U)
+      && (activePreemptIndex < INTERSECTION_PREEMPT_COUNT_MAX))
+  {
+    engine->runtime.preemptStates[activePreemptIndex] = activeState;
+  }
+
+  candidateIndex = SelectPreemptCandidate(engine);
 
   if (candidateIndex < 0)
   {
     engine->activePreemptIndex = 0xFFU;
     engine->preemptStageTicks = 0U;
     engine->preemptPresenceTicks = 0U;
+    ResetPreemptCyclingRuntime(engine);
+    ClearLinkedPreemptCall(engine);
 
     return 0U;
   }
@@ -3664,11 +5374,11 @@ static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
       {
           case INTERSECTION_PREEMPT_STATE_ENTRY_STARTED:
           {
-            if (engine->preemptStageTicks
-                >= (uint32_t) engine->preemptEnterYellowTicks[engine->
-                                                              activePreemptIndex]
-                + (uint32_t) engine->preemptEnterRedClearTicks[engine->
-                                                               activePreemptIndex])
+            uint32_t entryTicks = PreemptEntryCompleteTicks(
+              engine,
+              engine->activePreemptIndex);
+
+            if ((entryTicks == 0U) || (engine->preemptStageTicks >= entryTicks))
             {
               engine->preemptStageTicks = 0U;
               *state = ((preempt->trackGreenSeconds != 0U)
@@ -3687,6 +5397,30 @@ static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
                 || (engine->preemptStageTicks
                     >= engine->preemptTrackGreenTicks[engine->activePreemptIndex]))
             {
+              uint32_t trackClearTicks = PreemptTrackClearCompleteTicks(
+                engine,
+                &preempt->trackPhases,
+                engine->activePreemptIndex);
+
+              engine->preemptStageTicks = 0U;
+              *state = (trackClearTicks != 0U)
+                       ? INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT
+                       : INTERSECTION_PREEMPT_STATE_DWELL;
+            }
+
+            break;
+          }
+
+          case INTERSECTION_PREEMPT_STATE_ADVANCED_PREEMPT:
+          {
+            uint32_t trackClearTicks = PreemptTrackClearCompleteTicks(
+              engine,
+              &preempt->trackPhases,
+              engine->activePreemptIndex);
+
+            if ((trackClearTicks == 0U)
+                || (engine->preemptStageTicks >= trackClearTicks))
+            {
               engine->preemptStageTicks = 0U;
               *state = INTERSECTION_PREEMPT_STATE_DWELL;
             }
@@ -3696,6 +5430,36 @@ static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
 
           case INTERSECTION_PREEMPT_STATE_DWELL:
           {
+            uint8_t linkedTarget = 0xFFU;
+
+            if ((engine->preemptStageTicks
+                 >= engine->preemptDwellGreenTicks[engine->activePreemptIndex])
+                && (PreemptBaseDemandIsPresent(engine,
+                                              engine->activePreemptIndex)
+                    != 0U)
+                && (engine->linkedPreemptSourceIndex
+                    >= INTERSECTION_PREEMPT_COUNT_MAX)
+                && (ResolveLinkedPreemptTarget(engine,
+                                              engine->activePreemptIndex,
+                                              &linkedTarget)
+                    != 0U))
+            {
+              engine->linkedPreemptSourceIndex = engine->activePreemptIndex;
+              engine->linkedPreemptTargetIndex = linkedTarget;
+              *state = INTERSECTION_PREEMPT_STATE_LINK_ACTIVE;
+
+              break;
+            }
+
+            if ((engine->preemptStageTicks
+                 >= engine->preemptDwellGreenTicks[engine->activePreemptIndex])
+                && (PreemptBaseDemandIsPresent(engine,
+                                              engine->activePreemptIndex)
+                    != 0U))
+            {
+              TickPreemptCyclingRuntime(engine, engine->activePreemptIndex);
+            }
+
             if ((engine->preemptPresenceTicks
                  >= engine->preemptMinimumDurationTicks[engine->
                                                         activePreemptIndex])
@@ -3713,25 +5477,8 @@ static uint8_t HandlePreemptStateMachine(IntersectionEngine_t *engine)
 
           case INTERSECTION_PREEMPT_STATE_EXIT_STARTED:
           {
-            uint32_t exitTicks = 1U;
-
-            if (preempt->exitType
-                == (uint8_t) INTERSECTION_PREEMPT_EXIT_TYPE_EXIT_PHASES)
-            {
-              exitTicks = MaxPhaseMinGreenTicks(engine, &preempt->exitPhases);
-
-              if (exitTicks == 0U)
-              {
-                exitTicks = 1U;
-              }
-            }
-
-            if (engine->preemptStageTicks >= exitTicks)
-            {
-              ResetPreemptRuntime(engine);
-
-              return 0U;
-            }
+            (void) preempt;
+            (void) BeginPreemptExitRecovery(engine, engine->activePreemptIndex);
 
             break;
           }
@@ -5693,6 +7440,12 @@ uint8_t IntersectionEngineLoadConfig(IntersectionEngine_t *engine,
   engine->activePreemptIndex = 0xFFU;
   engine->preemptStageTicks = 0U;
   engine->preemptPresenceTicks = 0U;
+  memset(engine->phaseDemandWaitTicks, 0, sizeof(engine->phaseDemandWaitTicks));
+  memset(engine->preemptShortServiceOrder,
+         0xFF,
+         sizeof(engine->preemptShortServiceOrder));
+  engine->linkedPreemptSourceIndex = 0xFFU;
+  engine->linkedPreemptTargetIndex = 0xFFU;
   engine->runtime.configLoaded = 1U;
   engine->runtime.mode = INTERSECTION_CONTROL_MODE_FREE;
 
@@ -5818,6 +7571,24 @@ void IntersectionEngineReset(IntersectionEngine_t *engine)
   engine->activePreemptIndex = 0xFFU;
   engine->preemptStageTicks = 0U;
   engine->preemptPresenceTicks = 0U;
+  ResetPreemptCyclingRuntime(engine);
+  ClearLinkedPreemptCall(engine);
+  memset(engine->preemptEntryPhaseIntervals,
+         0,
+         sizeof(engine->preemptEntryPhaseIntervals));
+  memset(engine->preemptEntryPedIntervals,
+         0,
+         sizeof(engine->preemptEntryPedIntervals));
+  memset(engine->preemptEntryPhaseElapsedTicks,
+         0,
+         sizeof(engine->preemptEntryPhaseElapsedTicks));
+  memset(engine->preemptEntryPedElapsedTicks,
+         0,
+         sizeof(engine->preemptEntryPedElapsedTicks));
+  memset(engine->phaseDemandWaitTicks, 0, sizeof(engine->phaseDemandWaitTicks));
+  memset(engine->preemptShortServiceOrder,
+         0xFF,
+         sizeof(engine->preemptShortServiceOrder));
   engine->runtime.configLoaded = 1U;
   engine->runtime.mode = INTERSECTION_CONTROL_MODE_FREE;
   engine->runtime.coordPatternStatus = 254U;
@@ -5924,6 +7695,8 @@ void IntersectionEngineTick(IntersectionEngine_t *engine)
                              % engine->coordDiagnosticCycleTicks;
     UpdateCoordinationRuntime(engine);
   }
+
+  RefreshPhaseDemandWaitTimes(engine);
 
   if (HandlePreemptStateMachine(engine) != 0U)
   {

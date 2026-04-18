@@ -11,11 +11,11 @@ PSM (Power Supply Module) — embedded firmware for the **STM32G473xx** (Cortex-
 ### STM32 firmware (requires `arm-none-eabi-gcc` on PATH)
 
 ```bash
-cmake --preset STM32-GCC-Debug   && cmake --build --preset STM32-GCC-Debug
-cmake --preset STM32-GCC-Release && cmake --build --preset STM32-GCC-Release
+cmake --preset STM32-Debug   && cmake --build --preset STM32-Debug
+cmake --preset STM32-Release && cmake --build --preset STM32-Release
 ```
 
-Output: `build/STM32-GCC-{Debug,Release}/PSM.elf`. Linker script: `STM32G473XX_FLASH.ld`.
+Output: `build/STM32-{Debug,Release}/PSM.elf`. Linker script: `STM32G473XX_FLASH.ld`.
 
 ### Host unit tests (x86-64, no hardware required)
 
@@ -43,8 +43,8 @@ docker compose run --rm shell-test   # interactive test shell
 ### Code formatting (requires `uncrustify`)
 
 ```bash
-cmake --build build/STM32-GCC-Debug --target Format        # reformat in-place
-cmake --build build/STM32-GCC-Debug --target Format-Check  # CI-safe check
+cmake --build build/STM32-Debug --target Format        # reformat in-place
+cmake --build build/STM32-Debug --target Format-Check  # CI-safe check
 ```
 
 User application sources are added in the **top-level** `CMakeLists.txt` (not in `cmake/stm32cubemx/CMakeLists.txt`, which is CubeMX-managed and should not be edited by hand).
@@ -55,21 +55,45 @@ The `BUILD_TARGET` CMake variable controls the build mode: `STM32` (default, cro
 
 ### Layer separation
 
+PSM follows the same hexagonal (ports + adapters) architecture as CPM/CP.
+
 - `App/Domain/` — Pure C11 computation; **no HAL, no FreeRTOS**. Only layer covered by unit tests. Add new testable logic here.
-- `Tasks/` — FreeRTOS task implementations; calls Domain functions for computation, uses HAL/RTOS for I/O.
+- `App/Ports/` — Six vtable interface headers (zero implementation). Domain code only calls via these.
+- `App/Adapters/STM32/` — STM32 adapter implementations; included only in the `STM32` build target.
+- `App/Adapters/Mock/` — In-memory mock adapters for host unit tests; included only in the `Host` build target.
+- `Tasks/` — FreeRTOS task wrappers; creates adapters + ports, injects them into domain services.
 - `Core/` — STM32CubeMX-generated peripheral init code (HAL + FreeRTOS scaffolding). User logic lives inside `/* USER CODE BEGIN/END */` guards so CubeMX regeneration is safe.
 - `Tests/` — Unity unit tests; compiled only for `BUILD_TARGET=Host`. Each test file has its own `main()` with explicit `RUN_TEST()` calls.
 - `Tools/` — Docker (`Tools/Docker/`), MISRA-C format config (`Tools/Format/`), and helper scripts (`Tools/Scripts/`).
 - `Drivers/` / `Middlewares/` — Vendor-supplied STM32 HAL and FreeRTOS; do not modify.
 
+### Port interfaces (`App/Ports/`)
+
+Six vtable structs, each a `void *ctx` + function pointer(s) with an inline dispatch helper:
+
+| Header | Inline helper(s) | Abstracts |
+|--------|-----------------|-----------|
+| `IIndicatorLEDPort.h` | `IndicatorLED_SetState`, `IndicatorLED_Toggle` | GPIO LED outputs |
+| `ISignalInputPort.h` | `SignalInput_GetState` | GPIO digital inputs (ACOK, DCOK, COMMOK pins) |
+| `IEepromPort.h` | `Eeprom_Read`, `Eeprom_Write` | I2C EEPROM via StorageTask queue |
+| `ICANTxPort.h` | `CANTx_Send` | FDCAN1 transmit queue |
+| `IVoltageSensorPort.h` | `VoltageSensor_GetNetVoltage/GetRegVIn/GetRegVOut` | ADC DMA voltage results |
+| `IFrequencySensorPort.h` | `FrequencySensor_GetNetFrequency` | TIM2 frequency measurement |
+
+### Adapters
+
+**STM32 adapters** (`App/Adapters/STM32/`) — wrap HAL/storage calls. `VoltageSensorAdapterCtx_t` and `FrequencySensorAdapterCtx_t` have writable fields populated by ISR callback forwarders in `Tasks/Src/measurement.c` (`MeasurementNetVoltageSet`, etc.). Float reads/writes are 32-bit word-aligned on Cortex-M4 and therefore atomic — no mutex needed.
+
+**Mock adapters** (`App/Adapters/Mock/`) — in-memory implementations. Tests pre-set input fields and inspect output fields after calling service methods. `MockEepromAdapterCtx_t` has a 256-byte backing buffer plus configurable `bReadResult`/`bWriteResult` flags.
+
 ### FreeRTOS tasks (`Core/Src/app_freertos.c`)
 
 | Task | Priority | Role |
 |---|---|---|
-| `MaitenanceTask` | Low | Watchdog keeper; verifies all tasks signal `MaintenanceEvent` within 3 s, resets on 3 consecutive failures. IWDG is only initialized here in Release builds (`#ifndef DEBUG`). |
+| `MaintenanceTask` | Low | Watchdog keeper; verifies all tasks signal `MaintenanceEvent` within 500 ms, resets on 2 consecutive failures. IWDG is only initialized here in Release builds (`#ifndef DEBUG`). |
 | `CANMsgParserTask` | Normal | Dequeues received CAN frames from `CANRxReqsQueue`, dispatches to `CANMsgParse()`. Also calls `CANStart()` on init. |
 | `CANMsgSenderTask` | Normal | Serialises all outgoing CAN transmissions from `CANTxReqsQueue` to avoid concurrent TX FIFO access. |
-| `MeasurementTask` | Normal | Waits on `THREAD_FLAGS_MEASUREMENT_DONE` (set by ADC DMA complete callback), computes voltages/frequency, drives LEDs, sends periodic measurement frames and flash-sync frames. |
+| `MeasurementTask` | AboveNormal | Waits on `THREAD_FLAGS_MEASUREMENT_DONE` (set by ADC DMA complete callback), computes voltages/frequency, drives LEDs, sends periodic measurement frames and flash-sync frames. |
 | `StorageTask` | Normal | Synchronous EEPROM read/write over I2C; signals calling thread via `THREAD_FLAGS_STORAGE_REQ_PROCESS_OK/ERROR`. |
 
 ### Inter-task communication
@@ -81,8 +105,6 @@ All queues pass **pointers** to objects allocated from static memory pools, keep
 | `CANRxReqsQueue` | `CANRxReqsMemPool` | `HAL_FDCAN_RxFifo0Callback` (ISR) | `CANMsgParserTask` |
 | `CANTxReqsQueue` | `CANTxReqsMemPool` | `CANTxRequest()` (any task) | `CANMsgSenderTask` |
 | `StorageReqsQueue` | `StorageReqsMemPool` | `StorageRequest()` (any task) | `StorageTask` |
-
-`VoltagesMutex` protects `SCANMeasurements` (the struct copied into outgoing CAN frames) between `MeasurementTask` and any future reader.
 
 Global RTOS handles and the `MaintenanceTaskSignal()` helper are declared in `Core/Inc/utilities.h` and defined in `Core/Src/app_freertos.c`.
 
@@ -143,12 +165,12 @@ Three workflows in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `psm-build.yml` | push/PR to `main`, workflow_call | Builds STM32-GCC-Debug + STM32-GCC-Release; uploads `.elf` + `.map` (30 days) |
+| `psm-build.yml` | push/PR to `main`, workflow_call | Builds STM32-Debug + STM32-Release; uploads `.elf` + `.map` (30 days) |
 | `psm-test.yml` | any push/PR, workflow_call | Builds Host-Test, runs ctest, generates gcovr HTML/XML report (7 days) |
 | `psm-release.yml` | tag `psm-v*.*.*` | Calls build + test, generates `.bin`, creates GitHub Release |
 
 ## Notes
 
 - `Core/Src/can_util.c` is **not** included in the CMake build. It references old function names from a prior codebase version and can be ignored or removed.
-- `MAINTAINANCE_MAX_TASK_FAILURES = 3` and `MAINTAINANCE_TASK_MAX_TIMEOUT = 3000 ms` — adjust if tasks legitimately need more time to start.
+- `MAINTENANCE_MAX_TASK_FAILURES = 2` and `MAINTENANCE_TASK_TIMEOUT_MS = 500 ms` — worst-case fault detection latency = 1000 ms (NEMA TS2 compliant). Adjust if tasks legitimately need more time to start.
 - When adding new testable computation to `Tasks/`, extract it into `App/Domain/` first and add Unity tests in `Tests/Unit/`. Each test file must include its own `main()` with `UNITY_BEGIN()`, `RUN_TEST()` calls, and `UNITY_END()`.

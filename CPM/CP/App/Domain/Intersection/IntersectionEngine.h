@@ -87,6 +87,18 @@ typedef struct
   uint32_t startUpFlashTicksRemaining;
   uint32_t preemptStageTicks;
   uint32_t preemptPresenceTicks;
+  uint32_t phaseDemandWaitTicks[INTERSECTION_PHASE_COUNT_MAX];
+  uint32_t preemptShortServiceOrder[INTERSECTION_PHASE_COUNT_MAX];
+  uint8_t preemptCyclingInitialized;
+  uint8_t preemptCyclingDemandFilterActive;
+  uint8_t linkedPreemptSourceIndex;
+  uint8_t linkedPreemptTargetIndex;
+  IntersectionPhaseInterval_t preemptEntryPhaseIntervals[
+    INTERSECTION_PHASE_COUNT_MAX];
+  IntersectionPedInterval_t preemptEntryPedIntervals[
+    INTERSECTION_PHASE_COUNT_MAX];
+  uint32_t preemptEntryPhaseElapsedTicks[INTERSECTION_PHASE_COUNT_MAX];
+  uint16_t preemptEntryPedElapsedTicks[INTERSECTION_PHASE_COUNT_MAX];
   uint8_t systemPhaseOmit[INTERSECTION_PHASE_COUNT_MAX];
   uint8_t systemPedOmit[INTERSECTION_PHASE_COUNT_MAX];
   uint8_t systemPhaseHold[INTERSECTION_PHASE_COUNT_MAX];

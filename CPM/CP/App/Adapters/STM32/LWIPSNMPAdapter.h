@@ -17,6 +17,24 @@
 #include "Ports/IUnitAlarmPort.h"
 #include "Ports/IUnitClockPort.h"
 
+#define LWIP_SNMP_SESSION_CACHE_SIZE 8U
+
+typedef enum
+{
+  LWIP_SNMP_MANAGED_STATE_UNMANAGED = 0,
+  LWIP_SNMP_MANAGED_STATE_PREFIX_ONLY,
+  LWIP_SNMP_MANAGED_STATE_EXACT
+} LWIPSNMPManagedState_t;
+
+typedef struct
+{
+  uint32_t sessionKey;
+  uint8_t transactionId;
+  uint8_t transactionIdValid;
+  uint8_t occupied;
+  uint32_t lastAccess;
+} LWIPSNMPSessionState_t;
+
 typedef struct
 {
   ConfigurationService_t *configurationService;
@@ -29,6 +47,8 @@ typedef struct
   NtcipDbTransactionService_t dbTransactionService;
   NtcipObjectDirectory_t objectDirectory;
   NtcipContext_t ntcipContext;
+  LWIPSNMPSessionState_t sessionStates[LWIP_SNMP_SESSION_CACHE_SIZE];
+  uint32_t sessionAccessCounter;
 } LWIPSNMPAdapterCtx_t;
 
 void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
@@ -45,6 +65,14 @@ void LWIPSNMPAdapterBindUnitAlarmPort(LWIPSNMPAdapterCtx_t *ctx,
                                       IUnitAlarmPort_t *unitAlarmPort);
 void LWIPSNMPAdapterBindUnitClockPort(LWIPSNMPAdapterCtx_t *ctx,
                                       IUnitClockPort_t *unitClockPort);
+LWIPSNMPManagedState_t LWIPSNMPAdapterGetManagedState(
+  const LWIPSNMPAdapterCtx_t *ctx,
+  const uint32_t *oid,
+  uint8_t oidLength,
+  const NtcipObjectDescriptor_t **descriptorOut);
+void LWIPSNMPAdapterBuildRequestContext(LWIPSNMPAdapterCtx_t *ctx,
+                                        uint32_t sessionKey,
+                                        NtcipRequestContext_t *requestContext);
 NtcipError_t LWIPSNMPAdapterGet(const LWIPSNMPAdapterCtx_t *ctx,
                                 const uint32_t *oid,
                                 uint8_t oidLength,

@@ -28,9 +28,10 @@ jobs:
         working-directory: SSM
 
     env:
-      # Raise this value as Tasks/ coverage accumulates.
-      # Can also be overridden by workflow_dispatch input or workflow_call input.
-      MIN_LINE_COVERAGE: ${{ inputs.min_line_coverage || '0' }}
+      # Optional override for gcovr.cfg's fail-under-line. Leave empty to use
+      # the repo default (App/Domain/ at 80%). Can be overridden via
+      # workflow_dispatch input or workflow_call input.
+      MIN_LINE_COVERAGE: ${{ inputs.min_line_coverage || '' }}
 
     steps:
       - name: Checkout
@@ -55,20 +56,19 @@ jobs:
 
       - name: Generate coverage reports
         run: |
-          mkdir -p build/coverage/full build/coverage/tasks
+          mkdir -p build/coverage/full build/coverage/domain
           gcovr \
             --root . \
+            --fail-under-line 0 \
             --html-details build/coverage/full/index.html \
             --print-summary \
             build/Host-Test
-          gcovr \
-            --root . \
-            --filter Tasks/ \
-            --fail-under-line "$MIN_LINE_COVERAGE" \
-            --xml build/coverage/tasks/coverage.xml \
-            --html-details build/coverage/tasks/index.html \
-            --print-summary \
-            build/Host-Test
+          GCOVR_ARGS=(--root . --xml build/coverage/domain/coverage.xml \
+                      --html-details build/coverage/domain/index.html --print-summary)
+          if [ -n "${MIN_LINE_COVERAGE:-}" ]; then
+            GCOVR_ARGS+=(--fail-under-line "$MIN_LINE_COVERAGE")
+          fi
+          gcovr "${GCOVR_ARGS[@]}" build/Host-Test
 
       - name: Upload coverage report
         if: always()

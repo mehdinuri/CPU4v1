@@ -79,13 +79,33 @@
 				
 #define	THREAD_FLAGS_MEASUREMENT_DONE FLAG_BIT_0
 
-#define EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIIVE FLAG_BIT_0
-#define EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIIVE
+/* Maintenance task timeout: maximum time any operational task may go without
+ * signalling EVENT_FLAGS_MAINTENANCE_xxx_TASK_ACTIVE before it is counted as a
+ * failure.  NEMA TS2 fault detection must occur within 2 s; with
+ * MAINTENANCE_MAX_TASK_FAILURES = 2 the worst-case detection latency is
+ * 2 * MAINTENANCE_TASK_TIMEOUT_MS = 1000 ms, well within that budget. */
+#define MAINTENANCE_TASK_TIMEOUT_MS 500
+
+/* StorageRequest timeout: maximum time a calling thread waits for StorageTask
+ * to complete an I2C operation.  I2C EEPROM writes (up to 4 pages x 10 ms +
+ * device-ready polling) complete well within this window.  A timeout here
+ * means StorageTask is hung or crashed — caller gets FALSE (failure). */
+#define STORAGE_REQUEST_TIMEOUT_MS  1000U
+
+#define EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIVE  FLAG_BIT_0
+#define EVENT_FLAGS_MAINTENANCE_CAN_PARSER_TASK_ACTIVE  FLAG_BIT_1
+#define EVENT_FLAGS_MAINTENANCE_CAN_SENDER_TASK_ACTIVE  FLAG_BIT_2
+#define EVENT_FLAGS_MAINTENANCE_STORAGE_TASK_ACTIVE     FLAG_BIT_3
+#define EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE \
+    (EVENT_FLAGS_MAINTENANCE_MEASUREMENT_TASK_ACTIVE | \
+     EVENT_FLAGS_MAINTENANCE_CAN_PARSER_TASK_ACTIVE  | \
+     EVENT_FLAGS_MAINTENANCE_CAN_SENDER_TASK_ACTIVE  | \
+     EVENT_FLAGS_MAINTENANCE_STORAGE_TASK_ACTIVE)
 
 /* Public macros ------------------------------------------------------------*/
 
 /* Public types -------------------------------------------------------------*/
-extern osThreadId_t MaitenanceTaskHandle;
+extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t CANMsgParserTaskHandle;
 extern osThreadId_t CANMsgSenderTaskHandle;
 extern osThreadId_t MeasurementTaskHandle;
@@ -99,7 +119,7 @@ extern osMemoryPoolId_t CANRxReqsMemPoolHandle;
 extern osMemoryPoolId_t CANTxReqsMemPoolHandle;
 extern osMemoryPoolId_t StorageReqsMemPoolHandle;
 
-extern osMutexId_t VoltagesMutexHandle;
+/* VoltagesMutexHandle removed — see app_freertos.c for rationale. */
 
 extern osEventFlagsId_t MaintenanceEventHandle;
 

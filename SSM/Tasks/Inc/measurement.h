@@ -30,7 +30,6 @@
 
 /* Public function prototypes -----------------------------------------------*/
 extern void MeasurementSGStatesCntrsSet(void);
-extern void MeasurementSGCurrentsSet(float *pfCurrents);
 extern void MeasurementThreadFlagSet(void);
 
 #endif /* __SIGNAL_MONITOR_H__ */

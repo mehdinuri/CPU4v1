@@ -8,8 +8,8 @@
             "binaryDir": "${sourceDir}/build/${presetName}"
         },
         {
-            "name": "STM32-GCC-Debug",
-            "displayName": "STM32 GCC Debug",
+            "name": "STM32-Debug",
+            "displayName": "STM32 Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
@@ -18,8 +18,8 @@
             }
         },
         {
-            "name": "STM32-GCC-Release",
-            "displayName": "STM32 GCC Release",
+            "name": "STM32-Release",
+            "displayName": "STM32 Release",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
@@ -40,7 +40,7 @@
         {
             "name": "Docker-STM32-Release",
             "displayName": "STM32 Release (Docker /workspace)",
-            "inherits": "STM32-GCC-Release",
+            "inherits": "STM32-Release",
             "binaryDir": "/workspace/build/Docker-STM32-Release"
         },
         {
@@ -52,12 +52,12 @@
     ],
     "buildPresets": [
         {
-            "name": "STM32-GCC-Debug",
-            "configurePreset": "STM32-GCC-Debug"
+            "name": "STM32-Debug",
+            "configurePreset": "STM32-Debug"
         },
         {
-            "name": "STM32-GCC-Release",
-            "configurePreset": "STM32-GCC-Release"
+            "name": "STM32-Release",
+            "configurePreset": "STM32-Release"
         },
         {
             "name": "Host-Test",

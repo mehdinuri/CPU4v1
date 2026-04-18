@@ -12,6 +12,7 @@ target_sources(Adapters_STM32 PRIVATE
     UnitAlarmAdapter.c
     UnitClockAdapter.c
     LWIPSNMPAdapter.c
+    LWIPSNMPBridge.c
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Core/flash.c
     FlashStorageAdapter.c
     EepromStorageAdapter.c
