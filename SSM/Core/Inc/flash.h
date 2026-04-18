@@ -153,8 +153,11 @@
 /* Public define ------------------------------------------------------------*/
 #define FLASH_BANK2_START_ADDR  ((uint32_t)0x08040000)
 
-#define FLASH_ADDR_USER_BASE ADDR_FLASH_PAGE_126
-#define FLASH_ADDR_USER_END (FLASH_ADDR_USER_BASE + FLASH_PAGE_SIZE - 1)
+#define FLASH_ADDR_USER_SLOT0 ADDR_FLASH_PAGE_126
+#define FLASH_ADDR_USER_SLOT1 ADDR_FLASH_PAGE_127
+
+#define FLASH_ADDR_USER_BASE FLASH_ADDR_USER_SLOT0
+#define FLASH_ADDR_USER_END (FLASH_ADDR_USER_SLOT1 + FLASH_PAGE_SIZE - 1)
 
 #define FLASH_ADDR_END (ADDR_FLASH_PAGE_127 + FLASH_PAGE_SIZE - 1)
 /* Public macros ------------------------------------------------------------*/

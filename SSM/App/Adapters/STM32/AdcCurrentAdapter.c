@@ -53,7 +53,8 @@ ICurrentMeasurementPort_t AdcCurrentAdapter_CreatePort(
 }
 
 void AdcCurrentAdapter_Publish(tSAdcCurrentAdapterCtx *pCtx,
-                               const float *pfCurrents_mA)
+                               const float *pfCurrents_mA,
+                               uint8_t bStatus)
 {
   uint8_t i;
 
@@ -78,6 +79,7 @@ void AdcCurrentAdapter_Publish(tSAdcCurrentAdapterCtx *pCtx,
     pCtx->SSnap.aCurrents_mA[i] = (uint16_t) f;
   }
 
+  pCtx->SSnap.bStatus = bStatus;
   pCtx->SSnap.lSeqNo = pCtx->lSeq + 1U;      /* will match lSeq after final bump */
 
   __DMB();

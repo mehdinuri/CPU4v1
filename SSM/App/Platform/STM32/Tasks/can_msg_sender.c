@@ -18,6 +18,7 @@
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
+static volatile uint32_t lCANTxFaultCount = 0U;
 
 /* Private function prototypes -----------------------------------------------*/
 void vCANMsgSenderInit(void);
@@ -33,18 +34,33 @@ void vCANMsgSenderInit(void);
 /* Private application code --------------------------------------------------*/
 void CANMsgSenderInit(void)
 {
+  lCANTxFaultCount = 0U;
+}
+
+static void CANTxFaultRecord(void)
+{
+  lCANTxFaultCount++;
+  MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
 }
 
 /* Public application code --------------------------------------------------*/
-void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
-                  uint32_t lIDType,
-                  uint32_t lID,
-                  uint32_t lFrameType,
-                  uint32_t lBitRateSwitch,
-                  uint32_t lFDFormat,
-                  uint8_t *baData,
-                  uint8_t bDataLen)
+uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
+                     uint32_t lIDType,
+                     uint32_t lID,
+                     uint32_t lFrameType,
+                     uint32_t lBitRateSwitch,
+                     uint32_t lFDFormat,
+                     const uint8_t *baData,
+                     uint8_t bDataLen)
 {
+  if ((hfdcan == NULL)
+      || (bDataLen > FDCAN_MAX_DATA_LEN)
+      || ((bDataLen != 0U) && (baData == NULL)))
+  {
+    CANTxFaultRecord();
+    return 0U;
+  }
+
   tpSFDCANTxMsg pSReq =
     (tpSFDCANTxMsg) osMemoryPoolAlloc(CANTxReqsMemPoolHandle,
                                       0);
@@ -63,13 +79,28 @@ void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
     pSReq->STxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
     pSReq->STxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     pSReq->STxHeader.MessageMarker = 0x00;
-    memcpy(pSReq->baData, baData, bDataLen);
+    if (bDataLen != 0U)
+    {
+      memcpy(pSReq->baData, baData, bDataLen);
+    }
 
     if (osMessageQueuePut(CANTxReqsQueueHandle, &pSReq, 0, 0) != osOK)
     {
       osMemoryPoolFree(CANTxReqsMemPoolHandle, pSReq);
+      CANTxFaultRecord();
+      return 0U;
     }
+
+    return 1U;
   }
+
+  CANTxFaultRecord();
+  return 0U;
+}
+
+uint8_t CANTxFaultLatched(void)
+{
+  return (lCANTxFaultCount != 0U) ? 1U : 0U;
 }
 
 /* USER CODE BEGIN Header_vCANMsgSenderTask */
@@ -93,12 +124,28 @@ void CANMsgSenderTaskFunc(void *argument)
   while (pdTRUE)
   {
     if (osMessageQueueGet(CANTxReqsQueueHandle, &pSTxMsg, NULL,
-                          osWaitForever) == osOK)
+                          MAINTENANCE_TASK_HEARTBEAT_PERIOD_MS) == osOK)
     {
-      CANSendMessage(pSTxMsg);
-      CANWaitTxComplete(pSTxMsg->hfdcan);
+      uint32_t lTxBufferIndex = 0U;
+
+      if (CANSendMessage(pSTxMsg) != 0U)
+      {
+        lTxBufferIndex =
+          HAL_FDCAN_GetLatestTxFifoQRequestBuffer(pSTxMsg->hfdcan);
+      }
+
+      if ((lTxBufferIndex == 0U)
+          || (CANWaitTxComplete(pSTxMsg->hfdcan,
+                                lTxBufferIndex,
+                                ONE_CENTI_SECOND) == 0U))
+      {
+        CANTxFaultRecord();
+      }
+
       osMemoryPoolFree(CANTxReqsMemPoolHandle, pSTxMsg);
     }
+
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_SENDER_TASK_ACTIVE);
   }
 
   /* USER CODE END vCANMsgSenderTask */

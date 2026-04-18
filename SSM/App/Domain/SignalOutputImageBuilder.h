@@ -42,6 +42,25 @@ typedef struct
 void SignalOutputImageBuilder_Build(const tSSignalOutputBuildInputs *pInputs,
                                     tSSignalOutputImage *pImage);
 
+/**
+ * @brief Same as Build(), but returns 1 if any signal group carried an
+ *        illegal lamp combination and had to be collapsed to all-off.
+ *
+ * Allowed per-group combinations are:
+ *   - dark
+ *   - red
+ *   - yellow
+ *   - green
+ *   - red+yellow
+ *
+ * Any combination containing green together with another lamp, or all three
+ * lamps at once, is treated as a conflicting indication and forced dark for
+ * that group.
+ */
+uint8_t SignalOutputImageBuilder_BuildSafe(
+  const tSSignalOutputBuildInputs *pInputs,
+  tSSignalOutputImage *pImage);
+
 #endif /* DOMAIN_SIGNAL_OUTPUT_IMAGE_BUILDER_H */
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

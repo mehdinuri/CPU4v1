@@ -28,14 +28,15 @@
 /* Public types -------------------------------------------------------------*/
 
 /* Public function prototypes -----------------------------------------------*/
-extern void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
-                         uint32_t lIDType,
-                         uint32_t lID,
-                         uint32_t lFrameType,
-                         uint32_t lBitRateSwitch,
-                         uint32_t lFDFormat,
-                         uint8_t *baData,
-                         uint8_t bDataLen);
+extern uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
+                            uint32_t lIDType,
+                            uint32_t lID,
+                            uint32_t lFrameType,
+                            uint32_t lBitRateSwitch,
+                            uint32_t lFDFormat,
+                            const uint8_t *baData,
+                            uint8_t bDataLen);
+extern uint8_t CANTxFaultLatched(void);
 
 #endif /* __CAN_MSG_SENDER_H__ */
 

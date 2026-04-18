@@ -104,4 +104,14 @@ void vUtilsRefreshWatchdogs(void)
 	IWDGRefresh();
 }
 
+uint32_t MaintenanceTaskFaultsGet(void)
+{
+  if (MaintenanceEventHandle == NULL)
+  {
+    return 0U;
+  }
+
+  return osEventFlagsGet(MaintenanceEventHandle) & EVENT_FLAGS_MAINTENANCE_FAULT_MASK;
+}
+
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****END OF FILE****/

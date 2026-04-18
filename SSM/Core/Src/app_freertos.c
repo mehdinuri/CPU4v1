@@ -422,13 +422,14 @@ void MaintenanceTaskFunc(void *argument)
   {
     #ifndef DEBUG
     osEventFlagsClear(MaintenanceEventHandle,
-                      EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE);
+                      EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL);
     uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
-                                       EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE,
+                                       EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL,
                                        osFlagsWaitAll,
                                        MAINTENANCE_TASK_MAX_TIMEOUT);
 
-    if (lFlags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
+    if ((lFlags & EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL)
+        != EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL)
     {
       if (lActiveTaskFlags != lFlags)
       {

@@ -6,12 +6,14 @@ add_library(ssm_domain STATIC)
 target_sources(ssm_domain PRIVATE
     SignalOutput.c
     SignalOutputImageBuilder.c
+    SignalCardIdentity.c
     SignalFlashConfig.c
     CurrentMeasurement.c
     SignalSampleAccumulator.c
     Crc32.c
     FlashSyncWatchdog.c
     OutputVerify.c
+    PersistenceJournal.c
     VoltageCurrentFrame.c
 )
 

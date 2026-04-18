@@ -29,6 +29,7 @@ static tSCurrentMeasurementSnapshot MakeSnap(uint16_t a,
   s.aCurrents_mA[1] = b;
   s.aCurrents_mA[2] = c;
   s.aCurrents_mA[3] = d;
+  s.bStatus = 0U;
   s.lSeqNo = 0U;
 
   return s;
@@ -144,6 +145,24 @@ void test_pack_from_port_matches_get_latest_snapshot(void)
   TEST_ASSERT_EQUAL_UINT8(0xE4U, wire.bCurHighBitsPacked);
 }
 
+void test_port_snapshot_preserves_status_bits(void)
+{
+  tSMockCurrentMeasurementAdapterCtx mockCtx;
+  ICurrentMeasurementPort_t port;
+  tSCurrentMeasurementSnapshot canned = MakeSnap(1U, 2U, 3U, 4U);
+  tSCurrentMeasurementSnapshot got;
+
+  canned.bStatus = CURRENT_MEASUREMENT_STATUS_SATURATED;
+
+  MockCurrentMeasurementAdapter_Init(&mockCtx);
+  port = MockCurrentMeasurementAdapter_CreatePort(&mockCtx);
+  MockCurrentMeasurementAdapter_SetSnapshot(&mockCtx, &canned);
+
+  CurrentMeasurement_GetLatest(&port, &got);
+
+  TEST_ASSERT_EQUAL_UINT8(CURRENT_MEASUREMENT_STATUS_SATURATED, got.bStatus);
+}
+
 int main(void)
 {
   UNITY_BEGIN();
@@ -153,6 +172,7 @@ int main(void)
   RUN_TEST(test_pack_ten_bit_max_preserved);
   RUN_TEST(test_pack_saturates_above_ten_bits);
   RUN_TEST(test_pack_from_port_matches_get_latest_snapshot);
+  RUN_TEST(test_port_snapshot_preserves_status_bits);
 
   return UNITY_END();
 }

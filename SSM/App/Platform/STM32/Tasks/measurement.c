@@ -23,6 +23,7 @@
 #include "Domain/CurrentMeasurement.h"
 #include "Domain/FlashSyncWatchdog.h"
 #include "Domain/OutputVerify.h"
+#include "Domain/SignalCardIdentity.h"
 #include "Domain/VoltageCurrentFrame.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
 /* Private typedef -----------------------------------------------------------*/
@@ -205,8 +206,78 @@ static void SignalGroupSwitchStatesSet(void)
     }
   }
 
-  SignalOutputImageBuilder_Build(&SInputs, &SPendingCommandedImage);
+  if (SignalOutputImageBuilder_BuildSafe(&SInputs, &SPendingCommandedImage)
+      != 0U)
+  {
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_INVALID_COMMAND);
+  }
+
   SignalOutput_Apply(&g_SignalOutputPort, &SPendingCommandedImage);
+}
+
+static uint8_t VoltageCurrentStatusBuild(
+  const tSCurrentMeasurementSnapshot *pSCurSnap)
+{
+  uint8_t bStatus = 0U;
+  uint32_t lFaults = MaintenanceTaskFaultsGet();
+
+  if (CANRxFaultLatched() != 0U)
+  {
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+  }
+
+  if (CANTxFaultLatched() != 0U)
+  {
+    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
+  }
+
+  if (StorageFaultLatched() != 0U)
+  {
+    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_MEASUREMENT_FAULT) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_MEASUREMENT_FAULT);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_FLASHSYNC_STALE) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_FLASHSYNC_STALE);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_OUTPUT_VERIFY_FAULT);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CAN_RX_FAULT);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CAN_TX_FAULT);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_STORAGE_FAULT);
+  }
+
+  if ((pSCurSnap->bStatus & CURRENT_MEASUREMENT_STATUS_SATURATED) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CURRENT_SATURATED);
+  }
+
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_INVALID_COMMAND) != 0U)
+  {
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_INVALID_COMMAND);
+  }
+
+  return bStatus;
 }
 
 static void VoltageCurrentSend(void)
@@ -222,13 +293,17 @@ static void VoltageCurrentSend(void)
   CurrentMeasurement_GetLatest(&g_CurrentMeasurementPort, &SCurSnap);
   CurrentMeasurement_Pack(&SCurSnap, &SFrameIn.SCurrentWire);
   SFrameIn.SVoltageImage = SObservedImage;
+  SFrameIn.bStatus = VoltageCurrentStatusBuild(&SCurSnap);
 
   SFrame.sStdId = (uint16_t) (FDCAN_SSM_VOLTAGE_CURRENT_1_STD_ID
-                              + GPIOGetCardID());
+                              + g_bCardId);
   SFrame.bLen = VOLTAGE_CURRENT_FRAME_BYTES;
   VoltageCurrentFrame_Encode(&SFrameIn, SFrame.abData);
 
-  (void) CanBus_SendStd(&g_CanBusPort, CAN_BUS_FDCAN1, &SFrame);
+  if (CanBus_SendStd(&g_CanBusPort, CAN_BUS_FDCAN1, &SFrame) == 0U)
+  {
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
+  }
 }
 
 /* Public application code --------------------------------------------------*/

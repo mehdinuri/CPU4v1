@@ -19,6 +19,7 @@
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
+static volatile uint32_t lStorageFaultCount = 0U;
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -33,6 +34,13 @@
 /* Private application code --------------------------------------------------*/
 void StorageInit(void)
 {
+  lStorageFaultCount = 0U;
+}
+
+static void StorageFaultRecord(void)
+{
+  lStorageFaultCount++;
+  MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT);
 }
 
 uint8_t StorageRequestParse(tpSStorageReq pSReq)
@@ -80,6 +88,7 @@ uint8_t StorageRequest(uint8_t bReqId,
     pSReq->lAddress = lAddress;
     pSReq->pvData = pvData;
     pSReq->lDataSize = lDataSize;
+    osThreadFlagsClear(THREAD_FLAGS_STORAGE_REQ_PROCESS_ALL);
 
     if (osMessageQueuePut(StorageReqsQueueHandle, &pSReq, 0, 0) == osOK)
     {
@@ -89,25 +98,39 @@ uint8_t StorageRequest(uint8_t bReqId,
       }
       else
       {
-        osThreadFlagsClear(THREAD_FLAGS_STORAGE_REQ_PROCESS_OK
-                           | THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR);
         uint32_t lFlags =
           osThreadFlagsWait(THREAD_FLAGS_STORAGE_REQ_PROCESS_OK
                             | THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR,
                             osFlagsWaitAny,
                             osWaitForever);
 
-        return (lFlags & THREAD_FLAGS_STORAGE_REQ_PROCESS_OK) != 0;
+        if ((lFlags & 0x80000000U) != 0U)
+        {
+          StorageFaultRecord();
+          return FALSE;
+        }
+
+        return (lFlags & THREAD_FLAGS_STORAGE_REQ_PROCESS_OK) != 0U;
       }
     }
     else
     {
       osMemoryPoolFree(StorageReqsMemPoolHandle, pSReq);
+      StorageFaultRecord();
     }
+  }
+  else
+  {
+    StorageFaultRecord();
   }
 
   return FALSE;
 } /* StorageRequest */
+
+uint8_t StorageFaultLatched(void)
+{
+  return (lStorageFaultCount != 0U) ? 1U : 0U;
+}
 
 /* USER CODE BEGIN Header_vStorageTask */
 
@@ -130,9 +153,14 @@ void StorageTaskFunc(void *argument)
   while (pdTRUE)
   {
     if (osMessageQueueGet(StorageReqsQueueHandle, &pSReq, NULL,
-                          osWaitForever) == osOK)
+                          MAINTENANCE_TASK_HEARTBEAT_PERIOD_MS) == osOK)
     {
       uint8_t fResult = StorageRequestParse(pSReq);
+
+      if (fResult == FALSE)
+      {
+        StorageFaultRecord();
+      }
 
       if (pSReq->bReqId != STORAGE_REQ_FLASH_WRITE_ASYNCH)
       {
@@ -153,6 +181,8 @@ void StorageTaskFunc(void *argument)
 
       osMemoryPoolFree(StorageReqsMemPoolHandle, pSReq);
     }
+
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_STORAGE_TASK_ACTIVE);
   }
 
   /* USER CODE END vStorageTask */

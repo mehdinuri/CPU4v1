@@ -11,6 +11,11 @@ Add_Unity_Domain_Test(Test_SignalOutput
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_SignalOutput.c
 )
 
+# Domain: SignalCardIdentity address validity + mapping helpers.
+Add_Unity_Domain_Test(Test_SignalCardIdentity
+    ${CMAKE_CURRENT_SOURCE_DIR}/Test_SignalCardIdentity.c
+)
+
 # Domain + Mock adapter: SignalOutputImageBuilder.c end-to-end via MockSignalOutputAdapter.
 Add_Unity_Domain_Test(Test_SignalOutputImageBuilder
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_SignalOutputImageBuilder.c
@@ -44,6 +49,11 @@ target_link_libraries(Test_SignalSampleAccumulator PRIVATE ssm_adapters_mock)
 # Domain: CRC-32/ISO-HDLC table against standard test vectors.
 Add_Unity_Domain_Test(Test_Crc32
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_Crc32.c
+)
+
+# Domain: journal-record validation/selection used by flash persistence.
+Add_Unity_Domain_Test(Test_PersistenceJournal
+    ${CMAKE_CURRENT_SOURCE_DIR}/Test_PersistenceJournal.c
 )
 
 # Domain: FlashSyncWatchdog deadman, including SysTick wraparound.

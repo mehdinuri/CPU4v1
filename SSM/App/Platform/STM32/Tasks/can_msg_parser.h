@@ -34,12 +34,14 @@
 
 /* Public function prototypes -----------------------------------------------*/
 extern void CANRxRequest(tpSFDCANRxMsg pSRxMsg);
+extern void CANRxFaultRecord(void);
 extern uint8_t CANFlashStatusGet(void);
 extern uint8_t CANFlashSyncStatusGet(void);
 extern GPIO_PinState CANSignalOutputStateGet(uint8_t bGroupIdx,
                                              uint8_t bOutputIdx);
 extern GPIO_PinState CANSignalOutputFlashStateGet(uint8_t bGroupIdx,
                                                   uint8_t bOutputIdx);
+extern uint8_t CANRxFaultLatched(void);
 extern void CANSignalOutputFlashConfigCheck(void);
 
 #endif /* __CAN_MSG_PARSER_H__ */

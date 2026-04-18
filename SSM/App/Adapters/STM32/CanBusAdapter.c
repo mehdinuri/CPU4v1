@@ -19,7 +19,10 @@ static FDCAN_HandleTypeDef *HandleFor(tECanBusId eBus)
 
       case CAN_BUS_FDCAN2:
       {
-        return &hfdcan2;
+        /* Reserved bus. FDCAN2 is intentionally not initialised in SSM's
+         * current deployment profile, so reject attempts to use it.
+         */
+        return 0;
       }
 
       default:
@@ -50,16 +53,14 @@ static uint8_t AdapterSendStd(void *pCtx,
   /* CANTxRequest's pData is non-const for historical reasons; the enqueue
    * path memcpy's before returning, so casting away const is safe.
    */
-  CANTxRequest(pHandle,
-               FDCAN_STANDARD_ID,
-               (uint32_t) pFrame->sStdId,
-               FDCAN_DATA_FRAME,
-               FDCAN_BRS_OFF,
-               FDCAN_CLASSIC_CAN,
-               (uint8_t *) pFrame->abData,
-               pFrame->bLen);
-
-  return 1U;
+  return CANTxRequest(pHandle,
+                      FDCAN_STANDARD_ID,
+                      (uint32_t) pFrame->sStdId,
+                      FDCAN_DATA_FRAME,
+                      FDCAN_BRS_OFF,
+                      FDCAN_CLASSIC_CAN,
+                      pFrame->abData,
+                      pFrame->bLen);
 }
 
 void CanBusAdapter_Init(tSCanBusAdapterCtx *pCtx)

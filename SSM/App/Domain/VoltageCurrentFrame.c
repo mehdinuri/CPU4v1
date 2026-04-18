@@ -41,8 +41,8 @@ void VoltageCurrentFrame_Encode(const tSVoltageCurrentFrameInputs *pIn,
    */
   pOutBytes[6] = pIn->SCurrentWire.bCurHighBitsPacked;
 
-  /* Byte 7: reserved — receivers must accept 0. */
-  pOutBytes[7] = 0U;
+  /* Byte 7: status flags. */
+  pOutBytes[7] = pIn->bStatus;
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

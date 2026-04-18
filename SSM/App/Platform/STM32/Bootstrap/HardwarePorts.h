@@ -29,6 +29,7 @@ extern IPersistencePort_t g_PersistencePort;
 extern ICurrentMeasurementPort_t g_CurrentMeasurementPort;
 extern ICanBusPort_t g_CanBusPort;
 extern ITimerPort_t g_TimerPort;
+extern uint8_t g_bCardId;
 
 /* ISR-side handle needed by adc.c to publish new samples directly. */
 extern tSAdcCurrentAdapterCtx g_AdcCurrentCtx;

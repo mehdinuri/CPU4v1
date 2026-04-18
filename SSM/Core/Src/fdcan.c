@@ -32,6 +32,7 @@ FDCAN_HandleTypeDef hfdcan2;
 /* FDCAN1 init function */
 void MX_FDCAN1_Init(void)
 {
+  FDCAN_FilterTypeDef SFilterConfig;
 
   /* USER CODE BEGIN FDCAN1_Init 0 */
 
@@ -42,7 +43,7 @@ void MX_FDCAN1_Init(void)
   /* USER CODE END FDCAN1_Init 1 */
   hfdcan1.Instance = FDCAN1;
   hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
-  hfdcan1.Init.FrameFormat = FDCAN_FRAME_FD_BRS;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
   hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
   hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
@@ -55,7 +56,7 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.DataSyncJumpWidth = 1;
   hfdcan1.Init.DataTimeSeg1 = 1;
   hfdcan1.Init.DataTimeSeg2 = 1;
-  hfdcan1.Init.StdFiltersNbr = 0;
+  hfdcan1.Init.StdFiltersNbr = 3;
   hfdcan1.Init.ExtFiltersNbr = 0;
   hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
   if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
@@ -63,7 +64,41 @@ void MX_FDCAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN1_Init 2 */
-	
+  SFilterConfig.IdType = FDCAN_STANDARD_ID;
+  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
+  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+
+  SFilterConfig.FilterIndex = 0;
+  SFilterConfig.FilterID1 = FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID;
+  SFilterConfig.FilterID2 = FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  SFilterConfig.FilterIndex = 1;
+  SFilterConfig.FilterID1 = FDCAN_PSM_FLASH_SYNC_1_STD_ID;
+  SFilterConfig.FilterID2 = FDCAN_PSM_FLASH_SYNC_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  SFilterConfig.FilterIndex = 2;
+  SFilterConfig.FilterID1 = FDCAN_CP_FLASH_SIGNALS_1_STD_ID;
+  SFilterConfig.FilterID2 = FDCAN_CP_FLASH_SIGNALS_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT,
+                                   FDCAN_REJECT_REMOTE,
+                                   FDCAN_REJECT_REMOTE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
   /* USER CODE END FDCAN1_Init 2 */
 
 }
@@ -385,26 +420,80 @@ void CANDeInit(FDCAN_HandleTypeDef* hfdcan)
   HAL_FDCAN_DeInit(hfdcan);
 }
 
-void CANSendMessage(tpSFDCANTxMsg pSMsg)
+uint8_t CANSendMessage(tpSFDCANTxMsg pSMsg)
 {
+  if (pSMsg == NULL)
+  {
+    return 0U;
+  }
+
   if (HAL_FDCAN_AddMessageToTxFifoQ(pSMsg->hfdcan,
                                     &pSMsg->STxHeader,
                                     pSMsg->baData) != HAL_OK)
   {
-    Error_Handler();
+    return 0U;
   }
+
+  return 1U;
 }
 
-void CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan)
+uint8_t CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan,
+                          uint32_t lTxBufferIndex,
+                          uint32_t lTimeout_ms)
 {
-  while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) == 0)
+  uint32_t lStart = HAL_GetTick();
+
+  if ((hfdcan == NULL) || (lTxBufferIndex == 0U))
   {
+    return 0U;
+  }
+
+  while (HAL_FDCAN_IsTxBufferMessagePending(hfdcan, lTxBufferIndex) != 0U)
+  {
+    if ((HAL_GetTick() - lStart) >= lTimeout_ms)
+    {
+      (void) HAL_FDCAN_AbortTxRequest(hfdcan, lTxBufferIndex);
+      return 0U;
+    }
+
     osDelay(1);
+  }
+
+  return 1U;
+}
+
+static uint8_t CANRxFrameShouldQueue(const tSFDCANRxMsg *pSRxMsg)
+{
+  if ((pSRxMsg->SRxHeader.IdType != FDCAN_STANDARD_ID)
+      || (pSRxMsg->SRxHeader.RxFrameType != FDCAN_DATA_FRAME)
+      || (pSRxMsg->SRxHeader.DataLength != FDCAN_MAX_DATA_LEN))
+  {
+    return 0U;
+  }
+
+  switch (pSRxMsg->SRxHeader.Identifier)
+  {
+      case FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID:
+      case FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID:
+      case FDCAN_PSM_FLASH_SYNC_1_STD_ID:
+      case FDCAN_PSM_FLASH_SYNC_2_STD_ID:
+      case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
+      case FDCAN_CP_FLASH_SIGNALS_2_STD_ID:
+      {
+        return 1U;
+      }
+
+      default:
+      {
+        return 0U;
+      }
   }
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 {
+  (void) RxFifo0ITs;
+
   if (hfdcan->Instance == FDCAN1)
   {
 		tSFDCANRxMsg SRxMsg;
@@ -414,12 +503,20 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 
     if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &SRxMsg.SRxHeader, SRxMsg.baData) != HAL_OK)
     {
-      Error_Handler();
+      CANRxFaultRecord();
+      return;
     }
 
     SRxMsg.SRxHeader.DataLength = CANGetRxDataLength(SRxMsg.SRxHeader.DataLength);
-		
-		CANRxRequest(&SRxMsg);
+
+    if (CANRxFrameShouldQueue(&SRxMsg) != 0U)
+    {
+		  CANRxRequest(&SRxMsg);
+    }
+    else
+    {
+      CANRxFaultRecord();
+    }
   }
 }
 /* USER CODE END 1 */

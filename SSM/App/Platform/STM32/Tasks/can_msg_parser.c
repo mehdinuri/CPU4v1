@@ -17,6 +17,7 @@
 #include "storage.h"
 #include "Domain/SignalFlashConfig.h"
 #include "Domain/FlashSyncWatchdog.h"
+#include "Domain/SignalCardIdentity.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
 /* Private typedef -----------------------------------------------------------*/
 typedef enum
@@ -29,6 +30,7 @@ typedef enum
 static uint8_t fFlashStatus = FALSE;
 static uint8_t fFlashSyncStatus = FALSE;
 static tSOutputGroup SaSignalOutputGroups[SIGNAL_GROUPS_PER_SSM];
+static volatile uint32_t lCANRxFaultCount = 0U;
 /* Last flash-config we successfully saved; used to skip redundant writes. */
 static tSSignalFlashConfig SLastSavedFlashCfg;
 
@@ -48,6 +50,12 @@ void CANMsgParserInit(void)
 {
   memset(SaSignalOutputGroups, 0, sizeof(SaSignalOutputGroups));
   memset(&SLastSavedFlashCfg, 0, sizeof(SLastSavedFlashCfg));
+  lCANRxFaultCount = 0U;
+}
+
+void CANRxFaultRecord(void)
+{
+  lCANRxFaultCount++;
 }
 
 static void SignalOutputFlashConfigSet(void)
@@ -123,8 +131,7 @@ static void SignalOutputSet(uint8_t bGroupIdx,
 static void SignalOutputsUpdate(uint8_t *pbData, tEOutputSetType eSetType)
 {
   uint8_t bGroupIdx, bOutputIdx;
-  uint8_t bOutputBitIdx = (GPIOGetCardID() % SSM_MODULES_PER_SSM_GROUP)
-                          * (SIGNAL_OUTPUTS_PER_SSM);
+  uint8_t bOutputBitIdx = SignalCardIdentity_OutputBitBase(g_bCardId);
 
   for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
   {
@@ -146,6 +153,16 @@ static void SignalOutputsUpdate(uint8_t *pbData, tEOutputSetType eSetType)
 
 static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 {
+  if ((pSRxMsg == NULL)
+      || (pSRxMsg->SRxHeader.IdType != FDCAN_STANDARD_ID)
+      || (pSRxMsg->SRxHeader.RxFrameType != FDCAN_DATA_FRAME)
+      || (pSRxMsg->SRxHeader.DataLength != FDCAN_MAX_DATA_LEN))
+  {
+    CANRxFaultRecord();
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+    return;
+  }
+
   switch (pSRxMsg->SRxHeader.IdType)
   {
       case FDCAN_STANDARD_ID:
@@ -154,7 +171,7 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
         {
             case FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID:
             {
-              if (GPIOGetCardID() < SSM_MODULES_PER_SSM_GROUP)
+              if (SignalCardIdentity_CommandBank(g_bCardId) == 0U)
               {
                 SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_ACTIVE);
               }
@@ -164,7 +181,7 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 
             case FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID:
             {
-              if (GPIOGetCardID() >= SSM_MODULES_PER_SSM_GROUP)
+              if (SignalCardIdentity_CommandBank(g_bCardId) == 1U)
               {
                 SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_ACTIVE);
               }
@@ -174,7 +191,7 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 
             case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
             {
-              if (GPIOGetCardID() < SSM_MODULES_PER_SSM_GROUP)
+              if (SignalCardIdentity_CommandBank(g_bCardId) == 0U)
               {
                 SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_FLASH);
               }
@@ -184,7 +201,7 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 
             case FDCAN_CP_FLASH_SIGNALS_2_STD_ID:
             {
-              if (GPIOGetCardID() >= SSM_MODULES_PER_SSM_GROUP)
+              if (SignalCardIdentity_CommandBank(g_bCardId) == 1U)
               {
                 SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_FLASH);
               }
@@ -204,8 +221,22 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
                                      Tick_Now_ms(&g_TickPort));
               break;
             }
+
+            default:
+            {
+              CANRxFaultRecord();
+              MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+              break;
+            }
         } /* switch */
 
+        break;
+      }
+
+      default:
+      {
+        CANRxFaultRecord();
+        MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
         break;
       }
   } /* switch */
@@ -262,30 +293,54 @@ void CANSignalOutputFlashConfigCheck(void)
     return;
   }
 
-  /* No valid record — write defaults (all steady). */
-  tSSignalFlashConfig SDefault;
-
-  memset(&SDefault, 0, sizeof(SDefault));
-  if (SignalFlashConfig_Save(&g_PersistencePort, &SDefault))
+  /* Leave the runtime state at the safe default (all steady), but do not
+   * auto-rewrite flash here. A transient read/backend failure must not erase
+   * the last valid persisted program by overwriting it with defaults.
+   */
+  for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
   {
-    SLastSavedFlashCfg = SDefault;
+    for (bOutputIdx = 0;
+         bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
+         bOutputIdx++)
+    {
+      SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing
+        = 0U;
+    }
   }
+
+  memset(&SLastSavedFlashCfg, 0, sizeof(SLastSavedFlashCfg));
 }
 
 void CANRxRequest(tpSFDCANRxMsg pSRxMsg)
 {
+  if (pSRxMsg == NULL)
+  {
+    CANRxFaultRecord();
+    return;
+  }
+
   tpSFDCANRxMsg pSReq =
     (tpSFDCANRxMsg) osMemoryPoolAlloc(CANRxReqsMemPoolHandle,
                                       0);
 
-  if (pSRxMsg != NULL)
+  if (pSReq != NULL)
   {
     memcpy(pSReq, pSRxMsg, sizeof(tSFDCANRxMsg));
     if (osMessageQueuePut(CANRxReqsQueueHandle, &pSReq, 0, 0) != osOK)
     {
       osMemoryPoolFree(CANRxReqsMemPoolHandle, pSReq);
+      CANRxFaultRecord();
     }
   }
+  else
+  {
+    CANRxFaultRecord();
+  }
+}
+
+uint8_t CANRxFaultLatched(void)
+{
+  return (lCANRxFaultCount != 0U) ? 1U : 0U;
 }
 
 /* USER CODE BEGIN Header_CANMsgParserTaskFunc */
@@ -311,11 +366,13 @@ void CANMsgParserTaskFunc(void *argument)
   while (pdTRUE)
   {
     if (osMessageQueueGet(CANRxReqsQueueHandle, &pSRxMsg, NULL,
-                          osWaitForever) == osOK)
+                          MAINTENANCE_TASK_HEARTBEAT_PERIOD_MS) == osOK)
     {
       CANMsgParse(pSRxMsg);
       osMemoryPoolFree(CANRxReqsMemPoolHandle, pSRxMsg);
     }
+
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_PARSER_TASK_ACTIVE);
   }
 
   /* USER CODE END CANMsgParserTaskFunc */

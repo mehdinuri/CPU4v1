@@ -45,6 +45,7 @@ extern uint8_t StorageRequest(uint8_t bReqId,
                               uint32_t lAddress,
                               void *pvData,
                               uint32_t lDataSize);
+extern uint8_t StorageFaultLatched(void);
 
 #endif /* __STORAGE_H__ */
 

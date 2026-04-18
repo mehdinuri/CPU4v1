@@ -35,13 +35,15 @@ ICurrentMeasurementPort_t AdcCurrentAdapter_CreatePort(
 /**
  * @brief Publish a new sample. Bumps the seqlock, writes the snapshot,
  *        bumps the seqlock again. Source is an array of 4 currents in mA
- *        (float — converted + clamped internally).
+ *        (float — converted + clamped internally). Status bits carry
+ *        measurement qualifiers such as saturation.
  *
  *        Safe from ISR or task context. Single-writer: do not call from
  *        two contexts concurrently.
  */
 void AdcCurrentAdapter_Publish(tSAdcCurrentAdapterCtx *pCtx,
-                               const float *pfCurrents_mA);
+                               const float *pfCurrents_mA,
+                               uint8_t bStatus);
 
 #endif /* ADAPTERS_STM32_ADC_CURRENT_ADAPTER_H */
 

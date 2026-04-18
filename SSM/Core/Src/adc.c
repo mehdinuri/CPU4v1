@@ -25,7 +25,6 @@
 #include <math.h>
 #include <string.h>
 #include "measurement.h"
-#include "rng.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
 #include "Adapters/STM32/AdcCurrentAdapter.h"
 
@@ -67,21 +66,12 @@ static volatile uint8_t s_LatestReadyHalf = 0xFFU;
 #define SIGNAL_GROUP_CURRENT_DEADZONE_OFFSET_MA 5.5f
 #define SIGNAL_GROUP_NO_LOAD_THRESHOLD_MA 4.0f  /* Safely below 1W (~4mA) but above ambient noise */
 
-/* Malfunction Unit (MP) Jitter Configuration */
-/* Bounces the reported value between 1016 and 1023 to prevent static-value faults */
-#define JITTER_PRIME_STEP 3 /* Relatively prime to 8 for a full sequence */
-#define JITTER_MASK 0x07 /* Bitwise mask to restrict the range to 0-7 */
-
 uint16_t saADC1ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC1_MAX_CHANNELS];
 uint16_t saADC2ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC2_MAX_CHANNELS];
 
 float faSGP[SIGNAL_GROUPS_PER_SSM_MAX];
 float faSGH[SIGNAL_GROUPS_PER_SSM_MAX];
 float faSGCurrentRMS[SIGNAL_GROUPS_PER_SSM_MAX];
-
-#ifndef DEBUG
-static uint8_t bJitter = 0;
-#endif
 /* USER CODE END 0 */
 
 ADC_HandleTypeDef hadc1;
@@ -588,6 +578,7 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
                                                      SAMPLES_PER_MAINS_CYCLE);
 
   uint8_t bSGIdx = 0;
+  uint8_t bMeasurementStatus = 0U;
 
   for (bSGIdx = 0; bSGIdx < SIGNAL_GROUPS_PER_SSM_MAX; bSGIdx++)
   {
@@ -597,8 +588,8 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
                                                  SCALING_FACTOR_P,
                                                  SCALING_FACTOR_H) * 1000.0f;
 
-    #ifndef DEBUG
     /* Apply hardware dead-zone compensation */
+    #ifndef DEBUG
     if (faSGCurrentRMS[bSGIdx] < SIGNAL_GROUP_NO_LOAD_THRESHOLD_MA)
     {
       faSGCurrentRMS[bSGIdx] = 0.0f;
@@ -609,13 +600,14 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
     *  faSGCurrentRMS[bSGIdx] += SIGNAL_GROUP_CURRENT_DEADZONE_OFFSET_MA;
     *  }*/
 
+    #endif /* ifndef DEBUG */
+
     if (faSGCurrentRMS[bSGIdx] >= MP_MAX_CURRENT_MS)
     {
-      bJitter = (bJitter + JITTER_PRIME_STEP) & JITTER_MASK;
-      faSGCurrentRMS[bSGIdx] = (MP_MAX_CURRENT_MS - 1.0f - (float) (bJitter));
+      faSGCurrentRMS[bSGIdx] = MP_MAX_CURRENT_MS - 1.0f;
+      bMeasurementStatus = (uint8_t) (bMeasurementStatus
+                                      | CURRENT_MEASUREMENT_STATUS_SATURATED);
     }
-
-    #endif /* ifndef DEBUG */
   }
 
   /* Publish the latest RMS values through the ICurrentMeasurementPort
@@ -623,7 +615,7 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
    * __DMB + atomic swap also works from ISR, so the primitive is future-
    * proof if this ever needs to move back.
    */
-  AdcCurrentAdapter_Publish(&g_AdcCurrentCtx, faSGCurrentRMS);
+  AdcCurrentAdapter_Publish(&g_AdcCurrentCtx, faSGCurrentRMS, bMeasurementStatus);
 } /* SGCurrentProcess */
 
 /* ISR now does the minimum: remember which half is fresh and wake the

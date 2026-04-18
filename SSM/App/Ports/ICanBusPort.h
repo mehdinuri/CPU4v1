@@ -14,8 +14,8 @@
 
 typedef enum
 {
-  CAN_BUS_FDCAN1 = 0,      /* Classic CAN, standard IDs only (SSM ↔ CP, PSM) */
-  CAN_BUS_FDCAN2 = 1,      /* FD-BRS, reserved for future use */
+  CAN_BUS_FDCAN1 = 0,      /* Active field bus: classic CAN, standard IDs */
+  CAN_BUS_FDCAN2 = 1,      /* Reserved for future expansion */
   CAN_BUS__COUNT
 } tECanBusId;
 

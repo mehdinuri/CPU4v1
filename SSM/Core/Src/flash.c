@@ -84,7 +84,7 @@ static uint8_t FlashErase(uint32_t lAddress, uint32_t lDataSize)
 	
 	lBanks = FlashBankGet(lAddress);
 	lStartPage = FlashPageGet(lAddress);
-	lEndPage = FlashPageGet(lAddress + lDataSize);
+	lEndPage = FlashPageGet((lAddress + lDataSize) - 1U);
 	lNumberOfPages = lEndPage - lStartPage + 1;
 	
 	SEraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
@@ -103,7 +103,12 @@ uint8_t FlashWrite(uint32_t lAddress, const void * pvData, uint32_t lDataSize)
 {
 	uint32_t lWriteAddress = lAddress, lBytesWritten = 0;
 	
-	if (lWriteAddress % 8 != 0 || lWriteAddress < FLASH_ADDR_USER_BASE || lWriteAddress > FLASH_ADDR_USER_END)
+	if ((pvData == NULL)
+	    || (lDataSize == 0U)
+	    || (lWriteAddress % 8 != 0)
+	    || (lWriteAddress < FLASH_ADDR_USER_BASE)
+	    || (lWriteAddress > FLASH_ADDR_USER_END)
+	    || ((lDataSize - 1U) > (FLASH_ADDR_USER_END - lWriteAddress)))
 	{
 		return FALSE;
 	}
@@ -149,7 +154,11 @@ uint8_t FlashRead(uint32_t lAddress, void * pvData, uint32_t lDataSize)
 	uint32_t lReadAddress = lAddress, lBytesRead = 0;
 	uint8_t * pbData	= (uint8_t *) pvData;
 	
-	if(lReadAddress < FLASH_ADDR_USER_BASE || lReadAddress > FLASH_ADDR_USER_END)
+	if ((pvData == NULL)
+	    || (lDataSize == 0U)
+	    || (lReadAddress < FLASH_ADDR_USER_BASE)
+	    || (lReadAddress > FLASH_ADDR_USER_END)
+	    || ((lDataSize - 1U) > (FLASH_ADDR_USER_END - lReadAddress)))
 	{
 		return FALSE;
 	}

@@ -13,10 +13,12 @@
 #include <stdint.h>
 
 #define CURRENT_CHANNEL_COUNT 4U    /* Four signal groups */
+#define CURRENT_MEASUREMENT_STATUS_SATURATED 0x01U
 
 typedef struct
 {
   uint16_t aCurrents_mA[CURRENT_CHANNEL_COUNT];      /* RMS current per group, in mA */
+  uint8_t bStatus;                                   /* CURRENT_MEASUREMENT_STATUS_* */
   uint32_t lSeqNo;                                   /* monotonic sample counter (ok to wrap) */
 } tSCurrentMeasurementSnapshot;
 

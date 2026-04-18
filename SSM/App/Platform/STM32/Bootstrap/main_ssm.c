@@ -7,6 +7,7 @@
  */
 
 #include "Platform/STM32/Bootstrap/main_ssm.h"
+#include "main.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
 #include "Adapters/STM32/GpioOutputAdapter.h"
 #include "Adapters/STM32/GpioInputAdapter.h"
@@ -17,6 +18,7 @@
 #include "Adapters/STM32/CanBusAdapter.h"
 #include "Adapters/STM32/TimerAdapter.h"
 #include "Domain/FlashSyncWatchdog.h"
+#include "Domain/SignalCardIdentity.h"
 
 /* Adapter contexts — static storage duration, one instance per port.
  * g_AdcCurrentCtx is non-static: the ADC ISR in Core/Src/adc.c publishes
@@ -43,14 +45,24 @@ IPersistencePort_t g_PersistencePort;
 ICurrentMeasurementPort_t g_CurrentMeasurementPort;
 ICanBusPort_t g_CanBusPort;
 ITimerPort_t g_TimerPort;
+uint8_t g_bCardId;
 
 void MainApplication_Init(void)
 {
+  tSSignalInputSnapshot SInputSnapshot;
+
   GpioOutputAdapter_Init(&SGpioOutputCtx);
   g_SignalOutputPort = GpioOutputAdapter_CreatePort(&SGpioOutputCtx);
 
   GpioInputAdapter_Init(&SGpioInputCtx);
   g_SignalInputPort = GpioInputAdapter_CreatePort(&SGpioInputCtx);
+  SignalInput_Sample(&g_SignalInputPort, &SInputSnapshot);
+  if (SignalCardIdentity_IsValid(SInputSnapshot.bCardId) == 0U)
+  {
+    Error_Handler();
+  }
+
+  g_bCardId = SInputSnapshot.bCardId;
 
   IwdgWatchdogAdapter_Init(&SIwdgWatchdogCtx);
   g_WatchdogPort = IwdgWatchdogAdapter_CreatePort(&SIwdgWatchdogCtx);

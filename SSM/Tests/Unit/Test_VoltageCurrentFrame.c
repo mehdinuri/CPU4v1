@@ -115,14 +115,12 @@ void test_current_high_bits_pass_through(void)
   TEST_ASSERT_EQUAL_UINT8(0xE4U, bytes[6]);
 }
 
-void test_byte_7_reserved_is_zero(void)
+void test_byte_7_status_passthrough(void)
 {
-  /* Fill everything we can to try to poison byte 7 — encoder must
-   * write 0 regardless. */
-  memset(&in, 0xFFU, sizeof(in));
+  in.bStatus = 0xA5U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
-  TEST_ASSERT_EQUAL_UINT8(0U, bytes[7]);
+  TEST_ASSERT_EQUAL_UINT8(0xA5U, bytes[7]);
 }
 
 void test_voltage_independent_of_current_fields(void)
@@ -152,7 +150,7 @@ int main(void)
   RUN_TEST(test_nonzero_voltage_values_normalise_to_single_bit);
   RUN_TEST(test_current_low_bytes_pass_through);
   RUN_TEST(test_current_high_bits_pass_through);
-  RUN_TEST(test_byte_7_reserved_is_zero);
+  RUN_TEST(test_byte_7_status_passthrough);
   RUN_TEST(test_voltage_independent_of_current_fields);
 
   return UNITY_END();

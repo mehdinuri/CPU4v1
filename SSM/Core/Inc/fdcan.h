@@ -123,8 +123,10 @@ extern uint32_t CANGetTxDataLengthCode(uint8_t bLen);
 extern void CANStart(FDCAN_HandleTypeDef* hfdcan);
 extern void CANStop(FDCAN_HandleTypeDef* hfdcan);
 extern void CANDeInit(FDCAN_HandleTypeDef* hfdcan);
-extern void CANSendMessage(tpSFDCANTxMsg pSMsg);
-extern void CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan);
+extern uint8_t CANSendMessage(tpSFDCANTxMsg pSMsg);
+extern uint8_t CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan,
+                                 uint32_t lTxBufferIndex,
+                                 uint32_t lTimeout_ms);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus
