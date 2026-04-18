@@ -81,102 +81,41 @@ typedef struct _tSFDCANTxMsg
 	
 } tSFDCANTxMsg, *tpSFDCANTxMsg;
 
-typedef __packed struct _tSBitFlags16
-{
-	uint8_t fBit0 : 1;
-	uint8_t fBit1 : 1;
-	uint8_t fBit2 : 1;
-	uint8_t fBit3 : 1;
-	uint8_t fBit4 : 1;
-	uint8_t fBit5 : 1;
-	uint8_t fBit6 : 1;
-	uint8_t fBit7 : 1;
-	uint8_t fBit8 : 1;
-	uint8_t fBit9 : 1;
-	uint8_t fBit10 : 1;
-	uint8_t fBit11 : 1;
-	uint8_t fBit12: 1;
-  uint8_t fBit13: 1;
-  uint8_t fBit14: 1;
-  uint8_t fBit15: 1;
+/* NOTE: the former tSBitFlags16, tSVoltageCurrent_t, and tUOutputs types
+ * were deleted once the outgoing CAN telemetry path moved to the byte-
+ * explicit Domain/VoltageCurrentFrame encoder. They were the main source
+ * of GCC's "'packed' attribute ignored" warnings (nested __packed unions).
+ *
+ * The remaining types below are module-internal state only — never
+ * memcpy'd onto a CAN frame — so __packed is redundant: all members are
+ * already byte-aligned and the compiler's natural layout matches the
+ * field order we use.
+ */
 
-} tSBitFlags16, *tpSBitFlags16;
-
-typedef __packed struct _tSVoltageCurrent_t
-{
-	__packed union 
-	{
-		tSBitFlags16 SVoltageBits;
-		uint16_t sVoltages;
-
-	} UVoltages;
-
-	__packed union 
-	{
-		__packed struct
-		{
-			uint8_t bSOCurLow0_2;
-			uint8_t bSOCurLow3_5;
-			uint8_t bSOCurLow6_8;
-			uint8_t bSOCurLow9_11;
-
-		} SSOCurrentsLow;
-
-		uint8_t baSOCurrentsLow[4];
-
-	} USOCurrentsLow;
-
-	__packed union 
-	{
-		__packed struct
-		{
-			uint8_t bSOCurHighBits0_2 : 2;
-			uint8_t bSOCurHighBits3_5 : 2;
-			uint8_t bSOCurHighBits6_8 : 2;
-			uint8_t bSOCurHighBits9_11 : 2;
-
-		} SSOCurrentsHighBits;
-
-		uint8_t bSOCurrentsHighBits;
-
-	} USOCurrentsHighBits;
-
-	uint8_t bReserved2;
-
-} tSVoltageCurrent_t, *tpSVoltageCurrent_t;
-
-typedef __packed struct _tSSignalOutput
+typedef struct _tSSignalOutput
 {
 	uint8_t bOnCntr;
 	uint8_t bOffCntr;
-					
+
 	uint8_t fIsActive : 1;
 	uint8_t fIsOn : 1;
 	uint8_t fIsFlashing : 1;
 	uint8_t bReserved : 5;
-	
+
 } tSSignalOutput, *tpSSignalOutput;
 
-typedef __packed struct _tSOutputGroup
+typedef struct _tSOutputGroup
 {
 	tSSignalOutput SaSignalOutputs[SIGNAL_OUTPUTS_PER_SIGNAL_GROUP];
 	uint16_t sCurrent;
-	
+
 } tSOutputGroup, *tpSOutputGroup;
 
-typedef __packed union _tUOutputs
-{
-	tSBitFlags16 SBitFlags16;
-	uint16_t sData;
-	uint8_t baData[2];
-	
-} tUOutputs, *tpUOutputs;
-
-typedef __packed struct _tSSignalOutputStateCntr
+typedef struct _tSSignalOutputStateCntr
 {
 	uint8_t bOnCntr;
 	uint8_t bOffCntr;
-	
+
 } tSSignalOutputStateCntr, *tpSSignalOutputStateCntr;
 
 extern uint8_t CANGetRxDataLength(uint32_t lCode);

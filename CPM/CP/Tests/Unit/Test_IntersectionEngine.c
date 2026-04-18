@@ -274,6 +274,32 @@ static IntersectionConfig_t MakeThreePhasePerRingConfig(void)
   return config;
 }
 
+static IntersectionConfig_t MakeSingleModifierOverlapConfig(
+  IntersectionOverlapType_t overlapType)
+{
+  IntersectionConfig_t config = MakeThreePhasePerRingConfig();
+  uint8_t phaseIndex;
+
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].minGreenDs = 10U;
+    config.phases[phaseIndex].yellowChangeDs = 3U;
+    config.phases[phaseIndex].redClearDs = 2U;
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.channels[0].controlSource = 1U;
+  config.channels[0].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.overlaps[0].type = (uint8_t) overlapType;
+  config.overlaps[0].includedPhases.length = 1U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
+  config.overlaps[0].modifierPhases.length = 1U;
+  config.overlaps[0].modifierPhases.values[0] = 2U;
+
+  return config;
+}
+
 void test_load_config_starts_all_red_until_first_tick(void)
 {
   IntersectionConfig_t config;
@@ -928,6 +954,7 @@ void test_preempt_flash_dwell_ignores_cycling_phase_programming(void)
 {
   IntersectionConfig_t config;
   const IntersectionRuntime_t *runtime;
+  IntersectionOutputIntentImage_t outputIntentImage;
   uint8_t phaseIndex;
 
   config = MakeThreePhasePerRingConfig();
@@ -953,9 +980,29 @@ void test_preempt_flash_dwell_ignores_cycling_phase_programming(void)
   config.preempts[0].dwellPhases.length = 2U;
   config.preempts[0].dwellPhases.values[0] = 1U;
   config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].dwellOverlaps.length = 1U;
+  config.preempts[0].dwellOverlaps.values[0] = 1U;
   config.preempts[0].cyclingPhases.length = 2U;
   config.preempts[0].cyclingPhases.values[0] = 2U;
   config.preempts[0].cyclingPhases.values[1] = 5U;
+  config.preempts[0].cyclingOverlaps.length = 1U;
+  config.preempts[0].cyclingOverlaps.values[0] = 2U;
+  config.channels[0].controlSource = 1U;
+  config.channels[0].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+  config.channels[1].controlSource = 2U;
+  config.channels[1].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+  config.channels[2].controlSource = 1U;
+  config.channels[2].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.channels[3].controlSource = 2U;
+  config.channels[3].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.overlaps[0].type = INTERSECTION_OVERLAP_TYPE_NORMAL;
+  config.overlaps[0].includedPhases.length = 1U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
+  config.overlaps[1].type = INTERSECTION_OVERLAP_TYPE_NORMAL;
+  config.overlaps[1].includedPhases.length = 1U;
+  config.overlaps[1].includedPhases.values[0] = 2U;
 
   TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
   IntersectionEngineTick(&s_engine);
@@ -978,12 +1025,23 @@ void test_preempt_flash_dwell_ignores_cycling_phase_programming(void)
                         runtime->phases[1].interval);
   TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_RED,
                         runtime->phases[4].interval);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW,
+                        outputIntentImage.channels[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_RED,
+                        outputIntentImage.channels[1]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW,
+                        outputIntentImage.channels[2]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_RED,
+                        outputIntentImage.channels[3]);
 } /* test_preempt_flash_dwell_ignores_cycling_phase_programming */
 
 void test_preempt_cycling_phases_begin_after_dwell_interval(void)
 {
   IntersectionConfig_t config;
   const IntersectionRuntime_t *runtime;
+  IntersectionOutputIntentImage_t outputIntentImage;
   uint8_t activePhaseNumber = 0U;
   uint8_t phaseIndex;
 
@@ -1010,9 +1068,23 @@ void test_preempt_cycling_phases_begin_after_dwell_interval(void)
   config.preempts[0].dwellPhases.length = 2U;
   config.preempts[0].dwellPhases.values[0] = 1U;
   config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].dwellOverlaps.length = 1U;
+  config.preempts[0].dwellOverlaps.values[0] = 1U;
   config.preempts[0].cyclingPhases.length = 2U;
   config.preempts[0].cyclingPhases.values[0] = 2U;
   config.preempts[0].cyclingPhases.values[1] = 5U;
+  config.preempts[0].cyclingOverlaps.length = 1U;
+  config.preempts[0].cyclingOverlaps.values[0] = 2U;
+  config.channels[2].controlSource = 1U;
+  config.channels[2].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.channels[3].controlSource = 2U;
+  config.channels[3].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.overlaps[0].type = INTERSECTION_OVERLAP_TYPE_NORMAL;
+  config.overlaps[0].includedPhases.length = 1U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
+  config.overlaps[1].type = INTERSECTION_OVERLAP_TYPE_NORMAL;
+  config.overlaps[1].includedPhases.length = 1U;
+  config.overlaps[1].includedPhases.values[0] = 2U;
 
   TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
   IntersectionEngineTick(&s_engine);
@@ -1043,7 +1115,73 @@ void test_preempt_cycling_phases_begin_after_dwell_interval(void)
                         runtime->phases[1].interval);
   TEST_ASSERT_EQUAL_INT(INTERSECTION_PHASE_INTERVAL_GREEN,
                         runtime->phases[4].interval);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_RED,
+                        outputIntentImage.channels[2]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[3]);
 } /* test_preempt_cycling_phases_begin_after_dwell_interval */
+
+void test_preempt_cycling_ped_service_starts_only_after_cycling_begins(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  uint8_t phaseIndex;
+
+  config = MakeThreePhasePerRingConfig();
+
+  for (phaseIndex = 0U; phaseIndex < config.phaseCount; phaseIndex++)
+  {
+    config.phases[phaseIndex].minGreenDs = 1U;
+    config.phases[phaseIndex].yellowChangeDs = 1U;
+    config.phases[phaseIndex].redClearDs = 1U;
+    config.phases[phaseIndex].walkSeconds = 0U;
+    config.phases[phaseIndex].pedClearSeconds = 0U;
+  }
+
+  config.phases[1].walkSeconds = 1U;
+  config.phases[1].pedClearSeconds = 1U;
+  config.phases[1].pedDelayDs = 0U;
+  config.preempts[0].control = 0x10U;
+  config.preempts[0].minimumGreenSeconds = 0U;
+  config.preempts[0].minimumWalkSeconds = 0U;
+  config.preempts[0].enterPedClearSeconds = 0U;
+  config.preempts[0].trackGreenSeconds = 0U;
+  config.preempts[0].dwellGreenSeconds = 1U;
+  config.preempts[0].minimumDurationSeconds = 5U;
+  config.preempts[0].enterYellowChangeDs = 0U;
+  config.preempts[0].enterRedClearDs = 0U;
+  config.preempts[0].dwellPhases.length = 2U;
+  config.preempts[0].dwellPhases.values[0] = 1U;
+  config.preempts[0].dwellPhases.values[1] = 4U;
+  config.preempts[0].cyclingPhases.length = 2U;
+  config.preempts[0].cyclingPhases.values[0] = 2U;
+  config.preempts[0].cyclingPhases.values[1] = 5U;
+  config.preempts[0].cyclingPeds.length = 1U;
+  config.preempts[0].cyclingPeds.values[0] = 2U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetPedCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetPreemptControlState(&s_engine, 1U, 1U));
+  IntersectionEngineTick(&s_engine);
+  TickUntilPreemptState(1U, INTERSECTION_PREEMPT_STATE_DWELL, 25U);
+  TickForTicks(50U);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PED_INTERVAL_DONT_WALK,
+                        runtime->phases[1].pedInterval);
+
+  TickUntilActivePhase(1U, 2U, 200U);
+  TickUntilPedInterval(2U, INTERSECTION_PED_INTERVAL_WALK, 50U);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PREEMPT_STATE_DWELL,
+                        runtime->preemptStates[0]);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_PED_INTERVAL_WALK,
+                        runtime->phases[1].pedInterval);
+} /* test_preempt_cycling_ped_service_starts_only_after_cycling_begins */
 
 void test_system_pattern_command_activates_coordination_status(void)
 {
@@ -1674,6 +1812,195 @@ void test_system_flash_command_forces_flash_output_image(void)
                         outputIntentImage.channels[0]);
   TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW,
                         outputIntentImage.channels[1]);
+}
+
+void test_minus_green_yellow_overlap_follows_included_and_modifier_phases(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW);
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilPhaseInterval(1U, INTERSECTION_PHASE_INTERVAL_YELLOW, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_YELLOW,
+                        outputIntentImage.channels[0]);
+
+  TickUntilActivePhase(1U, 2U, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_RED,
+                        outputIntentImage.channels[0]);
+}
+
+void test_fya_three_section_overlap_flashes_yellow_then_turns_green(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION);
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilPhaseInterval(1U, INTERSECTION_PHASE_INTERVAL_YELLOW, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_YELLOW,
+                        outputIntentImage.channels[0]);
+
+  TickUntilActivePhase(1U, 2U, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+}
+
+void test_fya_four_section_overlap_flashes_yellow_then_turns_dark(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION);
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilActivePhase(1U, 2U, 300U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_DARK,
+                        outputIntentImage.channels[0]);
+}
+
+void test_fra_three_section_overlap_flashes_red_then_turns_green(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION);
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_RED,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilActivePhase(1U, 2U, 300U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+}
+
+void test_fra_four_section_overlap_flashes_red_then_turns_dark(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION);
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_FLASH_RED,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilActivePhase(1U, 2U, 300U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_DARK,
+                        outputIntentImage.channels[0]);
+}
+
+void test_minus_green_yellow_alternate_stays_green_when_modifier_is_not_next(
+  void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE);
+  config.overlaps[0].includedPhases.length = 2U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
+  config.overlaps[0].includedPhases.values[1] = 2U;
+  config.overlaps[0].modifierPhases.values[0] = 3U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilPhaseInterval(1U, INTERSECTION_PHASE_INTERVAL_YELLOW, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+}
+
+void test_minus_green_yellow_alternate_turns_red_when_modifier_is_next(void)
+{
+  IntersectionConfig_t config;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeSingleModifierOverlapConfig(
+    INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE);
+  config.overlaps[0].includedPhases.length = 2U;
+  config.overlaps[0].includedPhases.values[0] = 1U;
+  config.overlaps[0].includedPhases.values[1] = 2U;
+  config.overlaps[0].modifierPhases.values[0] = 2U;
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_GREEN,
+                        outputIntentImage.channels[0]);
+
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 1U));
+  TEST_ASSERT_TRUE(IntersectionEngineSetDetectorCall(&s_engine, 2U, 0U));
+  TickUntilPhaseInterval(1U, INTERSECTION_PHASE_INTERVAL_YELLOW, 200U);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_RED,
+                        outputIntentImage.channels[0]);
 }
 
 void test_programmed_automatic_flash_entry_and_exit_phases_follow_ts2_sequence(
@@ -3252,6 +3579,14 @@ int main(void)
   RUN_TEST(
     test_startup_flash_uses_configured_mode_and_expires_to_normal_operation);
   RUN_TEST(test_system_flash_command_forces_flash_output_image);
+  RUN_TEST(test_minus_green_yellow_overlap_follows_included_and_modifier_phases);
+  RUN_TEST(test_fya_three_section_overlap_flashes_yellow_then_turns_green);
+  RUN_TEST(test_fya_four_section_overlap_flashes_yellow_then_turns_dark);
+  RUN_TEST(test_fra_three_section_overlap_flashes_red_then_turns_green);
+  RUN_TEST(test_fra_four_section_overlap_flashes_red_then_turns_dark);
+  RUN_TEST(
+    test_minus_green_yellow_alternate_stays_green_when_modifier_is_not_next);
+  RUN_TEST(test_minus_green_yellow_alternate_turns_red_when_modifier_is_next);
   RUN_TEST(test_programmed_automatic_flash_entry_and_exit_phases_follow_ts2_sequence);
   RUN_TEST(test_remote_preempt_control_drives_runtime_state_and_status_group);
   RUN_TEST(test_preempt_entry_outputs_follow_enter_yellow_and_red_clear);
@@ -3264,6 +3599,7 @@ int main(void)
   RUN_TEST(test_preempt_exit_coord_returns_to_current_coordination_cycle_position);
   RUN_TEST(test_preempt_flash_dwell_ignores_cycling_phase_programming);
   RUN_TEST(test_preempt_cycling_phases_begin_after_dwell_interval);
+  RUN_TEST(test_preempt_cycling_ped_service_starts_only_after_cycling_begins);
   RUN_TEST(test_phase_call_does_not_hold_green_past_gap_timer);
   RUN_TEST(test_volume_density_reduces_current_gap_after_tbr);
   RUN_TEST(test_phase_startup_phase_not_on_holds_red_until_ring_demand);

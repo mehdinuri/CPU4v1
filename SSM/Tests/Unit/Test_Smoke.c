@@ -17,5 +17,6 @@ int main(void)
 {
   UNITY_BEGIN();
   RUN_TEST(test_ssm_infrastructure);
+
   return UNITY_END();
 }

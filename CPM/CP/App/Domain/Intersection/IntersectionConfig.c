@@ -1626,11 +1626,41 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
       return 0U;
     }
 
-    if (overlap->type != (uint8_t) INTERSECTION_OVERLAP_TYPE_NORMAL)
+    switch ((IntersectionOverlapType_t) overlap->type)
     {
-      SetError(errorInfo, INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE, objectIndex);
+        case INTERSECTION_OVERLAP_TYPE_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
+        {
+          break;
+        }
 
-      return 0U;
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW:
+        case INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE:
+        {
+          if (overlap->modifierPhases.length == 0U)
+          {
+            SetError(errorInfo,
+                     INTERSECTION_CONFIG_ERROR_OVERLAP_MODIFIER_PHASES,
+                     objectIndex);
+
+            return 0U;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_OTHER:
+        default:
+        {
+          SetError(errorInfo, INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE, objectIndex);
+
+          return 0U;
+        }
     }
   }
 
@@ -1642,6 +1672,7 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
   IntersectionConfigErrorInfo_t *errorInfo)
 {
   uint8_t channelIndex;
+  uint8_t overlapIndex;
   uint8_t preemptIndex;
 
   if (config == NULL)
@@ -1674,6 +1705,42 @@ uint8_t IntersectionConfigValidateRuntimeSupport(
                objectIndex);
 
       return 0U;
+    }
+  }
+
+  for (overlapIndex = 0U; overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       ++overlapIndex)
+  {
+    const IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
+    uint16_t objectIndex = (uint16_t) overlapIndex + 1U;
+
+    if ((overlap->type == (uint8_t) INTERSECTION_OVERLAP_TYPE_OTHER)
+        || (overlap->includedPhases.length == 0U))
+    {
+      continue;
+    }
+
+    switch ((IntersectionOverlapType_t) overlap->type)
+    {
+        case INTERSECTION_OVERLAP_TYPE_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW:
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE:
+        case INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION:
+        case INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION:
+        {
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
+        default:
+        {
+          SetError(errorInfo, INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE, objectIndex);
+
+          return 0U;
+        }
     }
   }
 

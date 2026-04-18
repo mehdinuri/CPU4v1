@@ -59,28 +59,63 @@ static uint8_t OffsetWrite(MeasurementServiceCtx_t *ctx)
                       sizeof(ctx->SRuntime.SOffset));
 }
 
+uint8_t MeasurementService_PeriodIsValid(uint8_t bPeriod)
+{
+  return (uint8_t) ((bPeriod >= (uint8_t) DEFAULT_PERIOD) &&
+                    (bPeriod <= (uint8_t) MAX_PERIOD));
+}
+
+uint8_t MeasurementService_OffsetOpIsValid(uint8_t bOp)
+{
+  return (uint8_t) (bOp <= (uint8_t) OFFSET_OPERATION_SUBTRACT);
+}
+
+void MeasurementService_PeriodApply(MeasurementServiceCtx_t *ctx,
+                                     uint8_t bPeriod)
+{
+  if (MeasurementService_PeriodIsValid(bPeriod) == 0U)
+  {
+    return;
+  }
+
+  ctx->SRuntime.lFlashPeriod = (uint32_t) bPeriod * 10U;
+}
+
+void MeasurementService_OffsetApply(MeasurementServiceCtx_t *ctx,
+                                     uint8_t bOp,
+                                     uint8_t bVal)
+{
+  if (MeasurementService_OffsetOpIsValid(bOp) == 0U)
+  {
+    return;
+  }
+
+  ctx->SRuntime.SOffset.eOperation = bOp;
+  ctx->SRuntime.SOffset.bValue     = bVal;
+}
+
 static void FlashPeriodCheck(MeasurementServiceCtx_t *ctx)
 {
   if (FlashPeriodRead(ctx) != 0U)
   {
-    if ((ctx->SRuntime.lFlashPeriod <= MAX_PERIOD) &&
-        (ctx->SRuntime.lFlashPeriod >= DEFAULT_PERIOD))
+    if ((ctx->SRuntime.lFlashPeriod <= 0xFFU) &&
+        (MeasurementService_PeriodIsValid((uint8_t) ctx->SRuntime.lFlashPeriod) != 0U))
     {
-      ctx->SRuntime.lFlashPeriod *= 10U;
+      MeasurementService_PeriodApply(ctx, (uint8_t) ctx->SRuntime.lFlashPeriod);
       return;
     }
   }
 
-  ctx->SRuntime.lFlashPeriod = DEFAULT_PERIOD;
+  ctx->SRuntime.lFlashPeriod = (uint32_t) DEFAULT_PERIOD;
   (void) FlashPeriodWrite(ctx);
-  ctx->SRuntime.lFlashPeriod *= 10U;
+  MeasurementService_PeriodApply(ctx, (uint8_t) DEFAULT_PERIOD);
 }
 
 static void OffsetCheck(MeasurementServiceCtx_t *ctx)
 {
   if (OffsetRead(ctx) != 0U)
   {
-    if ((ctx->SRuntime.SOffset.eOperation <= OFFSET_OPERATION_SUBTRACT) &&
+    if ((MeasurementService_OffsetOpIsValid(ctx->SRuntime.SOffset.eOperation) != 0U) &&
         (ctx->SRuntime.SOffset.bValue < 0xFFU))
     {
       return;
@@ -276,7 +311,7 @@ void MeasurementService_PeriodSet(MeasurementServiceCtx_t *ctx,
    * bPeriod = 0 would produce lFlashPeriod = 0, causing division-by-zero
    * in FlashSync; values > MAX_PERIOD would not survive FlashPeriodCheck
    * on next boot and would be overwritten with the default. */
-  if ((bPeriod < (uint8_t) DEFAULT_PERIOD) || (bPeriod > (uint8_t) MAX_PERIOD))
+  if (MeasurementService_PeriodIsValid(bPeriod) == 0U)
   {
     return;
   }
@@ -290,11 +325,13 @@ void MeasurementService_PeriodSet(MeasurementServiceCtx_t *ctx,
      * lFlashPeriod always in tick units — a single atomic 32-bit write
      * from old-ticks to new-ticks, safe against concurrent readers. */
     uint32_t lRaw = (uint32_t) bPeriod;
-    (void) Eeprom_Write(ctx->pEepromPort,
-                        EEPROM_ADDR_PERIOD,
-                        &lRaw,
-                        sizeof(lRaw));
-    ctx->SRuntime.lFlashPeriod = lNewTicks;
+    if (Eeprom_Write(ctx->pEepromPort,
+                     EEPROM_ADDR_PERIOD,
+                     &lRaw,
+                     sizeof(lRaw)) != 0U)
+    {
+      MeasurementService_PeriodApply(ctx, bPeriod);
+    }
   }
 }
 
@@ -303,7 +340,7 @@ void MeasurementService_OffsetSet(MeasurementServiceCtx_t *ctx,
                                    uint8_t bVal)
 {
   /* Reject unknown operation codes — only NONE, SUM, and SUBTRACT are valid. */
-  if (bOp > (uint8_t) OFFSET_OPERATION_SUBTRACT)
+  if (MeasurementService_OffsetOpIsValid(bOp) == 0U)
   {
     return;
   }
@@ -311,9 +348,13 @@ void MeasurementService_OffsetSet(MeasurementServiceCtx_t *ctx,
   if ((ctx->SRuntime.SOffset.eOperation != bOp) ||
       (ctx->SRuntime.SOffset.bValue     != bVal))
   {
-    ctx->SRuntime.SOffset.eOperation = bOp;
-    ctx->SRuntime.SOffset.bValue     = bVal;
-    (void) OffsetWrite(ctx);
+    tSMeasurementOffset SOld = ctx->SRuntime.SOffset;
+
+    MeasurementService_OffsetApply(ctx, bOp, bVal);
+    if (OffsetWrite(ctx) == 0U)
+    {
+      ctx->SRuntime.SOffset = SOld;
+    }
   }
 }
 

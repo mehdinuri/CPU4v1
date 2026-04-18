@@ -480,6 +480,15 @@ void test_period_set_no_write_when_unchanged(void)
   TEST_ASSERT_EQUAL_UINT32(100U, s_svc.SRuntime.lFlashPeriod);
 }
 
+void test_period_set_does_not_update_runtime_when_eeprom_write_fails(void)
+{
+  s_eeprom.bWriteResult = 0U;
+
+  MeasurementService_PeriodSet(&s_svc, 10U);
+
+  TEST_ASSERT_EQUAL_UINT32(50U, s_svc.SRuntime.lFlashPeriod);
+}
+
 /* ---------------------------------------------------------------------------
  * OffsetSet
  * ---------------------------------------------------------------------------*/
@@ -513,6 +522,16 @@ void test_offset_set_writes_when_op_changes(void)
   MeasurementService_OffsetSet(&s_svc, OFFSET_OPERATION_SUBTRACT, 10U);
 
   TEST_ASSERT_EQUAL_UINT32(writes + 1U, s_eeprom.lWriteCount);
+}
+
+void test_offset_set_does_not_update_runtime_when_eeprom_write_fails(void)
+{
+  s_eeprom.bWriteResult = 0U;
+
+  MeasurementService_OffsetSet(&s_svc, OFFSET_OPERATION_SUM, 10U);
+
+  TEST_ASSERT_EQUAL_UINT8(OFFSET_OPERATION_NONE, s_svc.SRuntime.SOffset.eOperation);
+  TEST_ASSERT_EQUAL_UINT8(0U, s_svc.SRuntime.SOffset.bValue);
 }
 
 /* ---------------------------------------------------------------------------
@@ -558,10 +577,12 @@ int main(void)
 
   RUN_TEST(test_period_set_writes_eeprom_and_multiplies);
   RUN_TEST(test_period_set_no_write_when_unchanged);
+  RUN_TEST(test_period_set_does_not_update_runtime_when_eeprom_write_fails);
 
   RUN_TEST(test_offset_set_writes_eeprom_on_first_call);
   RUN_TEST(test_offset_set_no_write_when_unchanged);
   RUN_TEST(test_offset_set_writes_when_op_changes);
+  RUN_TEST(test_offset_set_does_not_update_runtime_when_eeprom_write_fails);
 
   return UNITY_END();
 }

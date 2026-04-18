@@ -14,12 +14,9 @@
 
 /* Private define ------------------------------------------------------------*/
 
-/* STM32 HAL encodes DataLength as FDCAN_DLC_BYTES_x constants where the byte
- * count lives in bits [19:16]: FDCAN_DLC_BYTES_8 = 0x00080000.
- * Comparing DataLength directly to a raw byte count (e.g. >= 7U) is always
- * TRUE for any non-zero DLC because the constant values are >> 65535.
- * Use this macro to extract the actual byte count before range checks. */
-#define CAN_DLC_TO_BYTES(dlc)  ((uint8_t) ((dlc) >> 16U))
+/* HAL_FDCAN_RxHeaderTypeDef::DataLength is normalised to a raw byte count in
+ * HAL_FDCAN_RxFifo0Callback() before the frame is queued to CANMsgParserTask. */
+#define CAN_RX_LENGTH_BYTES(length)  ((uint8_t) (length))
 
 /* Private variables ---------------------------------------------------------*/
 
@@ -56,7 +53,7 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
             case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
             {
               /* Period value lives at byte index 6 — frame must carry ≥ 7 bytes. */
-              if (CAN_DLC_TO_BYTES(pSRxMsg->SRxHeader.DataLength) >= 7U)
+              if (CAN_RX_LENGTH_BYTES(pSRxMsg->SRxHeader.DataLength) >= 7U)
               {
                 MeasurementPeriodSet(pSRxMsg->baData[6]);
               }
@@ -68,7 +65,7 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
             case FDCAN_CP_OFFSET_2_STD_ID:
             {
               /* Op at byte 0, value at byte 1 — frame must carry ≥ 2 bytes. */
-              if (CAN_DLC_TO_BYTES(pSRxMsg->SRxHeader.DataLength) >= 2U)
+              if (CAN_RX_LENGTH_BYTES(pSRxMsg->SRxHeader.DataLength) >= 2U)
               {
                 MeasurementOffsetSet(pSRxMsg->baData[0], pSRxMsg->baData[1]);
               }

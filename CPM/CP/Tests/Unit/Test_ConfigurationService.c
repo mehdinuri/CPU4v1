@@ -436,6 +436,69 @@ void test_unsupported_channel_control_type_fails_runtime_support_verify(void)
   TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
 }
 
+void test_supported_overlap_type_passes_runtime_support_verify(void)
+{
+  const uint8_t includedPhases[] = { 1U };
+  const uint8_t modifierPhases[] = { 2U };
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
+                                                                0U,
+                                                                includedPhases,
+                                                                1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapModifierPhases(&s_service,
+                                                                0U,
+                                                                modifierPhases,
+                                                                1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
+}
+
+void test_minus_green_yellow_alternate_passes_runtime_support_verify(void)
+{
+  const uint8_t includedPhases[] = { 1U, 2U };
+  const uint8_t modifierPhases[] = { 3U };
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(
+    ConfigurationServiceSetOverlapType(&s_service,
+                                       0U,
+                                       INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
+                                                                0U,
+                                                                includedPhases,
+                                                                2U));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapModifierPhases(&s_service,
+                                                                0U,
+                                                                modifierPhases,
+                                                                1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceVerify(&s_service));
+}
+
+void test_unsupported_overlap_type_fails_runtime_support_verify(void)
+{
+  IntersectionConfigErrorInfo_t errorInfo;
+  const uint8_t includedPhases[] = { 1U };
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapType(
+                     &s_service,
+                     0U,
+                     INTERSECTION_OVERLAP_TYPE_TRANSIT_2));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetOverlapIncludedPhases(&s_service,
+                                                                0U,
+                                                                includedPhases,
+                                                                1U));
+  TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
+
+  errorInfo = ConfigurationServiceGetLastError(&s_service);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE, errorInfo.type);
+  TEST_ASSERT_EQUAL_UINT16(1U, errorInfo.objectIndex);
+}
+
 void test_supported_preempt_exit_type_passes_runtime_support_verify(void)
 {
   const uint8_t trackPhases[] = { 2U };
@@ -978,6 +1041,9 @@ int main(void)
   RUN_TEST(test_single_sequence_cap_rejects_pattern_and_preempt_sequence_numbers);
   RUN_TEST(test_out_of_range_input_mapping_fails_verify);
   RUN_TEST(test_unsupported_channel_control_type_fails_runtime_support_verify);
+  RUN_TEST(test_supported_overlap_type_passes_runtime_support_verify);
+  RUN_TEST(test_minus_green_yellow_alternate_passes_runtime_support_verify);
+  RUN_TEST(test_unsupported_overlap_type_fails_runtime_support_verify);
   RUN_TEST(test_supported_preempt_exit_type_passes_runtime_support_verify);
   RUN_TEST(test_phase_maximum_initial_below_minimum_green_fails_verify);
   RUN_TEST(test_extended_phase_configuration_persists_across_reload);

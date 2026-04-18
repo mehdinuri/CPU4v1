@@ -90,8 +90,6 @@ uint8_t StorageRequest(uint8_t bReqId,
       }
       else
       {
-        osThreadFlagsClear(THREAD_FLAGS_STORAGE_REQ_PROCESS_OK
-                           | THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR);
         uint32_t lFlags =
           osThreadFlagsWait(THREAD_FLAGS_STORAGE_REQ_PROCESS_OK
                             | THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR,

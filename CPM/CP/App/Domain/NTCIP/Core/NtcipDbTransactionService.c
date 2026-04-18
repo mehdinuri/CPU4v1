@@ -235,6 +235,13 @@ static void PopulateVerifyErrorFromConfig(NtcipDbTransactionService_t *service,
         break;
       }
 
+      case INTERSECTION_CONFIG_ERROR_OVERLAP_TYPE:
+      {
+        CopyErrorString(service,
+                        "overlapType is invalid or not supported by runtime");
+        break;
+      }
+
       case INTERSECTION_CONFIG_ERROR_PREEMPT_LINK:
       {
         CopyErrorString(service, "preemptLink is invalid");

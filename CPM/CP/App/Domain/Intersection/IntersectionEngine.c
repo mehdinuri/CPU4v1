@@ -4166,6 +4166,29 @@ static uint8_t PhaseReferenceListContainsPhase(
   return 0U;
 }
 
+static uint8_t OverlapReferenceListContainsOverlap(
+  const IntersectionOverlapReferenceList_t *list,
+  uint8_t overlapIndex)
+{
+  uint8_t index;
+  uint8_t overlapNumber = (uint8_t) (overlapIndex + 1U);
+
+  if (list == NULL)
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < list->length; index++)
+  {
+    if (list->values[index] == overlapNumber)
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
 static uint8_t PhaseReferenceListContainsRingPhase(
   const IntersectionEngine_t *engine,
   const IntersectionPhaseReferenceList_t *list,
@@ -6502,6 +6525,98 @@ static void RefreshRingStatusCodes(IntersectionEngine_t *engine)
   }
 } /* RefreshRingStatusCodes */
 
+typedef struct
+{
+  uint8_t anyGreen;
+  uint8_t anyYellow;
+  uint8_t anyRedClear;
+  uint8_t anyNext;
+} IntersectionOverlapPhaseSummary_t;
+
+static void SummarizeOverlapPhaseList(
+  const IntersectionEngine_t *engine,
+  const IntersectionPhaseReferenceList_t *phaseList,
+  IntersectionOverlapPhaseSummary_t *summary)
+{
+  uint8_t listIndex;
+
+  if ((engine == NULL) || (phaseList == NULL) || (summary == NULL))
+  {
+    return;
+  }
+
+  memset(summary, 0, sizeof(*summary));
+
+  for (listIndex = 0U; listIndex < phaseList->length; listIndex++)
+  {
+    uint8_t phaseNumber = phaseList->values[listIndex];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+    const IntersectionPhaseRuntime_t *phaseRuntime;
+
+    if ((phaseNumber == 0U) || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    phaseRuntime = &engine->runtime.phases[phaseIndex];
+
+    if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_GREEN)
+    {
+      summary->anyGreen = 1U;
+    }
+
+    if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_YELLOW)
+    {
+      summary->anyYellow = 1U;
+    }
+
+    if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_RED_CLEAR)
+    {
+      summary->anyRedClear = 1U;
+    }
+
+    if (phaseRuntime->next != 0U)
+    {
+      summary->anyNext = 1U;
+    }
+  }
+}
+
+static uint8_t OverlapConflictingPedActive(
+  const IntersectionEngine_t *engine,
+  const IntersectionOverlapConfig_t *overlap)
+{
+  uint8_t listIndex;
+
+  if ((engine == NULL) || (overlap == NULL))
+  {
+    return 0U;
+  }
+
+  for (listIndex = 0U; listIndex < overlap->conflictingPedPhases.length;
+       listIndex++)
+  {
+    uint8_t phaseNumber = overlap->conflictingPedPhases.values[listIndex];
+    uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
+    const IntersectionPhaseRuntime_t *phaseRuntime;
+
+    if ((phaseNumber == 0U) || (phaseIndex >= engine->config.phaseCount))
+    {
+      continue;
+    }
+
+    phaseRuntime = &engine->runtime.phases[phaseIndex];
+
+    if ((phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_WALK)
+        || (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_CLEAR))
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
 static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
 {
   uint8_t overlapIndex;
@@ -6518,84 +6633,219 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
     const IntersectionOverlapConfig_t *overlap =
       &engine->config.overlaps[overlapIndex];
     IntersectionOutputAspect_t aspect = INTERSECTION_OUTPUT_ASPECT_RED;
-    uint8_t listIndex;
-    uint8_t anyIncludedGreen = 0U;
-    uint8_t anyIncludedYellow = 0U;
-    uint8_t anyIncludedYellowOrRedClear = 0U;
-    uint8_t anyIncludedNext = 0U;
-    uint8_t conflictingPedActive = 0U;
+    IntersectionOverlapPhaseSummary_t includedSummary = { 0U };
+    IntersectionOverlapPhaseSummary_t modifierSummary = { 0U };
+    uint8_t includedYellowOrRedClear;
+    uint8_t modifierYellowOrRedClear;
+    uint8_t modifierRed;
+    uint8_t conflictingPedActive;
 
-    if ((overlap->type != (uint8_t) INTERSECTION_OVERLAP_TYPE_NORMAL)
+    if ((overlap->type == (uint8_t) INTERSECTION_OVERLAP_TYPE_OTHER)
         || (overlap->includedPhases.length == 0U))
     {
       engine->runtime.overlaps[overlapIndex].aspect = aspect;
       continue;
     }
 
-    for (listIndex = 0U;
-         listIndex < overlap->includedPhases.length;
-         listIndex++)
+    SummarizeOverlapPhaseList(engine, &overlap->includedPhases, &includedSummary);
+    SummarizeOverlapPhaseList(engine, &overlap->modifierPhases, &modifierSummary);
+    includedYellowOrRedClear = (uint8_t) ((includedSummary.anyYellow != 0U)
+                                          || (includedSummary.anyRedClear
+                                              != 0U));
+    modifierYellowOrRedClear = (uint8_t) ((modifierSummary.anyYellow != 0U)
+                                          || (modifierSummary.anyRedClear
+                                              != 0U));
+    modifierRed = (uint8_t) ((overlap->modifierPhases.length != 0U)
+                             && (modifierSummary.anyGreen == 0U)
+                             && (modifierSummary.anyYellow == 0U)
+                             && (modifierSummary.anyRedClear == 0U));
+    conflictingPedActive = OverlapConflictingPedActive(engine, overlap);
+
+    switch ((IntersectionOverlapType_t) overlap->type)
     {
-      uint8_t phaseNumber = overlap->includedPhases.values[listIndex];
-      uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
-      const IntersectionPhaseRuntime_t *phaseRuntime =
-        &engine->runtime.phases[phaseIndex];
+        case INTERSECTION_OVERLAP_TYPE_NORMAL:
+        {
+          if (conflictingPedActive != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_RED;
+          }
+          else if (includedSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedYellowOrRedClear != 0U)
+                   && (includedSummary.anyNext != 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if (includedSummary.anyYellow != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
 
-      if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_GREEN)
-      {
-        anyIncludedGreen = 1U;
-      }
+          break;
+        }
 
-      if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_YELLOW)
-      {
-        anyIncludedYellow = 1U;
-        anyIncludedYellowOrRedClear = 1U;
-      }
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW:
+        {
+          if ((includedSummary.anyGreen != 0U) && (modifierSummary.anyGreen == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedYellowOrRedClear != 0U)
+                   && (includedSummary.anyNext != 0U)
+                   && (modifierSummary.anyGreen == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedSummary.anyYellow != 0U)
+                   && (modifierSummary.anyYellow == 0U)
+                   && (includedSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
 
-      if (phaseRuntime->interval == INTERSECTION_PHASE_INTERVAL_RED_CLEAR)
-      {
-        anyIncludedYellowOrRedClear = 1U;
-      }
+          break;
+        }
 
-      if (phaseRuntime->next != 0U)
-      {
-        anyIncludedNext = 1U;
-      }
-    }
+        case INTERSECTION_OVERLAP_TYPE_MINUS_GREEN_YELLOW_ALTERNATE:
+        {
+          if ((includedSummary.anyGreen != 0U) && (modifierSummary.anyGreen == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedYellowOrRedClear != 0U)
+                   && (includedSummary.anyNext != 0U)
+                   && (modifierSummary.anyGreen == 0U)
+                   && (modifierSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((includedSummary.anyYellow != 0U)
+                   && (modifierSummary.anyYellow == 0U)
+                   && (includedSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
 
-    for (listIndex = 0U;
-         listIndex < overlap->conflictingPedPhases.length;
-         listIndex++)
-    {
-      uint8_t phaseNumber = overlap->conflictingPedPhases.values[listIndex];
-      uint8_t phaseIndex = (uint8_t) (phaseNumber - 1U);
-      const IntersectionPhaseRuntime_t *phaseRuntime =
-        &engine->runtime.phases[phaseIndex];
+          break;
+        }
 
-      if ((phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_WALK)
-          || (phaseRuntime->pedInterval == INTERSECTION_PED_INTERVAL_CLEAR))
-      {
-        conflictingPedActive = 1U;
-        break;
-      }
-    }
+        case INTERSECTION_OVERLAP_TYPE_FYA_THREE_SECTION:
+        {
+          if (conflictingPedActive != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_RED;
+          }
+          else if (modifierSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if (modifierYellowOrRedClear != 0U)
+          {
+            aspect = (modifierSummary.anyYellow != 0U)
+                     ? INTERSECTION_OUTPUT_ASPECT_YELLOW
+                     : INTERSECTION_OUTPUT_ASPECT_RED;
+          }
+          else if ((includedSummary.anyYellow != 0U)
+                   && (includedSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
+          else if (includedSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW;
+          }
+          else if ((includedYellowOrRedClear != 0U)
+                   && ((includedSummary.anyNext != 0U)
+                       || (modifierSummary.anyNext != 0U)))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW;
+          }
 
-    if (conflictingPedActive != 0U)
-    {
-      aspect = INTERSECTION_OUTPUT_ASPECT_RED;
-    }
-    else if (anyIncludedGreen != 0U)
-    {
-      aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
-    }
-    else if ((anyIncludedYellowOrRedClear != 0U)
-             && (anyIncludedNext != 0U))
-    {
-      aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
-    }
-    else if (anyIncludedYellow != 0U)
-    {
-      aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_FYA_FOUR_SECTION:
+        {
+          if (conflictingPedActive != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_RED;
+          }
+          else if (modifierSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_DARK;
+          }
+          else if (modifierYellowOrRedClear != 0U)
+          {
+            aspect = (modifierSummary.anyYellow != 0U)
+                     ? INTERSECTION_OUTPUT_ASPECT_YELLOW
+                     : INTERSECTION_OUTPUT_ASPECT_RED;
+          }
+          else if ((includedSummary.anyYellow != 0U)
+                   && (includedSummary.anyNext == 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
+          else if (includedSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW;
+          }
+          else if ((includedYellowOrRedClear != 0U)
+                   && ((includedSummary.anyNext != 0U)
+                       || (modifierSummary.anyNext != 0U)))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_FRA_THREE_SECTION:
+        {
+          if (modifierSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_GREEN;
+          }
+          else if ((modifierSummary.anyYellow != 0U)
+                   || ((modifierRed != 0U) && (includedSummary.anyYellow != 0U)))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
+          else if ((modifierRed != 0U) && (includedSummary.anyGreen != 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_RED;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_FRA_FOUR_SECTION:
+        {
+          if (modifierSummary.anyGreen != 0U)
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_DARK;
+          }
+          else if ((modifierSummary.anyYellow != 0U)
+                   || ((modifierRed != 0U) && (includedSummary.anyYellow != 0U)))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_YELLOW;
+          }
+          else if ((modifierRed != 0U) && (includedSummary.anyGreen != 0U))
+          {
+            aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_RED;
+          }
+
+          break;
+        }
+
+        case INTERSECTION_OVERLAP_TYPE_PEDESTRIAN_NORMAL:
+        case INTERSECTION_OVERLAP_TYPE_TRANSIT_2:
+        case INTERSECTION_OVERLAP_TYPE_OTHER:
+        default:
+        {
+          break;
+        }
     }
 
     engine->runtime.overlaps[overlapIndex].aspect = aspect;
@@ -6721,6 +6971,34 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
               != 0U))
       {
         aspect = INTERSECTION_OUTPUT_ASPECT_FLASH_RED;
+      }
+      else if ((flashDwell != 0U)
+               && (channel->controlSource != 0U)
+               && (channel->controlSource <= engine->config.phaseCount)
+               && ((IntersectionChannelControlType_t) channel->controlType
+                   == INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE))
+      {
+        aspect = (PhaseReferenceListContainsPhase(&preempt->dwellPhases,
+                                                  (uint8_t) (channel->
+                                                             controlSource
+                                                             - 1U))
+                  != 0U)
+                   ? INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW
+                   : INTERSECTION_OUTPUT_ASPECT_FLASH_RED;
+      }
+      else if ((flashDwell != 0U)
+               && (channel->controlSource != 0U)
+               && (channel->controlSource <= INTERSECTION_OVERLAP_COUNT_MAX)
+               && ((IntersectionChannelControlType_t) channel->controlType
+                   == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP))
+      {
+        aspect = (OverlapReferenceListContainsOverlap(&preempt->dwellOverlaps,
+                                                      (uint8_t) (channel->
+                                                                 controlSource
+                                                                 - 1U))
+                  != 0U)
+                   ? INTERSECTION_OUTPUT_ASPECT_FLASH_YELLOW
+                   : INTERSECTION_OUTPUT_ASPECT_FLASH_RED;
       }
       else if ((channel->controlSource != 0U)
                && (channel->controlSource <= engine->config.phaseCount)

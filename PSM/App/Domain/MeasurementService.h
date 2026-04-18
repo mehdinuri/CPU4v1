@@ -130,7 +130,23 @@ void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx);
 uint8_t MeasurementService_IsFlash(const MeasurementServiceCtx_t *ctx);
 
 /* ---------------------------------------------------------------------------
- * Command handlers — called from CAN parser / ADC / timer callbacks
+ * Validation and runtime-apply helpers
+ * ---------------------------------------------------------------------------*/
+
+uint8_t MeasurementService_PeriodIsValid(uint8_t bPeriod);
+uint8_t MeasurementService_OffsetOpIsValid(uint8_t bOp);
+
+/* Apply already-validated settings to runtime state only.
+ * Persistence is the caller's responsibility. */
+void MeasurementService_PeriodApply(MeasurementServiceCtx_t *ctx,
+                                     uint8_t bPeriod);
+
+void MeasurementService_OffsetApply(MeasurementServiceCtx_t *ctx,
+                                     uint8_t bOp,
+                                     uint8_t bVal);
+
+/* ---------------------------------------------------------------------------
+ * Command handlers — validate, persist, then update runtime state
  * ---------------------------------------------------------------------------*/
 void MeasurementService_FlashStateSet(MeasurementServiceCtx_t *ctx,
                                        uint8_t fState);

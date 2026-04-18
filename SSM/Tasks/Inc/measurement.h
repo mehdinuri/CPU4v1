@@ -1,10 +1,10 @@
 /**
-  ******************************************************************************
-  * @file           : measurement.h
-  * @brief          : Header for signal_monitor.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : measurement.h
+ * @brief          : Header for signal_monitor.c file.
+ *                   This file contains the common defines of the application.
+ ******************************************************************************
+ */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __SIGNAL_MONITOR_H__
@@ -26,7 +26,6 @@
 /* Public macros ------------------------------------------------------------*/
 
 /* Public types -------------------------------------------------------------*/
-
 
 /* Public function prototypes -----------------------------------------------*/
 extern void MeasurementSGStatesCntrsSet(void);
