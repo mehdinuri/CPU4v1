@@ -32,8 +32,11 @@ uint8_t PersistenceJournal_RecordIsValid(
   uint16_t sMaxPayloadSize);
 const tSPersistenceJournalRecord *PersistenceJournal_SelectLatest(
   const tSPersistenceJournalRecord *pA,
-  const tSPersistenceJournalRecord *pB,
-  uint16_t sMaxPayloadSize);
+  const
+  tSPersistenceJournalRecord
+  *pB,
+  uint16_t
+  sMaxPayloadSize);
 
 #endif /* DOMAIN_PERSISTENCE_JOURNAL_H */
 

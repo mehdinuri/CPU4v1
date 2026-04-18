@@ -14,7 +14,7 @@
 #define PERSISTENCE_JOURNAL_COMMIT  0xA5U
 
 #define PERSISTENCE_JOURNAL_CRC_SPAN \
-  ((uint16_t) offsetof(tSPersistenceJournalRecord, lCrc32))
+        ((uint16_t) offsetof(tSPersistenceJournalRecord, lCrc32))
 
 uint8_t PersistenceJournal_RecordBuild(tSPersistenceJournalRecord *pRecord,
                                        uint32_t lSequence,
@@ -70,8 +70,11 @@ uint8_t PersistenceJournal_RecordIsValid(
 
 const tSPersistenceJournalRecord *PersistenceJournal_SelectLatest(
   const tSPersistenceJournalRecord *pA,
-  const tSPersistenceJournalRecord *pB,
-  uint16_t sMaxPayloadSize)
+  const
+  tSPersistenceJournalRecord
+  *pB,
+  uint16_t
+  sMaxPayloadSize)
 {
   uint8_t bAValid = PersistenceJournal_RecordIsValid(pA, sMaxPayloadSize);
   uint8_t bBValid = PersistenceJournal_RecordIsValid(pB, sMaxPayloadSize);

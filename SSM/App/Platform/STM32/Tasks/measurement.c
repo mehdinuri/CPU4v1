@@ -23,6 +23,7 @@
 #include "Domain/CurrentMeasurement.h"
 #include "Domain/FlashSyncWatchdog.h"
 #include "Domain/OutputVerify.h"
+#include "Domain/SignalDiagnostics.h"
 #include "Domain/SignalCardIdentity.h"
 #include "Domain/VoltageCurrentFrame.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
@@ -67,6 +68,7 @@ static tSSignalOutputImage SPendingCommandedImage;
 static tSSignalOutputImage SLastCommandedImage;
 static tSSignalOutputImage SObservedImage;
 static tSOutputVerifyState SOutputVerify;
+static tSSignalDiagnosticsState SDiagnostics;
 static uint8_t bVerifyArmed = 0U;   /* first cycle has no "last" yet */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,6 +95,7 @@ static void TaskInit(void)
   memset(&SLastCommandedImage, 0, sizeof(SLastCommandedImage));
   memset(&SObservedImage, 0, sizeof(SObservedImage));
   OutputVerify_Reset(&SOutputVerify);
+  SignalDiagnostics_Reset(&SDiagnostics);
   bVerifyArmed = 0U;
 
   SignalOutputStateCntrsInit();
@@ -155,6 +158,10 @@ static void OutputVerifyStep(void)
     OutputVerify_Step(&SOutputVerify, &SLastCommandedImage, &SObservedImage);
     if (SOutputVerify.bFaultActive != 0U)
     {
+      /* Hardened Fault Handling: Bypass task latency and immediately drop
+       * all signals to Dark. External MMU will trip on Red Fail/Loss of Signal.
+       */
+      SignalOutput_AllOff(&g_SignalOutputPort);
       MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT);
     }
   }
@@ -169,6 +176,15 @@ static void SignalGroupSwitchStatesSet(void)
   uint8_t bGroup;
   uint8_t bOutput;
   uint8_t bIdx;
+
+  /* Refuse to command signals if a hardware fault has been latched. */
+  if (SOutputVerify.bFaultActive != 0U)
+  {
+    SignalOutput_AllOff(&g_SignalOutputPort);
+    memset(&SPendingCommandedImage, 0, sizeof(SPendingCommandedImage));
+
+    return;
+  }
 
   SInputs.bFlashActive = CANFlashStatusGet();
   SInputs.bFlashSyncActive = CANFlashSyncStatusGet();
@@ -206,14 +222,10 @@ static void SignalGroupSwitchStatesSet(void)
     }
   }
 
-  if (SignalOutputImageBuilder_BuildSafe(&SInputs, &SPendingCommandedImage)
-      != 0U)
-  {
-    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_INVALID_COMMAND);
-  }
+  SignalOutputImageBuilder_Build(&SInputs, &SPendingCommandedImage);
 
   SignalOutput_Apply(&g_SignalOutputPort, &SPendingCommandedImage);
-}
+} /* SignalGroupSwitchStatesSet */
 
 static uint8_t VoltageCurrentStatusBuild(
   const tSCurrentMeasurementSnapshot *pSCurSnap)
@@ -272,28 +284,25 @@ static uint8_t VoltageCurrentStatusBuild(
     bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CURRENT_SATURATED);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_INVALID_COMMAND) != 0U)
+  if ((lFaults & EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_INVALID_COMMAND);
+    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_LAMP_OUT_FAULT);
   }
 
   return bStatus;
-}
+} /* VoltageCurrentStatusBuild */
 
-static void VoltageCurrentSend(void)
+static void VoltageCurrentSend(const tSCurrentMeasurementSnapshot *pSCurSnap)
 {
-  tSCurrentMeasurementSnapshot SCurSnap;
   tSVoltageCurrentFrameInputs SFrameIn;
   tSCanFrame SFrame;
 
-  /* Pull the latest RMS snapshot from the ADC adapter and pack the 10-bit
-   * currents via the domain service. SObservedImage already holds the
-   * 12 voltage-channel states (populated by SignalOutputStatesCheck).
+  /* pack the 10-bit currents via the domain service. SObservedImage
+   * already holds the 12 voltage-channel states.
    */
-  CurrentMeasurement_GetLatest(&g_CurrentMeasurementPort, &SCurSnap);
-  CurrentMeasurement_Pack(&SCurSnap, &SFrameIn.SCurrentWire);
+  CurrentMeasurement_Pack(pSCurSnap, &SFrameIn.SCurrentWire);
   SFrameIn.SVoltageImage = SObservedImage;
-  SFrameIn.bStatus = VoltageCurrentStatusBuild(&SCurSnap);
+  SFrameIn.bStatus = VoltageCurrentStatusBuild(pSCurSnap);
 
   SFrame.sStdId = (uint16_t) (FDCAN_SSM_VOLTAGE_CURRENT_1_STD_ID
                               + g_bCardId);
@@ -505,7 +514,16 @@ void MeasurementTaskFunc(void *argument)
     SignalOutputStatesCheck();
     OutputVerifyStep();
 
-    VoltageCurrentSend();
+    tSCurrentMeasurementSnapshot SCurSnap;
+
+    CurrentMeasurement_GetLatest(&g_CurrentMeasurementPort, &SCurSnap);
+
+    if (SignalDiagnostics_Step(&SDiagnostics, &SObservedImage, &SCurSnap) != 0U)
+    {
+      MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT);
+    }
+
+    VoltageCurrentSend(&SCurSnap);
 
     if (bCommLedToggleCntr++ == COMM_LED_PERIOD)
     {

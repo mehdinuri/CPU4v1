@@ -160,6 +160,7 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
   {
     CANRxFaultRecord();
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+
     return;
   }
 
@@ -303,8 +304,8 @@ void CANSignalOutputFlashConfigCheck(void)
          bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
          bOutputIdx++)
     {
-      SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing
-        = 0U;
+      SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing =
+        0U;
     }
   }
 
@@ -316,6 +317,7 @@ void CANRxRequest(tpSFDCANRxMsg pSRxMsg)
   if (pSRxMsg == NULL)
   {
     CANRxFaultRecord();
+
     return;
   }
 

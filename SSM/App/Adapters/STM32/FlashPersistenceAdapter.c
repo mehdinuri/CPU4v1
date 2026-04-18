@@ -26,7 +26,8 @@ static const tSKeySlot SaKeyTable[PERSIST_KEY__COUNT] =
   }
 };
 
-static void RecordReadOrZero(uint32_t lAddress, tSPersistenceJournalRecord *pOut)
+static void RecordReadOrZero(uint32_t lAddress,
+                             tSPersistenceJournalRecord *pOut)
 {
   if (StorageRequest(STORAGE_REQ_FLASH_READ,
                      lAddress,
@@ -122,7 +123,7 @@ static tEPersistenceStatus AdapterWrite(void *pCtx,
                          &SNewRecord,
                          (uint32_t) sizeof(SNewRecord)) != 0U)
          ? PERSIST_OK : PERSIST_FAIL;
-}
+} /* AdapterWrite */
 
 void FlashPersistenceAdapter_Init(tSFlashPersistenceAdapterCtx *pCtx)
 {

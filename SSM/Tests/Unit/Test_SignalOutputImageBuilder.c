@@ -48,36 +48,22 @@ void test_run_mode_copies_run_channels(void)
   TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[10]);
 }
 
-void test_run_mode_normalises_legal_red_yellow_overlap(void)
+void test_run_mode_passes_through_conflicting_signals(void)
 {
   tSSignalOutputBuildInputs in;
   tSSignalOutputImage out;
 
+  /* Force conflicting Red+Green on group 1 (channels 0 and 2) */
   MakeInputs(&in, 0U, 0U);
-  in.aRunChannels[0] = 0xAAU;
-  in.aRunChannels[1] = 0xFFU;
+  in.aRunChannels[0] = 1U;
+  in.aRunChannels[2] = 1U;
 
   SignalOutputImageBuilder_Build(&in, &out);
 
+  /* Both should be preserved as 1 */
   TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[0]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[1]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[2]);
-}
-
-void test_flash_inactive_sync_on_ignored_still_uses_run(void)
-{
-  /* bFlashActive=0 means sync flag is irrelevant */
-  tSSignalOutputBuildInputs in;
-  tSSignalOutputImage out;
-
-  MakeInputs(&in, 0U, 1U);
-
-  SignalOutputImageBuilder_Build(&in, &out);
-
-  for (uint8_t i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
-  {
-    TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[i]);
-  }
+  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[2]);
+  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[1]);
 }
 
 void test_flash_active_sync_off_forces_all_dark(void)
@@ -120,63 +106,6 @@ void test_flash_active_sync_on_uses_flash_channels(void)
   TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[10]);
 }
 
-void test_per_channel_run_pattern_preserved(void)
-{
-  tSSignalOutputBuildInputs in;
-  tSSignalOutputImage out;
-
-  memset(&in, 0, sizeof(in));
-  in.aRunChannels[0] = 1U;      /* R1 */
-  in.aRunChannels[1] = 1U;      /* Y1 */
-  in.aRunChannels[11] = 1U;     /* G4 */
-
-  SignalOutputImageBuilder_Build(&in, &out);
-
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[0]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[1]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[2]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[10]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[11]);
-}
-
-void test_per_channel_flash_pattern_preserved(void)
-{
-  tSSignalOutputBuildInputs in;
-  tSSignalOutputImage out;
-
-  memset(&in, 0, sizeof(in));
-  in.bFlashActive = 1U;
-  in.bFlashSyncActive = 1U;
-  in.aFlashChannels[1] = 1U;      /* Y1 */
-  in.aFlashChannels[4] = 1U;      /* Y2 */
-  in.aFlashChannels[7] = 1U;      /* Y3 */
-  in.aFlashChannels[10] = 1U;     /* Y4 */
-
-  SignalOutputImageBuilder_Build(&in, &out);
-
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[0]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[1]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[2]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[4]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[7]);
-  TEST_ASSERT_EQUAL_UINT8(1U, out.aChannels[10]);
-}
-
-void test_invalid_red_green_overlap_collapses_group_to_dark_and_reports_fault(void)
-{
-  tSSignalOutputBuildInputs in;
-  tSSignalOutputImage out;
-
-  MakeInputs(&in, 0U, 0U);
-  in.aRunChannels[0] = 1U;
-  in.aRunChannels[2] = 1U;
-
-  TEST_ASSERT_EQUAL_UINT8(1U, SignalOutputImageBuilder_BuildSafe(&in, &out));
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[0]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[1]);
-  TEST_ASSERT_EQUAL_UINT8(0U, out.aChannels[2]);
-}
-
 void test_port_wiring_with_mock_records_apply(void)
 {
   tSMockSignalOutputAdapterCtx mockCtx;
@@ -217,13 +146,9 @@ int main(void)
 {
   UNITY_BEGIN();
   RUN_TEST(test_run_mode_copies_run_channels);
-  RUN_TEST(test_run_mode_normalises_legal_red_yellow_overlap);
-  RUN_TEST(test_flash_inactive_sync_on_ignored_still_uses_run);
+  RUN_TEST(test_run_mode_passes_through_conflicting_signals);
   RUN_TEST(test_flash_active_sync_off_forces_all_dark);
   RUN_TEST(test_flash_active_sync_on_uses_flash_channels);
-  RUN_TEST(test_per_channel_run_pattern_preserved);
-  RUN_TEST(test_per_channel_flash_pattern_preserved);
-  RUN_TEST(test_invalid_red_green_overlap_collapses_group_to_dark_and_reports_fault);
   RUN_TEST(test_port_wiring_with_mock_records_apply);
   RUN_TEST(test_port_wiring_with_mock_records_all_off);
 

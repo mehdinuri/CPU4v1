@@ -47,7 +47,7 @@
             "name": "Docker-Host-Test",
             "displayName": "Host Tests (Docker /workspace)",
             "inherits": "Host-Test",
-            "binaryDir": "/tmp/docker-host-test"
+            "binaryDir": "/workspace/build/Docker-Host-Test"
         }
     ],
     "buildPresets": [

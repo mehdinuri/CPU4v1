@@ -107,6 +107,7 @@ uint8_t StorageRequest(uint8_t bReqId,
         if ((lFlags & 0x80000000U) != 0U)
         {
           StorageFaultRecord();
+
           return FALSE;
         }
 
@@ -186,6 +187,6 @@ void StorageTaskFunc(void *argument)
   }
 
   /* USER CODE END vStorageTask */
-}
+} /* StorageTaskFunc */
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****END OF FILE****/

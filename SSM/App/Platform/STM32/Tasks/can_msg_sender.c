@@ -58,6 +58,7 @@ uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
       || ((bDataLen != 0U) && (baData == NULL)))
   {
     CANTxFaultRecord();
+
     return 0U;
   }
 
@@ -88,6 +89,7 @@ uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
     {
       osMemoryPoolFree(CANTxReqsMemPoolHandle, pSReq);
       CANTxFaultRecord();
+
       return 0U;
     }
 
@@ -95,8 +97,9 @@ uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
   }
 
   CANTxFaultRecord();
+
   return 0U;
-}
+} /* CANTxRequest */
 
 uint8_t CANTxFaultLatched(void)
 {

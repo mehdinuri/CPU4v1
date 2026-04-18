@@ -67,6 +67,11 @@ Add_Unity_Domain_Test(Test_OutputVerify
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_OutputVerify.c
 )
 
+# Domain: Advanced baselining for lamp-out detection.
+Add_Unity_Domain_Test(Test_SignalDiagnostics
+    ${CMAKE_CURRENT_SOURCE_DIR}/Test_SignalDiagnostics.c
+)
+
 # Domain: byte-explicit encoder for outgoing voltage/current CAN frame.
 Add_Unity_Domain_Test(Test_VoltageCurrentFrame
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_VoltageCurrentFrame.c

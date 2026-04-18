@@ -13,6 +13,7 @@ target_sources(ssm_domain PRIVATE
     Crc32.c
     FlashSyncWatchdog.c
     OutputVerify.c
+    SignalDiagnostics.c
     PersistenceJournal.c
     VoltageCurrentFrame.c
 )
