@@ -62,7 +62,7 @@ _Static_assert(sizeof(tSFlashSyncFrame) <= 8U,
                "tSFlashSyncFrame exceeds CAN frame payload limit (8 bytes)");
 
 /* ---------------------------------------------------------------------------
- * Runtime state (was static SPSMRuntime in Tasks/Src/measurement.c)
+ * Runtime state (was static SPSMRuntime in App/Platform/STM32/Tasks/Measurement.c)
  * ---------------------------------------------------------------------------*/
 typedef struct
 {

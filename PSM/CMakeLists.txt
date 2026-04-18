@@ -73,21 +73,8 @@ else()
     # Domain layer (pure computation, no HAL/FreeRTOS)
     add_subdirectory(App/Domain)
 
-    # Platform layer — adapter wiring, global ports, ISR setters
+    # Platform layer — adapter wiring, global ports, ISR setters, task sources
     add_subdirectory(App/Platform/STM32)
-
-    # Application task sources — adapter .c files are now compiled inside
-    # PSM_Platform_STM32 (App/Platform/STM32/CMakeLists.txt).
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        Tasks/Src/measurement.c
-        Tasks/Src/can_msg_parser.c
-        Tasks/Src/can_msg_sender.c
-        Tasks/Src/storage.c
-    )
-
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        Tasks/Inc
-    )
 
     target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE)

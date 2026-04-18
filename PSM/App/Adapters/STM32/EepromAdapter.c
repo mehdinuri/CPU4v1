@@ -7,7 +7,7 @@
  */
 
 #include "EepromAdapter.h"
-#include "storage.h"
+#include "Storage.h"
 
 /* ---------------------------------------------------------------------------
  * Private adapter implementations

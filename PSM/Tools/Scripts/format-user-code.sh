@@ -48,8 +48,7 @@ fi
 # ---------------------------------------------------------------------------
 USER_DIRS=(
     "App/Domain"
-    "Tasks/Inc"
-    "Tasks/Src"
+    "App/Platform/STM32/Tasks"
     "Tests"
 )
 

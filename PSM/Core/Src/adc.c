@@ -22,7 +22,7 @@
 
 /* USER CODE BEGIN 0 */
 #include <string.h>
-#include "measurement.h"
+#include "Measurement.h"
 #include <math.h>
 
 #define V_REF 3.38f

@@ -42,7 +42,7 @@ IFrequencySensorPort_t g_frequencySensorPort;
 /* ------------------------------------------------------------------
  * ISR/DMA-callback wrappers.
  * These thin functions bridge the globally-named ISR entry points
- * (declared in Tasks/Inc/measurement.h) to the adapter-owned inline
+ * (declared in App/Platform/STM32/Tasks/Measurement.h) to the adapter-owned inline
  * setters.  The adapters own the field write logic; this file only
  * routes the call to the correct adapter context.
  * ------------------------------------------------------------------ */

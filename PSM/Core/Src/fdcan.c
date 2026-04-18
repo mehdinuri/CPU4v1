@@ -23,7 +23,7 @@
 /* USER CODE BEGIN 0 */
 #include <string.h>
 #include "cmsis_os.h"
-#include "can_msg_parser.h"
+#include "CanMsgParser.h"
 /* USER CODE END 0 */
 
 FDCAN_HandleTypeDef hfdcan1;

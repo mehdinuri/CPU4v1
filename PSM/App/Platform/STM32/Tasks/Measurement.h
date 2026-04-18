@@ -1,14 +1,14 @@
 /**
  ******************************************************************************
- * @file    Tasks/Inc/measurement.h
+ * @file    App/Platform/STM32/Tasks/Measurement.h
  * @brief   Measurement task public API.
  *          Domain types live in Domain/MeasurementService.h.
  *          Adapter wiring lives in App/Platform/STM32/Bootstrap/main_stm32.c.
  ******************************************************************************
  */
 
-#ifndef TASKS_MEASUREMENT_H
-#define TASKS_MEASUREMENT_H
+#ifndef APP_PLATFORM_STM32_TASKS_MEASUREMENT_H
+#define APP_PLATFORM_STM32_TASKS_MEASUREMENT_H
 
 #include <stdint.h>
 
@@ -33,6 +33,6 @@ extern void MeasurementCommCntrReset(void);
 /* Called from ADC DMA-complete callback to unblock the task */
 extern void MeasurementThreadFlagSet(void);
 
-#endif /* TASKS_MEASUREMENT_H */
+#endif /* APP_PLATFORM_STM32_TASKS_MEASUREMENT_H */
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****END OF FILE****/

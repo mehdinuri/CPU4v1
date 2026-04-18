@@ -3,6 +3,10 @@
 
 add_library(PSM_Platform_STM32 STATIC
     Bootstrap/main_stm32.c
+    Tasks/Measurement.c
+    Tasks/CanMsgParser.c
+    Tasks/CanMsgSender.c
+    Tasks/Storage.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/IndicatorLEDAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/SignalInputAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/EepromAdapter.c
@@ -11,18 +15,21 @@ add_library(PSM_Platform_STM32 STATIC
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/FrequencySensorAdapter.c
 )
 
-# Bootstrap/ is PUBLIC so #include "HardwarePorts.h" works in tasks.
+# Bootstrap/ and Tasks/ are PUBLIC so the main executable (Core/Src/*) and
+# adapter sources can resolve headers like HardwarePorts.h, Measurement.h,
+# CanMsgParser.h, Storage.h.
 # App/ is PRIVATE so Ports/ and Adapters/STM32/ headers resolve.
-# Tasks/Inc is PRIVATE for storage.h and can_msg_sender.h used by adapters.
 target_include_directories(PSM_Platform_STM32
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/Bootstrap
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/Tasks
     PRIVATE ${CMAKE_SOURCE_DIR}/App
-    PRIVATE ${CMAKE_SOURCE_DIR}/Tasks/Inc
 )
 
 # Link stm32cubemx to get HAL include paths (Core/Inc, Drivers/*, etc.)
 # needed by adapter .c files that include gpio.h, fdcan.h, etc.
-target_link_libraries(PSM_Platform_STM32 PRIVATE stm32cubemx)
+# Link PSM_Domain so Tasks/*.c (now compiled into this library) can resolve
+# MeasurementService_* and other domain symbols at link time.
+target_link_libraries(PSM_Platform_STM32 PRIVATE stm32cubemx PSM_Domain)
 
 target_compile_options(PSM_Platform_STM32 PRIVATE
     -Wall -Wextra -Werror -Wpedantic

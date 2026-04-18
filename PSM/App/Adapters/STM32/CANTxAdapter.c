@@ -8,7 +8,7 @@
 
 #include "CANTxAdapter.h"
 #include "fdcan.h"
-#include "can_msg_sender.h"
+#include "CanMsgSender.h"
 
 /* ---------------------------------------------------------------------------
  * Private adapter implementation

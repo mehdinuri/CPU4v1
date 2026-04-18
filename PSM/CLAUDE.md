@@ -61,7 +61,8 @@ PSM follows the same hexagonal (ports + adapters) architecture as CPM/CP.
 - `App/Ports/` — Six vtable interface headers (zero implementation). Domain code only calls via these.
 - `App/Adapters/STM32/` — STM32 adapter implementations; included only in the `STM32` build target.
 - `App/Adapters/Mock/` — In-memory mock adapters for host unit tests; included only in the `Host` build target.
-- `Tasks/` — FreeRTOS task wrappers; creates adapters + ports, injects them into domain services.
+- `App/Platform/STM32/Tasks/` — FreeRTOS task wrappers (STM32-only); bridge CubeMX ISRs to domain services. Compiled into `PSM_Platform_STM32` for the STM32 build; omitted from Host builds.
+- `App/Platform/Host/` — Host test runner entry point (`main_host.c`); linked only for `BUILD_TARGET=Host`.
 - `Core/` — STM32CubeMX-generated peripheral init code (HAL + FreeRTOS scaffolding). User logic lives inside `/* USER CODE BEGIN/END */` guards so CubeMX regeneration is safe.
 - `Tests/` — Unity unit tests; compiled only for `BUILD_TARGET=Host`. Each test file has its own `main()` with explicit `RUN_TEST()` calls.
 - `Tools/` — Docker (`Tools/Docker/`), MISRA-C format config (`Tools/Format/`), and helper scripts (`Tools/Scripts/`).
@@ -82,7 +83,7 @@ Six vtable structs, each a `void *ctx` + function pointer(s) with an inline disp
 
 ### Adapters
 
-**STM32 adapters** (`App/Adapters/STM32/`) — wrap HAL/storage calls. `VoltageSensorAdapterCtx_t` and `FrequencySensorAdapterCtx_t` have writable fields populated by ISR callback forwarders in `Tasks/Src/measurement.c` (`MeasurementNetVoltageSet`, etc.). Float reads/writes are 32-bit word-aligned on Cortex-M4 and therefore atomic — no mutex needed.
+**STM32 adapters** (`App/Adapters/STM32/`) — wrap HAL/storage calls. `VoltageSensorAdapterCtx_t` and `FrequencySensorAdapterCtx_t` have writable fields populated by ISR callback forwarders in `App/Platform/STM32/Tasks/Measurement.c` (`MeasurementNetVoltageSet`, etc.). Float reads/writes are 32-bit word-aligned on Cortex-M4 and therefore atomic — no mutex needed.
 
 **Mock adapters** (`App/Adapters/Mock/`) — in-memory implementations. Tests pre-set input fields and inspect output fields after calling service methods. `MockEepromAdapterCtx_t` has a 256-byte backing buffer plus configurable `bReadResult`/`bWriteResult` flags.
 
@@ -113,7 +114,7 @@ Global RTOS handles and the `MaintenanceTaskSignal()` helper are declared in `Co
 - **FDCAN1** (PA11/PA12): Classic CAN, standard IDs only. Accepts IDs in range `[FDCAN_CP_FLASH_SIGNALS_1_STD_ID … FDCAN_CP_OFFSET_2_STD_ID]`; all others rejected.
 - **FDCAN2** (PB12/PB13): FDCAN with BRS, standard + extended IDs, accepts all frames (reserved for future use).
 
-Incoming message IDs parsed in `Tasks/Src/can_msg_parser.c`:
+Incoming message IDs parsed in `App/Platform/STM32/Tasks/CanMsgParser.c`:
 - `FDCAN_CP_DATE_TIME_STD_ID` — resets flash-state and comm-error counter.
 - `FDCAN_CP_FLASH_SIGNALS_1_STD_ID` — sets measurement/flash period from byte 6.
 - `FDCAN_CP_OFFSET_1/2_STD_ID` — sets AC voltage calibration offset (operation + value).
@@ -130,7 +131,7 @@ Outgoing:
 4. ADC DMA complete → `MeasurementThreadFlagSet()` → unblocks `MeasurementTask`.
 5. Task applies calibration coefficient + optional offset, converts to scaled integers, evaluates OK ranges, drives LEDs, sends CAN frame.
 
-Scaling constants (defined in `Tasks/Src/measurement.c`):
+Scaling constants (defined in `App/Platform/STM32/Tasks/Measurement.c`):
 - AC voltage: `CP_NET_VOLTAGE_COEFFICIENT = 0.73029`
 - DC voltages: `CP_REG_VIN_COEFFICIENT = CP_REG_VOUT_COEFFICIENT = 10.0`
 

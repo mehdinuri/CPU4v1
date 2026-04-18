@@ -22,7 +22,7 @@
 
 /* USER CODE BEGIN 0 */
 #include "utilities.h"
-#include "measurement.h"
+#include "Measurement.h"
 
 #define TIM2_CLOCK_FREQ 100000
 #define TIM2_MAX_COUNT 0xFFFFFFFF

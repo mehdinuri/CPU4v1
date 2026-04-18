@@ -1,6 +1,6 @@
 /**
  ******************************************************************************
- * @file    Tasks/Src/measurement.c
+ * @file    App/Platform/STM32/Tasks/Measurement.c
  * @brief   Measurement task — uses globally wired ports from HardwarePorts.h.
  *          All business logic lives in App/Domain/MeasurementService.c.
  *          Adapter contexts and ISR setters live in
@@ -9,7 +9,7 @@
  */
 
 /* Includes ------------------------------------------------------------------*/
-#include "measurement.h"
+#include "Measurement.h"
 #include "HardwarePorts.h"
 #include "Domain/MeasurementService.h"
 #include "Config/EepromMap.h"
