@@ -12,6 +12,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "cmsis_os.h"
+#include "Domain/Measurement.h"
 
 /* Private define ------------------------------------------------------------*/
 
@@ -26,16 +27,9 @@
 /* Public macros ------------------------------------------------------------*/
 
 /* Public types -------------------------------------------------------------*/
-typedef __packed struct _tSOffset
-{
-	uint8_t bOperation;
-	uint8_t bValue;
-	
-} tSOffset, *tptSOffset;
-
 typedef struct _tSPSMRuntime
 {
-	tSOffset SOffset;
+    tSMeasurementOffset SOffset;
 	uint8_t fFlashState;
 	uint32_t lFlashPeriod;
 	uint16_t sFlashCntr;
@@ -43,14 +37,11 @@ typedef struct _tSPSMRuntime
 	uint16_t sCommErrorCntr;
 	uint8_t bNetFrequency;
 	
-	float fNetVoltage;
-	float fRegVIn;
-	float fRegVOut;
-	
-	float fOffsetNetVoltage;
-	float fCPNetVoltage;
-	
-	uint16_t sNetVoltage;
+    float fNetVoltage;
+    float fRegVIn;
+    float fRegVOut;
+
+    uint16_t sNetVoltage;
 	uint16_t sRegVIn;
 	uint16_t sRegVOut;
 	

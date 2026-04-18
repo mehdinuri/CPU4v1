@@ -81,7 +81,7 @@ void vUpdateOutputs(uint8_t ucCardId, uint8_t * pucData)
 	{
 		for(ucOutputIdx = 0; ucOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP; ucOutputIdx++)
 		{
-			uint8_t ucStatus = utilsGetBitValue(pucData[ucOutputBitIdx / NUM_BITS_IN_BYTE], (ucOutputBitIdx % NUM_BITS_IN_BYTE));
+			uint8_t ucStatus = GET_BIT_VALUE(pucData[ucOutputBitIdx / NUM_BITS_IN_BYTE], (ucOutputBitIdx % NUM_BITS_IN_BYTE));
 			vSetOutput(ucGroupIdx, ucOutputIdx, ucStatus);
 			
 			ucOutputBitIdx++;
@@ -97,7 +97,7 @@ void vUpdateFlashOutputs(uint8_t ucCardId, uint8_t * pucData)
 	{
 		for(ucOutputIdx = 0; ucOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP; ucOutputIdx++)
 		{
-			uint8_t ucStatus = utilsGetBitValue(pucData[ucOutputBitIdx / NUM_BITS_IN_BYTE], (ucOutputBitIdx % NUM_BITS_IN_BYTE));
+			uint8_t ucStatus = GET_BIT_VALUE(pucData[ucOutputBitIdx / NUM_BITS_IN_BYTE], (ucOutputBitIdx % NUM_BITS_IN_BYTE));
 			vSetFlashOutput(ucGroupIdx, ucOutputIdx, ucStatus);
 			
 			ucOutputBitIdx++;
@@ -125,18 +125,18 @@ void vSaveFlashOutputs(void)
 			uint8_t ucBitIdx = (ucGroupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + ucOutputIdx;
 			if(xaOutputGroups[ucGroupIdx].xaOutputs[ucOutputIdx].ucIsFlashing)
 			{
-				utilsClearBitValue(xCurFlashSigConfig.usFlashBits, ucBitIdx);
+				CLEAR_BIT_VALUE(xCurFlashSigConfig.usFlashBits, ucBitIdx);
 			}
 			else
 			{
-				utilsSetBitValue(xCurFlashSigConfig.usFlashBits, ucBitIdx);
+				SET_BIT_VALUE(xCurFlashSigConfig.usFlashBits, ucBitIdx);
 			}
 		}
 	}
 	
 	vUtilsRefreshWatchdogs();
 	xCurFlashSigConfig.ulIsWritten = FLASH_SIGNALS_CONFIG_ALREADY_WRITTEN;
-	if(ucStoragePutRequest(STORAGE_REQ_INTERNAL_FLASH_READ, INTERNAL_FLASH_ADDR_USER_BASE, (uint32_t *)&xPrevFlashSigConfig, sizeof(xPrevFlashSigConfig)))
+	if(StorageRequest(STORAGE_REQ_FLASH_READ, FLASH_ADDR_USER_BASE, (uint32_t *)&xPrevFlashSigConfig, sizeof(xPrevFlashSigConfig)))
 	{
 		if(memcmp(&xCurFlashSigConfig, &xPrevFlashSigConfig, sizeof(FlashSignalsConfig_t)) == 0)
 		{
@@ -144,7 +144,7 @@ void vSaveFlashOutputs(void)
 		}
 	}
 
-	ucStoragePutRequest(STORAGE_REQ_INTERNAL_FLASH_WRITE, INTERNAL_FLASH_ADDR_USER_BASE, (uint32_t *)&xCurFlashSigConfig, sizeof(xCurFlashSigConfig));
+	StorageRequest(STORAGE_REQ_FLASH_WRITE, FLASH_ADDR_USER_BASE, (uint32_t *)&xCurFlashSigConfig, sizeof(xCurFlashSigConfig));
 }
 
 /* Public application code --------------------------------------------------*/
@@ -165,7 +165,7 @@ void vCANUtlReadFlashOutputs(void)
 	FlashSignalsConfig_t xCurFlashSigConfig;
 	memset(&xCurFlashSigConfig, 0xFF, sizeof(xCurFlashSigConfig));
 	
-	if(ucStoragePutRequest(STORAGE_REQ_INTERNAL_FLASH_READ, INTERNAL_FLASH_ADDR_USER_BASE, (uint32_t *)&xCurFlashSigConfig, sizeof(xCurFlashSigConfig)))
+	if(StorageRequest(STORAGE_REQ_FLASH_READ, FLASH_ADDR_USER_BASE, (uint32_t *)&xCurFlashSigConfig, sizeof(xCurFlashSigConfig)))
 	{
 		if(xCurFlashSigConfig.ulIsWritten == FLASH_SIGNALS_CONFIG_ALREADY_WRITTEN)
 		{
@@ -174,7 +174,7 @@ void vCANUtlReadFlashOutputs(void)
 				for(ucOutputIdx = 0; ucOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP; ucOutputIdx++)
 				{
 					uint8_t ucBitIdx = (ucGroupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + ucOutputIdx;
-					if(utilsGetBitValue(xCurFlashSigConfig.usFlashBits, ucBitIdx))
+					if(GET_BIT_VALUE(xCurFlashSigConfig.usFlashBits, ucBitIdx))
 					{
 						xaOutputGroups[ucGroupIdx].xaOutputs[ucOutputIdx].ucIsFlashing = FALSE;
 					}
@@ -200,7 +200,7 @@ GPIO_PinState xCANUtlGetOutputFlashState(uint8_t ucGroupIdx, uint8_t ucOutputIdx
 
 void vCANUtlProcessStdMsgs(uint32_t ulId, uint8_t * pucData, uint8_t ucLen)
 {
-	uint8_t ucCardId = ucGPIOGetCardID();
+	uint8_t ucCardId = GPIOGetCardID();
 	switch(ulId)
 	{
 		case CPX_SIGNAL_OUTPUTS_1_STD_ID:
@@ -242,7 +242,7 @@ void vCANUtlProcessStdMsgs(uint32_t ulId, uint8_t * pucData, uint8_t ucLen)
 		case PSX_FLASH_SYNC_1_STD_ID:
 		case PSX_FLASH_SYNC_2_STD_ID:
 		{
-			vSetFlashSyncStatus(utilsGetBitValue(pucData[0], 0));
+			vSetFlashSyncStatus(GET_BIT_VALUE(pucData[0], 0));
 		}
 		break;
 	}

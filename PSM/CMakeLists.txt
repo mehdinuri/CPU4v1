@@ -1,68 +1,100 @@
 cmake_minimum_required(VERSION 3.22)
 
-#
-# This file is generated only once,
-# and is not re-generated if converter is called multiple times.
-#
-# User is free to modify the file as much as necessary
-#
+# ---------------------------------------------------------------------------
+# FORMAT TARGET — uncrustify user code (MISRA-C style), skips ST libraries
+# Available on all presets:
+#   cmake --build <build-dir> --target Format        # reformat in-place
+#   cmake --build <build-dir> --target Format-Check  # verify (CI-safe, no writes)
+# ---------------------------------------------------------------------------
+find_program(UNCRUSTIFY_EXECUTABLE uncrustify)
+if(UNCRUSTIFY_EXECUTABLE)
+    message(STATUS "Uncrustify     : ${UNCRUSTIFY_EXECUTABLE}")
+    add_custom_target(Format
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/Scripts/format-user-code.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Formatting user code with Uncrustify (MISRA-C)"
+        VERBATIM
+    )
+    add_custom_target(Format-Check
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Tools/Scripts/format-user-code.sh --check
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Checking user code formatting (MISRA-C)"
+        VERBATIM
+    )
+else()
+    message(STATUS "Uncrustify     : not found — 'Format'/'Format-Check' targets unavailable")
+    message(STATUS "                 Install: sudo apt install uncrustify")
+endif()
 
 # Setup compiler settings
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
-
-# Define the build type
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Debug")
-endif()
-
-# Set the project name
-set(CMAKE_PROJECT_NAME PSM)
-
-# Enable compile command to ease indexing with e.g. clangd
+# Enable compile command export for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
-# Core project settings
+# Build target: STM32 (default) or Host (for unit testing on x86)
+if(NOT DEFINED BUILD_TARGET)
+    set(BUILD_TARGET "STM32")
+endif()
+
+set(CMAKE_PROJECT_NAME PSM)
 project(${CMAKE_PROJECT_NAME})
-message("Build type: " ${CMAKE_BUILD_TYPE})
+message(STATUS "Build target : ${BUILD_TARGET}")
+message(STATUS "Build type   : ${CMAKE_BUILD_TYPE}")
 
-# Enable CMake support for ASM and C languages
-enable_language(C ASM)
+# ---------------------------------------------------------------------------
+# HOST BUILD — Domain + Unit/Integration Tests (x86-64)
+# ---------------------------------------------------------------------------
+if(BUILD_TARGET STREQUAL "Host")
+    enable_language(C)
+    enable_testing()
 
-# Create an executable object type
-add_executable(${CMAKE_PROJECT_NAME})
+    include(cmake/unity.cmake)
 
-# Add STM32CubeMX generated sources
-add_subdirectory(cmake/stm32cubemx)
+    add_subdirectory(App/Domain)
+    add_subdirectory(Tests)
 
-# Link directories setup
-target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined library search paths
-)
+# ---------------------------------------------------------------------------
+# STM32 BUILD — full firmware for STM32G473xx
+# ---------------------------------------------------------------------------
+else()
+    enable_language(C ASM)
 
-# Add sources to executable
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
-)
+    # Main firmware executable (must be created before subdirs that add sources)
+    add_executable(${CMAKE_PROJECT_NAME})
 
-# Add include paths
-target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
-)
+    # CubeMX-generated HAL, middleware, and application sources
+    add_subdirectory(cmake/stm32cubemx)
 
-# Add project symbols (macros)
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
-)
+    # Domain layer (pure computation, no HAL/FreeRTOS)
+    add_subdirectory(App/Domain)
 
-# Remove wrong libob.a library dependency when using cpp files
-list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
+    # Application task sources
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+        Tasks/Src/measurement.c
+        Tasks/Src/can_msg_parser.c
+        Tasks/Src/can_msg_sender.c
+        Tasks/Src/storage.c
+    )
 
-# Add linked libraries
-target_link_libraries(${CMAKE_PROJECT_NAME}
-    stm32cubemx
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        Tasks/Inc
+    )
 
-    # Add user defined libraries
-)
+    target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE)
+
+    list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
+
+    target_link_libraries(${CMAKE_PROJECT_NAME}
+        stm32cubemx
+        PSM_Domain
+
+        # Add user defined libraries
+    )
+
+    set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+        ADDITIONAL_CLEAN_FILES ${CMAKE_PROJECT_NAME}.map)
+endif()

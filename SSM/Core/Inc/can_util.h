@@ -115,7 +115,7 @@ typedef enum xSSX_MODULES
 
 } CANUtlSSXModules_e;
 
-#define SIGNAL_GROUPS_MAX (uint8_t) (SSX_MODULES_MAX * SIGNAL_GROUPS_PER_SSM)
+#define SIGNAL_GROUPS_MAX (uint8_t) (SSX_MODULES_MAX * SIGNAL_GROUPS_PER_SSX)
 #define SIGNAL_OUTPUTS_MAX (uint8_t) (SIGNAL_GROUPS_MAX * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP)
 
 typedef enum xSIGNAL_OUTPUT_TYPES
@@ -133,14 +133,14 @@ typedef enum xSIGNAL_OUTPUT_TYPES
 typedef struct xFDCAN_RX_REQUEST
 {
 	uint8_t	ucStatus;
-	CANRxMessage_t xRxMessage;
+	tSFDCANRxMsg xRxMessage;
 	
 } FDCANUtlRxRequest_t, *pFDCANUtlRxRequest_t;
 
 typedef struct xFDCAN_TX_REQUEST
 {
 	uint8_t	ucStatus;
-	CANTxMessage_t xTxMessage;
+	tSFDCANTxMsg xTxMessage;
 	
 } FDCANUtlTxRequest_t, *pFDCANUtlTxRequest_t;
 

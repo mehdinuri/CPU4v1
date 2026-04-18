@@ -8,6 +8,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include <string.h>
 #include "measurement.h"
+#include "Domain/Measurement.h"
 #include "fdcan.h"
 #include "can_msg_sender.h"
 #include "adc.h"
@@ -16,37 +17,14 @@
 #include "utilities.h"
 #include "i2c.h"
 #include "gpio.h"
-/* Private typedef -----------------------------------------------------------*/
-typedef enum
-{
-	OFFSET_OPERATION_NONE = 0,
-	OFFSET_OPERATION_SUM,
-	OFFSET_OPERATION_SUBTRACT
-	
-} tEOffsetOperations;
 /* Private define ------------------------------------------------------------*/
 #define GET_MOST_SIG_BIT(x) ((unsigned char)((x & 0xFF00) >> 8))
 #define GET_LEASTT_SIG_BIT(x) ((unsigned char)(x & 0x00FF))
-	
+
 #define COMM_LED_PERIOD 5
-
-#define REG_VIN_OK_MIN 220 // 22.0V
-#define REG_VIN_OK_MAX 260 // 26.0V
-
-#define REG_VOUT_OK_MIN 47	//	4.7V
-#define REG_VOUT_OK_MAX 67	//	6.7V
-
-#define NET_LEVEL_OK_MIN 226	//	165V = 226 * 0.73029
-#define NET_LEVEL_OK_MAX 363	//	265V = 363 * 0.73029
-
-#define MAX_COMM_ERROR 999
-
-#define CP_NET_VOLTAGE_COEFFICIENT (float)(0.73029f)
-#define CP_REG_VIN_COEFFICIENT (float)(10.0f)
-#define CP_REG_VOUT_COEFFICIENT (float)(10.0f)
-
-#define MAX_PERIOD 40
-#define DEFAULT_PERIOD 5
+#define MAX_COMM_ERROR  999
+#define MAX_PERIOD      40
+#define DEFAULT_PERIOD  5
 /* Private variables ---------------------------------------------------------*/
 static tSPSMRuntime SPSMRuntime;
 static tSPSMMeasurement SCANMeasurements;
@@ -132,7 +110,7 @@ static void OffsetCheck(void)
 {
 	if (OffsetRead())
 	{
-		if(SPSMRuntime.SOffset.bOperation < OFFSET_OPERATION_SUBTRACT && SPSMRuntime.SOffset.bValue < 0xFF)
+		if(SPSMRuntime.SOffset.bOperation < OFFSET_OPERATION_SUBTRACT && SPSMRuntime.SOffset.bValue < 0xFFU)
 		{
 			return;
 		}
@@ -171,18 +149,12 @@ static void FlashPeriodCheck(void)
 
 static uint8_t DCIsOK(void)
 {
-	if(	(SPSMRuntime.sRegVIn >= REG_VIN_OK_MIN) && (SPSMRuntime.sRegVIn <= REG_VIN_OK_MAX) &&
-				((SPSMRuntime.sRegVOut >= REG_VOUT_OK_MIN) && (SPSMRuntime.sRegVOut <= REG_VOUT_OK_MAX)))
-	{
-		return TRUE;
-	}
-	
-	return FALSE;
+	return Measurement_DCIsOK(SPSMRuntime.sRegVIn, SPSMRuntime.sRegVOut);
 }
 
 static uint8_t ACIsOK(void)
 {
-	return (SPSMRuntime.sNetVoltage >= NET_LEVEL_OK_MIN && SPSMRuntime.sNetVoltage <= NET_LEVEL_OK_MAX);
+	return Measurement_ACIsOK(SPSMRuntime.sNetVoltage);
 }
 
 static uint8_t IsError(void)
@@ -250,55 +222,18 @@ static void FlashSync(void)
 	}
 }
 
-static void NetVoltageOffsetAdd(void)
-{
-	switch(SPSMRuntime.SOffset.bOperation)
-	{
-		case OFFSET_OPERATION_SUM:
-		{
-			SPSMRuntime.fOffsetNetVoltage = SPSMRuntime.fNetVoltage + (float)(SPSMRuntime.SOffset.bValue);
-		}
-		break;
-			
-		case OFFSET_OPERATION_SUBTRACT:
-		{
-			SPSMRuntime.fOffsetNetVoltage = SPSMRuntime.fNetVoltage - (float)(SPSMRuntime.SOffset.bValue);
-		}
-		break;
-		
-		default:
-		{
-			SPSMRuntime.fOffsetNetVoltage = SPSMRuntime.fNetVoltage;
-		}
-		break;
-	}
-}
-
-static void CPNetVoltageSet(void)
-{
-	SPSMRuntime.fCPNetVoltage = (float)(SPSMRuntime.fOffsetNetVoltage / CP_NET_VOLTAGE_COEFFICIENT);
-	SPSMRuntime.sNetVoltage = (uint16_t)(SPSMRuntime.fCPNetVoltage);
-}
-
-static void CPRegVoltagesSet(void)
-{
-	float fRegVIn = (float)(SPSMRuntime.fRegVIn * CP_REG_VIN_COEFFICIENT);
-	float fRegVOut = (float)(SPSMRuntime.fRegVOut * CP_REG_VOUT_COEFFICIENT);
-	
-	SPSMRuntime.sRegVIn = (uint16_t)(fRegVIn);
-	SPSMRuntime.sRegVOut = (uint16_t)(fRegVOut);
-}
-
 static void NetVoltageSet(void)
-{	
-	NetVoltageOffsetAdd();
-	
-	CPNetVoltageSet();
+{
+	SPSMRuntime.sNetVoltage = Measurement_ScaleNetVoltage(SPSMRuntime.fNetVoltage,
+	                                                      &SPSMRuntime.SOffset);
 }
 
 static void RegVoltagesSet(void)
 {
-	CPRegVoltagesSet();
+	SPSMRuntime.sRegVIn  = Measurement_ScaleRegVoltage(SPSMRuntime.fRegVIn,
+	                                                    MEASUREMENT_CP_REG_VIN_COEFFICIENT);
+	SPSMRuntime.sRegVOut = Measurement_ScaleRegVoltage(SPSMRuntime.fRegVOut,
+	                                                    MEASUREMENT_CP_REG_VOUT_COEFFICIENT);
 }
 
 /* Public application code --------------------------------------------------*/

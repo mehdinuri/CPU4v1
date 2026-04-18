@@ -114,6 +114,7 @@ extern osEventFlagsId_t MaintenanceEventHandle;
 extern const uint32_t laUtilsBitValues[32];
 
 extern void MaintenanceTaskSignal(uint32_t ulSignal);
+extern void vUtilsRefreshWatchdogs(void);
 /* Public function prototypes -----------------------------------------------*/
 
 #endif /* __UTILITIES_H__ */

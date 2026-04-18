@@ -11,14 +11,12 @@
 #include "main.h"
 #include "utilities.h"
 #include "iwdg.h"
-#include "wwdg.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-ModuleVersion_t xSSXModuleVersion = {1, 0, 0};
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -28,7 +26,7 @@ ModuleVersion_t xSSXModuleVersion = {1, 0, 0};
 
 /* Public variables ---------------------------------------------------------*/
 
-const uint32_t ulaUtilsBitValues[32] =
+const uint32_t laUtilsBitValues[32] =
 {
 	0x00000001,
 	0x00000002,
@@ -103,8 +101,7 @@ uint8_t ucUtilsBufferCompare(uint8_t * pucBuf1, uint8_t *pucBuf2, uint16_t usLen
 
 void vUtilsRefreshWatchdogs(void)
 {
-	vWWDGRefresh();
-	vIWDGRefresh();
+	IWDGRefresh();
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK *****END OF FILE****/
