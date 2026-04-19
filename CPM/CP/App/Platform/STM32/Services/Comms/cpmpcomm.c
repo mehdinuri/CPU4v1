@@ -6,11 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "DomainServices.h"
 #include "CanMsgParser.h"
 #include "MLM.h"
 #include "gpio.h"
 #include "HardwarePorts.h"
-#include "lcd.h"
 #include "program.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
@@ -346,19 +346,10 @@ void CPMPComTaskFunc(void *argument)
             }
             else
             {
-              /* control if lcd user request exist */
-              if (GetLCDPowerRelayRequest())
+              if (RelayControlServiceGetUserOutputPowerEnabled(
+                    &g_relayControlService) == 0U)
               {
-                /* control if lcd user permits relay can be on, if so, set relay */
-                /* to on */
-                if (GetLCDPowerRelay())
-                {
-                  SetPowerRelay(FALSE);
-                }
-                else
-                {
-                  SetPowerRelay(TRUE);
-                }
+                SetPowerRelay(TRUE);
               }
               else
               {

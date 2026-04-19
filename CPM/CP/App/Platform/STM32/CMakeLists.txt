@@ -10,6 +10,7 @@ target_sources(Platform_STM32 PRIVATE
     Services/Persistence/MLM.c
     Services/Persistence/MSM.c
     Services/Update/IAP.c
+    ../../Adapters/STM32/LCDAdapter.c
     Services/Time/gps.c
     Services/Time/time.c
     Services/Comms/MCS.c

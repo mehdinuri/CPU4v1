@@ -115,29 +115,14 @@ void IAPSendMessage(uint8_t bSrc, uint8_t bDataLen)
       case IAP_REQUEST_SOURCE_UI_SERIAL:
       case IAP_REQUEST_SOURCE_UI_USB:
       {
-        uint16_t sDataIndex = 0;
-        char strData[UI_COMM_MAX_PACKET_LENGTH + 1] = { '\0' };
-        char strPartData[4] = { '\0' };
-
         uint8_t bReqId = (bSrc
                           == IAP_REQUEST_SOURCE_UI_SERIAL)
                          ? UI_REQ_TYPE_SERIAL : UI_REQ_TYPE_USB;
         uint16_t sPacketLen = bDataLen + IAP_PACKET_OVERHEAD_SIZE;
-        uint8_t sPacketLenSize = DigitCountsGet(sPacketLen);
 
-        strcat(strData, UI_COMM_START_OF_PACKET_STR);
-        strcat(strData, UI_COMM_PACKET_IAP_STR);
-        strcat(strData, UI_COMM_DATA_FIELD_SEPARATOR_STR);
-        sprintf(strPartData, "%d", sPacketLen);
-        strcat(strData, strPartData);
-        strcat(strData, UI_COMM_DATA_SEPARATOR_STR);
-        sDataIndex = UI_COMM_IAP_DATA_LEN_INDEX + sPacketLenSize + 1;
-        memcpy(&strData[sDataIndex], &SIAPTransmit, sPacketLen);
-        sDataIndex += sPacketLen;
-        strData[sDataIndex] = UI_COMM_END_OF_PACKET;
-        sDataIndex += 1;
-
-        UITxRequest(bReqId, strData, sDataIndex);
+        UITxRequest(bReqId,
+                    (const uint8_t *) &SIAPTransmit,
+                    sPacketLen);
         break;
       }
   }

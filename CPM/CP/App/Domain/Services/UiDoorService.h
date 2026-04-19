@@ -6,24 +6,29 @@
 
 #include "Domain/Services/MmiEventLogService.h"
 #include "Ports/IDoorSensorPort.h"
+#include "Ports/ILogEventPort.h"
 
 typedef struct
 {
   IDoorSensorPort_t *doorSensorPort;
+  ILogEventPort_t *eventPort;
   MmiEventLogService_t *eventLogService;
   uint8_t initialized;
   uint8_t open;
   uint8_t changed;
   uint16_t latestOpenLogIndex;
   uint16_t latestCloseLogIndex;
+  uint32_t lastPollTick;
+  uint32_t pollIntervalMs;
   uint32_t changeSequence;
 } UiDoorService_t;
 
 void UiDoorServiceInit(UiDoorService_t *service);
 void UiDoorServiceBind(UiDoorService_t *service,
                        IDoorSensorPort_t *doorSensorPort,
+                       ILogEventPort_t *eventPort,
                        MmiEventLogService_t *eventLogService);
-uint8_t UiDoorServiceStep(UiDoorService_t *service);
+uint8_t UiDoorServiceStep(UiDoorService_t *service, uint32_t nowTicks);
 void UiDoorServiceRefreshLatestLogIndices(UiDoorService_t *service);
 uint8_t UiDoorServiceIsOpen(const UiDoorService_t *service);
 uint8_t UiDoorServiceConsumeChanged(UiDoorService_t *service);

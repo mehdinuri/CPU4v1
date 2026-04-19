@@ -490,10 +490,6 @@ void TransmitCANPackets(void)
 
 void SigCardDrvInit(void)
 {
-  uint8_t bDoorNow = DoorSensorIsOpen(&g_doorPort);
-
-  SetGateCurrentStatus(bDoorNow);
-  SetGatePrevStatus(bDoorNow);
   /* period counters */
   bPeriodCounter = 0; /* some packets are sent with different intervals */
   bLoopStatusRequestPeriodCnt = 0;
@@ -502,39 +498,6 @@ void SigCardDrvInit(void)
   bInputErrorCounter = 0;
   bInputStatusCheckCntr = 0;
   memset(baLoopErrorCounters, 0, sizeof(baLoopErrorCounters));
-}
-
-static void DoorMonitorProcess(void)
-{
-  uint8_t bDoorNow = DoorSensorIsOpen(&g_doorPort);
-
-  SetGateCurrentStatus(bDoorNow);
-
-  if (GetGateCurrentStatus() != GetGatePrevStatus())
-  {
-    if (GetGateCurrentStatus() != 0U)
-    {
-      LogRequest(LOG_REQ_APPEND_ASYNCH,
-                 NULL,
-                 EVENT_DOOR_CLOSED,
-                 0,
-                 0,
-                 0,
-                 0);
-    }
-    else
-    {
-      LogRequest(LOG_REQ_APPEND_ASYNCH,
-                 NULL,
-                 EVENT_DOOR_OPEN,
-                 0,
-                 0,
-                 0,
-                 0);
-    }
-
-    SetGatePrevStatus(GetGateCurrentStatus());
-  }
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
@@ -558,8 +521,6 @@ void SignalCardDriveTaskFunc(void *argument)
     {
       UseIOValues();
     }
-
-    DoorMonitorProcess();
     switch (CPMPStateGet())
     {
         case PACKET_TYPE_CP_DEFAULT:

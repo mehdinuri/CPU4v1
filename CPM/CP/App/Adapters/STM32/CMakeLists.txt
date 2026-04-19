@@ -30,8 +30,8 @@ target_sources(Adapters_STM32 PRIVATE
     PersistenceAdapter.c
     UserAuthStoreAdapter.c
     ConfigRepositoryAdapter.c
+    LogEventAdapter.c
     LogRepositoryAdapter.c
-    LCDAdapter.c
     KeypadAdapter.c
     UnitInputAdapter.c
     AdminInfoAdapter.c

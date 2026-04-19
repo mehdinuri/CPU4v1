@@ -10,16 +10,16 @@
 #include "MCS.h"
 #include "MSM.h"
 #include "PPPOSAsynch.h"
+#include "DomainServices.h"
 #include "gps.h"
 #include "IAP.h"
-#include "lcd.h"
 #include "lwip/apps/snmp.h"
 #include "main.h"
 #include "tcp_client.h"
-#include "ui.h"
 /* ///////////////////////////////////////////////////////// */
 /*                    Data */
 #define MCS_ASYNCH_DMA_TX_TIMEOUT 1000
+#define MCS_ASYNCH_LCD_LINE_COUNT 4U
 
 /* Reception and Transmission Control */
 static tSMCSAsynchTransfer SMCSAsynchRx;
@@ -573,7 +573,8 @@ void MCSAsynchRuntimeMsgSet(void)
 
   /*  module flags */
   SMCSDevRtm.bRelay = GetPowerRelay();
-  SMCSDevRtm.bGate = GetGateState();
+  /* Legacy gate/door runtime is removed; keep field zero for wire compatibility. */
+  SMCSDevRtm.bGate = 0U;
   SMCSDevRtm.bGps = GpsModemAliveGet();
   SMCSDevRtm.bLampDim = GetLampDimmingState();
   SMCSDevRtm.bHeater = GetHeaterState();
@@ -659,6 +660,52 @@ void MCSAsynchVersionMsgSet(void)
                     &SMCSVersion);
 }
 
+static void MCSAsynchBuildLegacyLcdStream(tSMCSLCDStream *stream)
+{
+  MmiRuntimeSummaryV2_t summary;
+  MmiRuntimeSafetySummaryV2_t safetySummary;
+  MmiRuntimePowerSummaryV2_t powerSummary;
+  MmiRuntimeDoorSummaryV2_t doorSummary;
+
+  if (stream == NULL)
+  {
+    return;
+  }
+
+  (void) memset(&summary, 0, sizeof(summary));
+  (void) memset(&safetySummary, 0, sizeof(safetySummary));
+  (void) memset(&powerSummary, 0, sizeof(powerSummary));
+  (void) memset(&doorSummary, 0, sizeof(doorSummary));
+
+  (void) MmiSnapshotCacheGetSummary(&g_mmiSnapshotCache, &summary);
+  (void) MmiSnapshotCacheGetSafetySummary(&g_mmiSnapshotCache, &safetySummary);
+  (void) MmiSnapshotCacheGetPowerSummary(&g_mmiSnapshotCache, &powerSummary);
+  (void) MmiSnapshotCacheGetDoorSummary(&g_mmiSnapshotCache, &doorSummary);
+
+  (void) snprintf(stream->strLCDLines[0],
+                  sizeof(stream->strLCDLines[0]),
+                  "M:%u A:%u S:%u",
+                  summary.mode,
+                  summary.actionPlanControl,
+                  safetySummary.safetyAction);
+  (void) snprintf(stream->strLCDLines[1],
+                  sizeof(stream->strLCDLines[1]),
+                  "SEQ:%u CFG:%u",
+                  summary.activeSequenceNumber,
+                  summary.configLoaded);
+  (void) snprintf(stream->strLCDLines[2],
+                  sizeof(stream->strLCDLines[2]),
+                  "V1:%u.%u F1:%u",
+                  (unsigned int) (powerSummary.psmVoltageTenthsVrms[0] / 10U),
+                  (unsigned int) (powerSummary.psmVoltageTenthsVrms[0] % 10U),
+                  (unsigned int) powerSummary.psmFrequencyRaw[0]);
+  (void) snprintf(stream->strLCDLines[3],
+                  sizeof(stream->strLCDLines[3]),
+                  "DOOR:%s MMU:%u",
+                  (doorSummary.open != 0U) ? "OPEN" : "CLOSE",
+                  summary.mmuFlashActive);
+}
+
 void MCSAsynchLCDStreamMsgSet(void)
 {
   uint8_t bLine = 0;
@@ -666,25 +713,24 @@ void MCSAsynchLCDStreamMsgSet(void)
 
   memset(&SMCSLCDStream, 0, sizeof(SMCSLCDStream));
 
-  for (bLine = 0; bLine < LCD_SIZE_OF_PAGE; bLine++)
+  for (bLine = 0; bLine < MCS_ASYNCH_LCD_LINE_COUNT; bLine++)
   {
     strcpy(SMCSLCDStream.strLCDLines[bLine], "");
   }
 
   if (SMCSAsynchRuntime.bSOMeasurements)
   {
-    LCDSOMeasurements(SMCSAsynchRuntime.bSSMNo, &SMCSLCDStream);
+    (void) snprintf(SMCSLCDStream.strLCDLines[0],
+                    sizeof(SMCSLCDStream.strLCDLines[0]),
+                    "OUTPUT TEST");
+    (void) snprintf(SMCSLCDStream.strLCDLines[1],
+                    sizeof(SMCSLCDStream.strLCDLines[1]),
+                    "SSM:%u",
+                    (unsigned int) SMCSAsynchRuntime.bSSMNo);
   }
   else
   {
-    /*  1st line of LCD */
-    OpeningScreenFirstLine(SMCSLCDStream.strLCDLines[0]);
-    /*  2nd line of LCD */
-    OpeningScreenSecondLine(SMCSLCDStream.strLCDLines[1]);
-    /*  3rd line of LCD */
-    OpeningScreenThirdLine(SMCSLCDStream.strLCDLines[2]);
-    /*  4th Line of LCD */
-    OpeningScreenFourthLine(SMCSLCDStream.strLCDLines[3]);
+    MCSAsynchBuildLegacyLcdStream(&SMCSLCDStream);
   }
 
   MCSAsynchReqTxMsg(MCS_ASYNCH_HEADER_LCD_STREAM,
@@ -839,7 +885,7 @@ void MCSAsynchInputRuntimeMsgSet()
 
     bStrIRLen = strlen(strIR);
     bStrIRDataLen = strlen(strIRData);
-    if (bStrIRLen + bStrIRDataLen < UI_COMM_MAX_MCS_PACKET_LENGTH)
+    if (bStrIRLen + bStrIRDataLen < MCS_ASYNCH_DATA_PACKET_MAX_LEN)
     {
       strncat(strIRData, strIR, bStrIRLen);
       strcat(strIRData, "\r");
@@ -1209,8 +1255,6 @@ void MCSAsynchParseMsg(tpSMCSAsynchMsg pSRxMsg)
       case MCS_ASYNCH_HEADER_DOWNLOAD:
       case MCS_ASYNCH_HEADER_UPLOAD:
       {
-        UIRxRequest(UI_REQ_TYPE_TCP_CLIENT, pSRxMsg->UData.strDownloadUpload,
-                    (pSRxMsg->bLen - sizeof(uint32_t)));
         break;
       }
 
@@ -1707,9 +1751,7 @@ void MCSAsyTaskFunc(void *argument)
         }
       }
 
-      if ((ProgramStateGet() != PROGRAM_STATE_LOADING)
-          && !UIMCSDownloadInProgressGet()
-          && !UIMCSUploadInProgressGet())
+      if (ProgramStateGet() != PROGRAM_STATE_LOADING)
       {
         if ((sErrorInfoTimer % MCS_ASYNCH_PERIOD_ERROR_INFO) == 0)
         {

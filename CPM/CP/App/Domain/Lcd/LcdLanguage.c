@@ -158,33 +158,3 @@ const char *Lcd_GetSettingsMenuEntryStr(uint8_t index, uint8_t lang)
 
   return pStrDeviceSettingsMenuEntries[lang][index];
 }
-
-const char *Lcd_GetEventStr(uint8_t code, uint8_t lang, uint8_t isLong)
-{
-  /* Simplified event string lookup - in a real system this would be much larger */
-  (void) isLong;
-  switch (code)
-  {
-      case 1:
-      { return (lang == LANGUAGE_TURKISH) ? "Guc ACILDI" : "POWER ON"; }
-
-      case 2:
-      { return (lang == LANGUAGE_TURKISH) ? "CiHAZ RESET" : "DEVICE RESET"; }
-
-      case 10:
-      { return (lang == LANGUAGE_TURKISH) ? "FLAs MODU" : "FLASH MODE"; }
-
-      case 11:
-      { return (lang == LANGUAGE_TURKISH) ? "KAPALI MOD" : "OFF MODE"; }
-
-      case 20:
-      { return (lang == LANGUAGE_TURKISH) ? "LAMBA HATASI" : "LAMP FAILURE"; }
-
-      case 30:
-      { return (lang == LANGUAGE_TURKISH) ? "cAKIsMA HATASI" : "CONFLICT ERROR";
-      }
-
-      default:
-      { return (lang == LANGUAGE_TURKISH) ? "BiLiNMEYEN" : "UNKNOWN"; }
-  }
-}

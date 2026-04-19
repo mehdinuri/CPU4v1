@@ -48,10 +48,6 @@ typedef struct _tSLogReq
  *       Public Methods
  */
 extern void MLMInit(void);
-extern const char *GetEventStr(uint8_t, uint8_t);
-extern const char *GetEventStrShort(uint8_t bEventCode,
-                                    uint8_t bInterfaceLanguage,
-                                    uint8_t bStrType);
 extern uint16_t LogEventNew(uint16_t);
 extern uint8_t LogRequest(uint8_t bReqId, tpSLogRecord pSLogRecordBuffer,
                           uint8_t bEvent, uint8_t bParam, uint16_t sParam,

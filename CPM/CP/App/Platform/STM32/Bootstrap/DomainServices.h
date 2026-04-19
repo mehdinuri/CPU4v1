@@ -22,6 +22,7 @@
 #include "Domain/Services/MmiSnapshotCache.h"
 #include "Domain/Services/UiCommsIdentityService.h"
 #include "Domain/Services/UiDoorService.h"
+#include "Domain/Services/UiLanguageService.h"
 #include "Domain/Services/UiPowerService.h"
 #include "Domain/Services/UserAuthService.h"
 #include "Ports/ISystemResetPort.h"
@@ -36,6 +37,7 @@ extern GlobalTimeManagementService_t g_globalTimeManagementService;
 extern IntersectionOutputDispatcher_t g_intersectionOutputDispatcher;
 extern UserAuthService_t g_userAuthService;
 extern UiPowerService_t g_uiPowerService;
+extern UiLanguageService_t g_uiLanguageService;
 extern UiCommsIdentityService_t g_uiCommsIdentityService;
 extern UiDoorService_t g_uiDoorService;
 extern RelayControlService_t g_relayControlService;

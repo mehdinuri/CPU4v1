@@ -1,6 +1,7 @@
 /* App/Domain/Lcd/LcdPage_Home.c */
 #include "LcdPage.h"
 #include "LcdEngine.h"
+#include "LcdEventText.h"
 #include "LcdLanguage.h"
 #include "LcdPageRegistry.h"
 #include "LcdServiceRegistry.h"
@@ -356,6 +357,7 @@ static void DrawRingLine(const MmiSnapshotCache_t *cache,
 static void DrawStatusLine(const HomeCtx_t *ctx,
                            IDisplayPort_t *display,
                            uint8_t lang,
+                           const MmiRuntimeSummaryV2_t *summary,
                            const MmiRuntimeRelaySummaryV2_t *relay,
                            const MmiRuntimeOutputTestSummaryV2_t *outputTest,
                            const MmiRuntimeDoorSummaryV2_t *door)
@@ -393,6 +395,19 @@ static void DrawStatusLine(const HomeCtx_t *ctx,
                       "TEST READY P:%u",
                       (relay == NULL) ? 0U : relay->permitOutputPower);
     }
+  }
+  else if ((summary != NULL) && (summary->safetyReasonCode != 0U))
+  {
+    const char *faultText =
+      LcdEventText_GetSafetyReasonShort(summary->safetyReasonCode, lang);
+
+    (void) snprintf(buf,
+                    sizeof(buf),
+                    "FLT:%-4s D:%c E:%c",
+                    faultText,
+                    ((door != NULL) && (door->open != 0U)) ? 'O' : 'C',
+                    ((relay != NULL) && (relay->permitOutputPower != 0U))
+                    ? '1' : '0');
   }
   else
   {
@@ -442,7 +457,7 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
   DrawSummaryLine(c, display, lang, &summary, &outputTest);
   DrawRingLine(c->services->runtimeCache, display, 1U, 1U, 1U);
   DrawRingLine(c->services->runtimeCache, display, 2U, 2U, 5U);
-  DrawStatusLine(c, display, lang, &relay, &outputTest, &door);
+  DrawStatusLine(c, display, lang, &summary, &relay, &outputTest, &door);
 }
 
 static void ExecuteShortcut(HomeCtx_t *ctx, LcdEngine_t *engine)

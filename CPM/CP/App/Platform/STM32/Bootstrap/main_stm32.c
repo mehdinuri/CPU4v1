@@ -45,6 +45,7 @@
 #include "Adapters/STM32/PersistenceAdapter.h"
 #include "Adapters/STM32/UserAuthStoreAdapter.h"
 #include "Adapters/STM32/ConfigRepositoryAdapter.h"
+#include "Adapters/STM32/LogEventAdapter.h"
 #include "Adapters/STM32/LogRepositoryAdapter.h"
 #include "Adapters/STM32/ModemAdapter.h"
 #include "Adapters/STM32/ModemConfigAdapter.h"
@@ -118,6 +119,7 @@ static EepromStorageAdapterCtx_t s_eepromStorageCtx;
 static PersistenceAdapterCtx_t s_persistenceCtx;
 static UserAuthStoreAdapterCtx_t s_userAuthStoreCtx;
 static ConfigRepositoryAdapterCtx_t s_configRepositoryCtx;
+static LogEventAdapterCtx_t s_logEventCtx;
 static LogRepositoryAdapterCtx_t s_logRepositoryCtx;
 static ModemConfigAdapterCtx_t s_modemConfigCtx;
 static GpsConfigAdapterCtx_t s_gpsConfigCtx;
@@ -178,6 +180,7 @@ static IModemConfigPort_t s_modemConfigPort;
 static IGpsPort_t s_gpsConfigPort;
 static IGpsTimeSyncPort_t s_gpsTimeSyncPort;
 static IUserSettingsPort_t s_userSettingsPort;
+static ILogEventPort_t s_logEventPort;
 
 ConfigurationService_t g_configurationService;
 CpMpLinkService_t g_cpMpLinkService;
@@ -189,6 +192,7 @@ GlobalTimeManagementService_t g_globalTimeManagementService;
 IntersectionOutputDispatcher_t g_intersectionOutputDispatcher;
 UserAuthService_t g_userAuthService;
 UiPowerService_t g_uiPowerService;
+UiLanguageService_t g_uiLanguageService;
 UiCommsIdentityService_t g_uiCommsIdentityService;
 UiDoorService_t g_uiDoorService;
 RelayControlService_t g_relayControlService;
@@ -300,6 +304,9 @@ void MainApplication_Init(void)
 
   PersistenceAdapterInit(&s_persistenceCtx);
   g_persistencePort = PersistenceAdapterCreatePort(&s_persistenceCtx);
+  UiLanguageServiceInit(&g_uiLanguageService);
+  UiLanguageServiceBind(&g_uiLanguageService, &g_persistencePort);
+  (void) UiLanguageServiceLoad(&g_uiLanguageService);
   UserAuthStoreAdapterInit(&s_userAuthStoreCtx, &g_persistencePort);
   s_userAuthStorePort = UserAuthStoreAdapterCreatePort(&s_userAuthStoreCtx);
   BrokenInputSettingsAdapterInit(&s_brokenInputSettingsCtx);
@@ -483,9 +490,14 @@ void MainApplication_Init(void)
 
   LogRepositoryAdapterInit(&s_logRepositoryCtx, &s_eepromStoragePort);
   g_logRepositoryPort = LogRepositoryAdapterCreatePort(&s_logRepositoryCtx);
+  LogEventAdapterInit(&s_logEventCtx);
+  s_logEventPort = LogEventAdapterCreatePort(&s_logEventCtx);
   MmiEventLogServiceInit(&g_mmiEventLogService);
   MmiEventLogServiceBind(&g_mmiEventLogService, &g_logRepositoryPort);
-  UiDoorServiceBind(&g_uiDoorService, &g_doorPort, &g_mmiEventLogService);
+  UiDoorServiceBind(&g_uiDoorService,
+                    &g_doorPort,
+                    &s_logEventPort,
+                    &g_mmiEventLogService);
   UiDoorServiceRefreshLatestLogIndices(&g_uiDoorService);
   MmiCanAdapterBindEventLogService(&s_mmiCanCtx, &g_mmiEventLogService);
 

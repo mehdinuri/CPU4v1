@@ -10,10 +10,8 @@
 #include "MSM.h"
 #include "PPPOSAsynch.h"
 #include "cpmpcomm.h"
-#include "lcd.h"
 #include "main.h"
 #include "signalCardDrv.h"
-#include "ui.h"
 #include "i2c.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
@@ -1100,7 +1098,7 @@ void ProgramTaskFunc(void *argument)
   /* get data and update program data according to schedule */
   if (ProgramReadData() == FALSE)
   {
-    DataInit(UI_REQ_TYPE_NONE, TRUE);
+    DataInit(FALSE, TRUE);
     ProgramDataSet();
   }
 
@@ -1122,8 +1120,6 @@ void ProgramTaskFunc(void *argument)
   {
     osThreadFlagsWait(THREAD_FLAGS_PROGRAM_SEC_ELAPSED, osFlagsWaitAll,
                       osWaitForever);
-
-    UIRuntimeTimeoutsChecks();
 
     /* examine traffic actuated periodical values */
     IOPerValsInit();

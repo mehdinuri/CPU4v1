@@ -5,14 +5,10 @@
 /*  includes */
 #include "Ports/UserInputTypes.h"
 
-typedef struct _tSMCSLCDStream tSMCSLCDStream;
-typedef tSMCSLCDStream *tpSMCSLCDStream;
-
 /* /////////////////////////////////////////// */
 /*  Public Methods */
 extern void LCDSoftwareOpen(void);
 extern void LCDSoftwareClose(void);
-extern void InitLCDTask(void);
 
 /* //////// Keypad  ////////////////////////////////////////////// */
 #define NUMBER_OF_KEYS KEYPAD_KEY_COUNT
@@ -451,83 +447,5 @@ extern void InitLCDTask(void);
 #define LCD_ADMIN_DEFAULT_USERNAME 1111
 #define LCD_ADMIN_DEFAULT_PASSWORD 1111
 /*  Public Methods */
-
-extern void LCDLanguageSet(uint8_t bLang);
-extern uint8_t LCDLanguageGet(void);
-extern uint8_t LCDLanguageWrite(void);
-extern uint8_t LCDLanguageRead(void);
-
-extern void SetLCDPowerRelayRequest(uint8_t bState);
-extern uint8_t GetLCDPowerRelayRequest(void);
-extern uint8_t GetLCDPowerRelay(void);
-extern void SetLCDPowerRelay(uint8_t bState);
-extern void SetLCDState(uint8_t bState);
-extern uint8_t GetLCDState(void);
-extern void ShowMenuPage(uint8_t bPage);
-extern void KeyOpeningScreen(void);
-extern void ConnectionsScreen(void);
-extern void StatusScreen(void);
-extern void EmergencyScreen(void);
-extern void DemandsScreen(void);
-extern void LCD_RemoteConfigMenu(void);
-extern void LCD_RemoteConfigMenuKeyScan(void);
-extern void LCD_RemoteConfigMenuIPandPortConfig(void);
-extern void LCD_RemoteConfigMenuIPandPortConfigKeyScan(void);
-extern void LCD_RemoteConfigMenuSaveScreenKeyScan(void);
-extern uint8_t PSMTestModuleNoGet(void);
-extern uint8_t PSMTestOperationGet(uint8_t bPSMNo);
-extern uint8_t PSMTestValueGet(uint8_t bPSMNo);
-extern void PSMTestMenuInit(void);
-extern void PSMTestMenuShow(uint8_t bPSMNo);
-extern void KeyPSMTestMenu(void);
-
-/* GPS Settings */
-extern void PageGPSSettingsInit(void);
-extern void PageGPSSettingsPortConfigInit(void);
-extern void PageGPSSettingsBaudRateConfigInit(void);
-
-/* User Accounts */
-extern void PageUserAccountsInit(void);
-extern void PageUserAccountsChangePasswordInit(void);
-
-/* Remote Connection */
-extern void PageRemoteConnectionInit(void);
-extern void RemoteConnectionKeyScan(void);
-
-/* Settings Menu */
-extern void ShowSettingsMenuPage(uint8_t bPage);
-
-/* Heater & Lamp Dimming */
-/* H&D Commented */
-
-/*
- *  extern  void  HeaterAndLampDimmingScreen(void);
- */
-
-/* Security Settings */
-extern void UserSettingsScreen(void);
-
-/* Broken Input Settings */
-extern void BrokenInputSettingsScreen(void);
-
-/* Server Settings */
-extern void ServerSettingsScreen(void);
-
-/* MCS Connection Settings */
-extern void MCSConnectionSettingsMenuPage(uint8_t bKey);
-extern void MCSConnectionSettingsMenuKeyScan(void);
-extern void MCSConnectionSettingShowAdjacentPage(uint8_t fNext);
-extern void MCSConnectionSettingShowNextPage(uint8_t fNext);
-extern void MCSConnectionSettingSetModemType(uint8_t bKey);
-extern void LRLFDetectTimeMenuStateInit(void);
-
-/* Opening Screen */
-extern void OpeningScreenFirstLine(char *pStrPtr);
-extern void OpeningScreenSecondLine(char *pStrPtr);
-extern void OpeningScreenThirdLine(char *pStrPtr);
-extern void OpeningScreenFourthLine(char *pStrPtr);
-
-/* SO Measurements */
-extern void LCDSOMeasurements(uint8_t bSSMNo, tpSMCSLCDStream pSScreen);
 
 #endif /* ifndef _LCD */

@@ -27,12 +27,14 @@ target_sources(Domain PRIVATE
     Services/MmiEventLogService.c
     Services/MmiMaintenanceService.c
     Services/UiPowerService.c
+    Services/UiLanguageService.c
     Services/UiDoorService.c
     Services/UiCommsIdentityService.c
     Services/RelayControlService.c
     Services/OutputTestService.c
     Services/UserAuthService.c
     Lcd/LcdEngine.c
+    Lcd/LcdEventText.c
     Lcd/LcdLanguage.c
     Lcd/LcdPage_Home.c
     Lcd/LcdPage_Login.c

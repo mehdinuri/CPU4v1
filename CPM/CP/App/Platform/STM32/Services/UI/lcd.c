@@ -16,9 +16,6 @@
 #include "cmsis_os2.h"
 #include "HardwarePorts.h"
 #include "PersistencePorts.h"
-#include "usart.h"
-#include "usb.h"
-#include "gps.h"
 #include "Domain/Lcd/LcdEngine.h"
 #include "Domain/Lcd/LcdLanguage.h"
 #include "Domain/Lcd/LcdServiceRegistry.h"
@@ -27,7 +24,6 @@
 #include "Ports/ICommsStatusPort.h"
 #include "Ports/IUserPort.h"
 #include "Ports/ILogRepositoryPort.h"
-#include "Ports/IGpsPort.h"
 #include "DomainServices.h"
 
 static LcdEngine_t g_lcdEngine;
@@ -89,7 +85,6 @@ extern void LcdPage_OutputTest_Init(void *ctx,
                                     const LcdServiceRegistry_t *s,
                                     const LcdPageRegistry_t *p);
 
-uint8_t bLanguage = LANGUAGE_TURKISH;
 static uint8_t fLCDPowered = 1U;
 
 /* ------------------------------------------------------------------
@@ -100,26 +95,6 @@ static void HardwareSetupLCD(void)
   DisplayPowerOn(&g_lcdPort);
   DisplayClear(&g_lcdPort);
   fLCDPowered = 1U;
-}
-
-uint8_t LCDLanguageGet(void)
-{
-  return bLanguage;
-}
-
-void LCDLanguageSet(uint8_t bLang)
-{
-  bLanguage = bLang;
-}
-
-uint8_t LCDLanguageWrite(void)
-{
-  return 1U;
-}
-
-uint8_t LCDLanguageRead(void)
-{
-  return 1U;
 }
 
 void LCDSoftwareClose(void)
@@ -140,62 +115,10 @@ void LCDSoftwareOpen(void)
   }
 }
 
-void LCDSOMeasurements(uint8_t bSSMNo, tpSMCSLCDStream pSScreen)
-{
-  (void) bSSMNo; (void) pSScreen;
-}
-
-void OpeningScreenFirstLine(char *buf)
-{
-  (void) buf;
-}
-
-void OpeningScreenSecondLine(char *buf)
-{
-  (void) buf;
-}
-
-void OpeningScreenThirdLine(char *buf)
-{
-  (void) buf;
-}
-
-void OpeningScreenFourthLine(char *buf)
-{
-  (void) buf;
-}
-
-uint8_t GetLCDPowerRelayRequest(void)
-{
-  return 0U;
-}
-
-uint8_t GetLCDPowerRelay(void)
-{
-  return 0U;
-}
-
-void SetLCDPowerRelay(uint8_t state)
-{
-  (void) state;
-}
-
-void SetLCDPowerRelayRequest(uint8_t state)
-{
-  (void) state;
-}
-
-void SetLCDState(uint8_t state)
-{
-  (void) state;
-}
-
 static ISystemPort_t s_lcdSystemPort;
 static ICommsStatusPort_t s_lcdCommsPort;
 static IUserPort_t s_lcdUserPort;
 static ILogRepositoryPort_t s_lcdLogPort;
-static IGpsPort_t s_lcdGpsPort;
-
 static uint16_t LcdGetMainVoltage(void *ctx)
 {
   uint16_t lineVoltageTenthsVrms = 0U;
@@ -247,12 +170,15 @@ static uint8_t LcdGetTimeSource(void *ctx)
 
 static uint8_t LcdGetLanguage(void *ctx)
 {
-  (void) ctx; return bLanguage;
+  (void) ctx;
+  return UiLanguageServiceGet(&g_uiLanguageService);
 }
 
 static void LcdSetLanguage(void *ctx, uint8_t lang)
 {
-  (void) ctx; bLanguage = lang;
+  (void) ctx;
+  (void) UiLanguageServiceSet(&g_uiLanguageService, lang);
+  (void) UiLanguageServiceSave(&g_uiLanguageService);
 }
 
 static UserRole_t LcdLogin(void *ctx, uint16_t username, uint16_t password)
@@ -334,54 +260,6 @@ static uint8_t LcdReadCommsSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
   return 0U;
 }
 
-static uint8_t LcdGpsGetPortType(void *ctx)
-{
-  (void) ctx; return GpsPortGet();
-}
-
-static void LcdGpsSetPortType(void *ctx, uint8_t type)
-{
-  (void) ctx; GpsPortSet(type);
-}
-
-static uint8_t LcdGpsGetBaudRateIndex(void *ctx)
-{
-  (void) ctx; return GpsBaudRateIndexGet();
-}
-
-static void LcdGpsSetBaudRateIndex(void *ctx, uint8_t index)
-{
-  (void) ctx; GpsBaudRateIndexSet(index);
-}
-
-static uint32_t LcdGpsIndexToBaudRate(void *ctx, uint8_t index)
-{
-  (void) ctx; return GpsIndexToBaudRate(index);
-}
-
-static uint8_t LcdGpsSaveConfig(void *ctx)
-{
-  uint8_t ok;
-
-  (void) ctx;
-  ok = GpsPortWrite();
-  ok = (uint8_t) (ok && GpsBaudRateIndexWrite());
-  return ok;
-}
-
-static uint8_t LcdGpsIsValidPortType(void *ctx, uint8_t type)
-{
-  (void) ctx;
-  return (uint8_t) (type <= GPS_PORT_TYPE_MAX);
-}
-
-static uint8_t LcdGpsIsValidBaudRateIndex(void *ctx, uint8_t index)
-{
-  (void) ctx;
-  return (uint8_t) ((index >= GPS_MIN_BAUD_RATE_INDEX)
-                    && (index <= GPS_MAX_BAUD_RATE_INDEX));
-}
-
 void InitLCDTask(void)
 {
   HardwareSetupLCD();
@@ -392,7 +270,7 @@ void InitLCDTask(void)
   g_lcdServices.user = &s_lcdUserPort;
   g_lcdServices.logs = &s_lcdLogPort;
   g_lcdServices.rtc = &g_rtcPort;
-  g_lcdServices.gps = &s_lcdGpsPort;
+  g_lcdServices.gps = g_mmiLocalSettingsService.gpsPort;
   g_lcdServices.maintenance = &g_mmiMaintenanceService;
   g_lcdServices.runtimeCache = &g_mmiSnapshotCache;
 
@@ -416,16 +294,6 @@ void InitLCDTask(void)
   s_lcdLogPort.Exists = LcdLogExists;
   s_lcdLogPort.IsIndexValid = LcdLogIsIndexValid;
   s_lcdLogPort.GetWriteIndex = LcdLogGetWriteIndex;
-
-  s_lcdGpsPort.ctx = NULL;
-  s_lcdGpsPort.GetPortType = LcdGpsGetPortType;
-  s_lcdGpsPort.SetPortType = LcdGpsSetPortType;
-  s_lcdGpsPort.GetBaudRateIndex = LcdGpsGetBaudRateIndex;
-  s_lcdGpsPort.SetBaudRateIndex = LcdGpsSetBaudRateIndex;
-  s_lcdGpsPort.IndexToBaudRate = LcdGpsIndexToBaudRate;
-  s_lcdGpsPort.SaveConfig = LcdGpsSaveConfig;
-  s_lcdGpsPort.IsValidPortType = LcdGpsIsValidPortType;
-  s_lcdGpsPort.IsValidBaudRateIndex = LcdGpsIsValidBaudRateIndex;
 
   /* Initialize Page Registry */
   g_lcdPages.home = &LcdPage_Home;
@@ -475,7 +343,7 @@ void LCDTaskFunc(void *argument)
 {
   uint32_t lastDoorChangeSequence;
 
-  UNUSED(argument);
+  (void) argument;
   InitLCDTask();
   lastDoorChangeSequence = UiDoorServiceGetChangeSequence(&g_uiDoorService);
 

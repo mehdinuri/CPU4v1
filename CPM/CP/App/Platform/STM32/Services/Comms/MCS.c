@@ -28,7 +28,6 @@
 #include "data.h"
 #include "defs.h"
 #include "eth.h"
-#include "lcd.h"
 #include "lwip.h"
 #include "lwip/apps/snmp.h"
 #include "netif/ppp/ppp.h"

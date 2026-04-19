@@ -32,6 +32,5 @@ const char *Lcd_GetLocalIpStr(uint8_t lang);
 const char *Lcd_GetServerIpStr(uint8_t lang);
 
 const char *Lcd_GetSettingsMenuEntryStr(uint8_t index, uint8_t lang);
-const char *Lcd_GetEventStr(uint8_t code, uint8_t lang, uint8_t isLong);
 
 #endif /* LCD_LANGUAGE_H */

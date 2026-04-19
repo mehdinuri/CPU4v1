@@ -6,7 +6,8 @@
 enum
 {
   UI_DOOR_EVENT_OPEN = 64U,
-  UI_DOOR_EVENT_CLOSED = 65U
+  UI_DOOR_EVENT_CLOSED = 65U,
+  UI_DOOR_POLL_INTERVAL_MS = 1000U
 };
 
 void UiDoorServiceInit(UiDoorService_t *service)
@@ -16,16 +17,19 @@ void UiDoorServiceInit(UiDoorService_t *service)
     (void) memset(service, 0, sizeof(*service));
     service->latestOpenLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
     service->latestCloseLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
+    service->pollIntervalMs = UI_DOOR_POLL_INTERVAL_MS;
   }
 }
 
 void UiDoorServiceBind(UiDoorService_t *service,
                        IDoorSensorPort_t *doorSensorPort,
+                       ILogEventPort_t *eventPort,
                        MmiEventLogService_t *eventLogService)
 {
   if (service != NULL)
   {
     service->doorSensorPort = doorSensorPort;
+    service->eventPort = eventPort;
     service->eventLogService = eventLogService;
   }
 }
@@ -40,6 +44,7 @@ void UiDoorServiceRefreshLatestLogIndices(UiDoorService_t *service)
   }
 
   index = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
+  service->latestOpenLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
   if (MmiEventLogServiceFindLatestByEventCode(service->eventLogService,
                                               UI_DOOR_EVENT_OPEN,
                                               &index) != 0U)
@@ -48,6 +53,7 @@ void UiDoorServiceRefreshLatestLogIndices(UiDoorService_t *service)
   }
 
   index = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
+  service->latestCloseLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
   if (MmiEventLogServiceFindLatestByEventCode(service->eventLogService,
                                               UI_DOOR_EVENT_CLOSED,
                                               &index) != 0U)
@@ -56,17 +62,25 @@ void UiDoorServiceRefreshLatestLogIndices(UiDoorService_t *service)
   }
 }
 
-uint8_t UiDoorServiceStep(UiDoorService_t *service)
+uint8_t UiDoorServiceStep(UiDoorService_t *service, uint32_t nowTicks)
 {
+  uint32_t elapsedTicks;
   uint8_t open;
+  uint8_t eventCode;
 
   if ((service == NULL) || (service->doorSensorPort == NULL))
   {
     return 0U;
   }
 
+  elapsedTicks = nowTicks - service->lastPollTick;
+  if ((service->initialized != 0U) && (elapsedTicks < service->pollIntervalMs))
+  {
+    return 1U;
+  }
+
   open = DoorSensorIsOpen(service->doorSensorPort);
-  service->changed = 0U;
+  service->lastPollTick = nowTicks;
 
   if (service->initialized == 0U)
   {
@@ -80,7 +94,13 @@ uint8_t UiDoorServiceStep(UiDoorService_t *service)
     service->open = open;
     service->changed = 1U;
     service->changeSequence++;
-    UiDoorServiceRefreshLatestLogIndices(service);
+    eventCode = (open != 0U) ? UI_DOOR_EVENT_OPEN : UI_DOOR_EVENT_CLOSED;
+
+    if ((service->eventPort != NULL)
+        && (LogEventAppend(service->eventPort, eventCode, 0U, 0U, 0U) != 0U))
+    {
+      UiDoorServiceRefreshLatestLogIndices(service);
+    }
   }
 
   return 1U;

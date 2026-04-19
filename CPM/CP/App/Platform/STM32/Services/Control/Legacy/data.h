@@ -607,13 +607,13 @@ typedef struct _tSSeqExtension
 typedef struct _SPeripheralStates
 {
   uint8_t fRelay : 1;
-  uint8_t fGate : 1;
   uint8_t fClearSOPowers : 1;
   uint8_t fCPUinProgress : 1; /* Indicates the download / upload status of CPU */
   uint8_t fProgramRestart : 1;
   uint8_t fSystemInEM : 1;
   uint8_t fHeater : 1;
   uint8_t fLampDimming : 1;
+  uint8_t fReserved0 : 1;
 
   uint8_t fExternalBattery : 1;
   uint8_t fReserved : 7;
@@ -2285,23 +2285,6 @@ typedef struct _tSSSMTest
   uint8_t bTurnOnSONo;
 } tSSSMTest, *tpSSSMTest;
 
-/* ///////////////////////////////////////////////////////////////////////////////////////////////// */
-/*  Gate State Changes */
-typedef struct _tSGateStateChanges
-{
-  uint16_t SOpenLogRecordIndex;
-  uint16_t SClosedLogRecordIndex;
-
-  struct
-  {
-    uint8_t fGateStateAssigned : 1;
-    uint8_t fGateStateChanged : 1;
-    uint8_t fCurrentStatus : 1;
-    uint8_t fPrevStatus : 1;
-    uint8_t fReserved : 4;
-  } __attribute__((packed)) SFlags;
-} __attribute__((packed)) tSGateStateChanges, *tpSGateStateChanges;
-
 /* Maestro Data Structure */
 #define SCP_START_MAGIC 0xAAAA5555
 #define SCP_MAGIC_MAX 8
@@ -3834,7 +3817,8 @@ extern void FlashCntrClear(void);
 extern uint8_t FlashOnGet(uint16_t sPeriod);
 
 /*  Device Info */
-extern uint8_t SetDeviceInfo(tpSDeviceInfo pSDeviceInfo, uint8_t bCurrentId);
+extern uint8_t SetDeviceInfo(tpSDeviceInfo pSDeviceInfo,
+                             uint8_t keepConnectionInfo);
 extern void GetDeviceInfo(tpSDeviceInfo pSDeviceInfo);
 extern int8_t GetDeviceTimeZone(void);
 extern void SetDeviceTimeZone(int8_t bTimeZone);
@@ -4175,7 +4159,7 @@ extern long OperationState(tpSOperation pSOperation);
 extern long OperandState(tpSOperand pSOperand);
 
 /*  Data Operations */
-extern void DataInit(uint8_t bUIReqID, uint8_t fInitSOPowers);
+extern void DataInit(uint8_t keepConnectionInfo, uint8_t fInitSOPowers);
 extern uint8_t ProgramDataErase(void);
 extern uint8_t ProgramDataWrite(void);
 extern uint8_t ProgramDataRead(void);
@@ -4199,16 +4183,6 @@ extern void ReturnFactorySettings(void);
 extern void EventMPCont(tpSEvent pSEvent);
 
 /*  Peripheral States */
-extern uint8_t GetGateState(void);
-extern void SetGateState(uint8_t bState);
-extern void SetGateOpenLogRecordIndex(uint16_t sIndex);
-extern uint16_t GetGateOpenLogRecordIndex(void);
-extern void SetGateClosedLogRecordIndex(uint16_t sIndex);
-extern uint16_t GetGateClosedLogRecordIndex(void);
-extern void SetGateStateAssigned(uint8_t fState);
-extern uint8_t GetGateStateAssigned(void);
-extern void SetGateStateChanged(uint8_t fState);
-extern uint8_t GetGateStateChanged(void);
 extern void GetPeripheralStates(tpSPeripheralStates pSPeripheralStates);
 extern uint8_t WriteSOPower(uint8_t bSOIndex, tpSSOPowerRecord ptSOPower);
 extern uint8_t ReadSOPower(uint8_t bSOIndex, tpSSOPowerRecord ptSOPower);
@@ -4471,11 +4445,5 @@ extern void PreemptInit(void);
 /* ASC Phase */
 extern tpSAscPhase GetAscPhasePtr(void);
 extern void AscPhaseInit(void);
-
-uint8_t GetGateCurrentStatus(void);
-void SetGateCurrentStatus(uint8_t bState);
-
-uint8_t GetGatePrevStatus(void);
-void SetGatePrevStatus(uint8_t bState);
 
 #endif /* ifndef __DATA_H__ */

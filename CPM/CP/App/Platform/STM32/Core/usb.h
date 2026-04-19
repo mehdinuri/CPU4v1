@@ -2,8 +2,6 @@
  ******************************************************************************
  * @file           : usb.h
  * @brief          : Header for usb.c file.
- *                   This file contains the common defines for usb packet
- * transformation.
  ******************************************************************************
  */
 
@@ -14,8 +12,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include <stdint.h>
 
-#include "ui.h"
 #include "usb_device.h"
+#include "ui.h"
 #include "usbd_custom_hid_if.h"
 /* Private define ------------------------------------------------------------*/
 
@@ -33,24 +31,16 @@
 /* Public types -------------------------------------------------------------*/
 typedef struct _tSUSBData
 {
-  uint8_t baData[UI_COMM_MAX_PACKET_LENGTH + 1];
+  uint8_t baData[UI_FRAME_MAX_SIZE];
   uint16_t sIndex;
   uint16_t sTotalBytes;
-
-  struct
-  {
-    uint8_t fBusy : 1;
-    uint8_t fCheckStarter : 1;
-    uint8_t fCheckTerminator : 1;
-    uint8_t fReserved : 5;
-  } SFlags;
 } tSUSBData, *tpSUSBData;
 
 /* Public function prototypes -----------------------------------------------*/
-extern void USBReceiveByte(uint8_t bRxByte);
+extern void USBReceiveReport(const uint8_t *pbData, uint16_t sDataLen);
 extern void USBStartRx(void);
 extern void USBSend(void);
-extern void USBStartTx(uint8_t *pbData, uint16_t sDataLen);
+extern void USBStartTx(const uint8_t *pbData, uint16_t sDataLen);
 extern void USBStop(void);
 extern void USBDeInit(void);
 

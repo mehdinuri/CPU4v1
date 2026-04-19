@@ -231,10 +231,8 @@ static int8_t CUSTOM_HID_OutEvent_FS(uint8_t event_idx, uint8_t state)
   {
       case USBD_CUSTOM_HID_CONFIG_TOOL_OUT_REPORT_ID:
       {
-        for (ucIdx = 1; ucIdx < strlen((char *) hhid->Report_buf); ucIdx++)
-        {
-          USBReceiveByte(hhid->Report_buf[ucIdx]);
-        }
+        UNUSED(ucIdx);
+        USBReceiveReport(&hhid->Report_buf[1], USBD_CUSTOM_HID_REPORT_COUNT);
 
         break;
       }

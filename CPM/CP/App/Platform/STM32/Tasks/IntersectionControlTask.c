@@ -36,7 +36,7 @@ void IntersectionControlTaskFunc(void *argument)
     DetectorReportServiceStep(&g_detectorReportService);
     GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
     (void) UiCommsIdentityServiceRefresh(&g_uiCommsIdentityService);
-    (void) UiDoorServiceStep(&g_uiDoorService);
+    (void) UiDoorServiceStep(&g_uiDoorService, wakeTick);
     (void) MmiSnapshotCacheRefresh(&g_mmiSnapshotCache);
     if (UiDoorServiceConsumeChanged(&g_uiDoorService) != 0U)
     {

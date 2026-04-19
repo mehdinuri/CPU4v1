@@ -10,17 +10,15 @@
 #include "ethernetif.h"
 #include "gps.h"
 #include "iwdg.h"
-#include "lcd.h"
-#include "lcdDrv.h"
 #include "rng.h"
 #include "signalCardDrv.h"
 #include "snmp_client.h"
 #include "tim.h"
-#include "ui.h"
 #include "usb.h"
 #include "i2c.h"
 #include "crc.h"
 #include "gpio.h"
+#include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "PersistencePorts.h"
 
@@ -128,9 +126,6 @@ static uint32_t laTransitonsLock[TRANSITION_LOCK_SIZE]; /* 1 bit per */
 /*  green-wave sequence extension */
 static tSOperation SCurrentOperation;
 static uint32_t bOffsetVal = 0;
-
-/*  gate state changes */
-static tSGateStateChanges SGateStateChanges;
 
 /* User settings */
 static tSUserSettings SUserSettings;
@@ -1372,9 +1367,9 @@ uint8_t FlashOnGet(uint16_t sPeriod)
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Device Info */
-uint8_t SetDeviceInfo(tpSDeviceInfo pSDeviceInfo, uint8_t bCurrentId)
+uint8_t SetDeviceInfo(tpSDeviceInfo pSDeviceInfo, uint8_t keepConnectionInfo)
 {
-  if (bCurrentId == UI_REQ_TYPE_TCP_CLIENT) /* if data is coming from internet */
+  if (keepConnectionInfo != FALSE)
   {
     /* Keep current connection related info */
     memcpy(pSDeviceInfo->strDomain, SCP.SDevInfo.strDomain,
@@ -6773,7 +6768,7 @@ long OperandState(tpSOperand pSOperand)
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Data Operations */
-void DataInit(uint8_t bUIReqID, uint8_t fInitSOPowers)
+void DataInit(uint8_t keepConnectionInfo, uint8_t fInitSOPowers)
 {
   uint8_t bIndex = 0;
 
@@ -6784,7 +6779,7 @@ void DataInit(uint8_t bUIReqID, uint8_t fInitSOPowers)
   memset(&SCPRuntime.SPeripheralStates, 0,
          sizeof(SCPRuntime.SPeripheralStates));
 
-  if (bUIReqID != UI_REQ_TYPE_TCP_CLIENT)
+  if (keepConnectionInfo == FALSE)
   {
     memset(&SCP.SDevInfo, 0, sizeof(SCP.SDevInfo));
   }
@@ -7056,7 +7051,7 @@ void DataValidate(void)
   #if defined(CHECK_DEVICE_UID)
   if (!CheckDeviceUIDs())
   {
-    SetLCDState(LCD_STATE_UNLICENSED_USAGE);
+    /* Legacy LCD state machine is removed from the active UI path. */
   }
 
   #endif
@@ -7355,11 +7350,11 @@ int8_t DataChecksumIsCorrect(void)
 
 void ReturnFactorySettings(void)
 {
-  DataInit(UI_REQ_TYPE_NONE, TRUE);
+  DataInit(FALSE, TRUE);
   ProgramDataSet();
 
-  LCDLanguageSet(LANGUAGE_TURKISH);
-  LCDLanguageWrite();
+  (void) UiLanguageServiceSet(&g_uiLanguageService, LANGUAGE_TURKISH);
+  (void) UiLanguageServiceSave(&g_uiLanguageService);
 
   LRLFDetectTimeSet(LRLF_DETECT_TIME_800_MS);
   LRLFDetectTimeWrite();
@@ -8508,111 +8503,6 @@ void EventMPCont(tpSEvent pSEvent)
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Peripheral States */
-uint8_t GetGateState(void)
-{
-  return SCPRuntime.SPeripheralStates.fGate;
-}
-
-void SetGateState(uint8_t bState)
-{
-  if (GetGateStateAssigned() == FALSE)
-  {
-    SCPRuntime.SPeripheralStates.fGate = bState;
-    SetGateStateAssigned(TRUE);
-    SetGateStateChanged(TRUE);
-  }
-  else
-  {
-    uint8_t bPreviousState = GetGateState();
-
-    SCPRuntime.SPeripheralStates.fGate = bState;
-    if (bPreviousState != bState)
-    {
-      SetGateStateChanged(TRUE);
-    }
-  }
-
-  if (GetGateStateChanged())
-  {
-    if (SCPRuntime.SPeripheralStates.fGate)
-    {
-      if (LCDIsOn())
-      {
-        LCDSoftwareClose();
-        LCDClose();
-      }
-    }
-    else
-    {
-      if (LCDIsOff())
-      {
-        OpenLCD();
-        LCDSoftwareOpen();
-      }
-    }
-  }
-} /* SetGateState */
-
-void SetGateOpenLogRecordIndex(uint16_t sIndex)
-{
-  SGateStateChanges.SOpenLogRecordIndex = sIndex;
-}
-
-uint16_t GetGateOpenLogRecordIndex(void)
-{
-  return SGateStateChanges.SOpenLogRecordIndex;
-}
-
-void SetGateClosedLogRecordIndex(uint16_t sIndex)
-{
-  SGateStateChanges.SClosedLogRecordIndex = sIndex;
-}
-
-uint16_t GetGateClosedLogRecordIndex(void)
-{
-  return SGateStateChanges.SClosedLogRecordIndex;
-}
-
-void SetGateStateAssigned(uint8_t fState)
-{
-  SGateStateChanges.SFlags.fGateStateAssigned = fState;
-}
-
-uint8_t GetGateStateAssigned(void)
-{
-  return SGateStateChanges.SFlags.fGateStateAssigned;
-}
-
-void SetGateStateChanged(uint8_t fState)
-{
-  SGateStateChanges.SFlags.fGateStateChanged = fState;
-}
-
-uint8_t GetGateStateChanged(void)
-{
-  return SGateStateChanges.SFlags.fGateStateChanged;
-}
-
-uint8_t GetGateCurrentStatus(void)
-{
-  return SGateStateChanges.SFlags.fCurrentStatus;
-}
-
-void SetGateCurrentStatus(uint8_t bState)
-{
-  SGateStateChanges.SFlags.fCurrentStatus = (bState != 0U);
-}
-
-uint8_t GetGatePrevStatus(void)
-{
-  return SGateStateChanges.SFlags.fPrevStatus;
-}
-
-void SetGatePrevStatus(uint8_t bState)
-{
-  SGateStateChanges.SFlags.fPrevStatus = (bState != 0U);
-}
-
 void GetPeripheralStates(tpSPeripheralStates pSPeripheralStates)
 {
   memcpy(pSPeripheralStates, &SCPRuntime.SPeripheralStates,

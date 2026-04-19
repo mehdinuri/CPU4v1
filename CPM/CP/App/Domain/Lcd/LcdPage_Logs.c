@@ -1,6 +1,7 @@
 /* App/Domain/Lcd/LcdPage_Logs.c
  */
 #include "LcdPage.h"
+#include "LcdEventText.h"
 #include "LcdEngine.h"
 #include "LcdLanguage.h"
 #include "LcdPageRegistry.h"
@@ -89,7 +90,8 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
     DisplayWrite(display, 1, 0, buf, (uint8_t) strlen(buf));
 
     /* Line 3: Event Name */
-    const char *eventStr = Lcd_GetEventStr(record.SEvent.bEvent, lang, 1);
+    const char *eventStr = LcdEventText_GetEventLong(record.SEvent.bEvent,
+                                                     lang);
 
     DisplayWrite(display, 2, 0, eventStr, (uint8_t) strlen(eventStr));
 

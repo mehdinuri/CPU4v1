@@ -10,8 +10,6 @@
 
 #include <string.h>
 
-#include "defs.h"
-#include "ui.h"
 #include "usbd_custom_hid_if.h"
 
 /* Private typedef -----------------------------------------------------------*/
@@ -19,7 +17,6 @@
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-static tSUSBData SUSBReceiver;
 static tSUSBData SUSBTransmitter;
 static uint8_t baTxBuf[USB_DATA_PACKET_MAX_SIZE];
 
@@ -37,47 +34,24 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 /* Private application code --------------------------------------------------*/
 
 /* Public application code --------------------------------------------------*/
-void USBReceiveByte(uint8_t bRxByte)
+void USBReceiveReport(const uint8_t *pbData, uint16_t sDataLen)
 {
-  if (SUSBReceiver.SFlags.fCheckStarter)
+  if ((pbData != NULL) && (sDataLen > 0U))
   {
-    if (bRxByte == UI_COMM_START_OF_PACKET)
+    uint16_t sSafeLength = sDataLen;
+
+    if (sSafeLength > USBD_CUSTOM_HID_REPORT_COUNT)
     {
-      SUSBReceiver.sIndex = 0;
-      SUSBReceiver.baData[SUSBReceiver.sIndex] = bRxByte;
-      SUSBReceiver.sIndex++;
-      SUSBReceiver.SFlags.fCheckStarter = FALSE;
+      sSafeLength = USBD_CUSTOM_HID_REPORT_COUNT;
     }
-  }
-  else
-  {
-    if (SUSBReceiver.sIndex < UI_COMM_MAX_PACKET_LENGTH)
-    {
-      SUSBReceiver.baData[SUSBReceiver.sIndex] = bRxByte;
-      SUSBReceiver.sIndex++;
-      if (SUSBReceiver.SFlags.fCheckTerminator)
-      {
-        if (bRxByte == UI_COMM_END_OF_PACKET)
-        {
-          SUSBReceiver.SFlags.fCheckTerminator = FALSE;
-          UIRxRequest(UI_REQ_TYPE_USB,
-                      (char *) &SUSBReceiver.baData[0],
-                      SUSBReceiver.sIndex);
-        }
-      }
-    }
-    else
-    {
-      USBStartRx();
-    }
+
+    UIRxRequest(UI_REQ_TYPE_USB, pbData, sSafeLength);
   }
 }
 
 void USBStartRx(void)
 {
-  memset(&SUSBReceiver, 0, sizeof(SUSBReceiver));
-  SUSBReceiver.SFlags.fCheckStarter = TRUE;
-  SUSBReceiver.SFlags.fCheckTerminator = TRUE;
+  /* No state to reset in the raw-report transport skeleton. */
 }
 
 void USBSend(void)
@@ -103,8 +77,18 @@ void USBSend(void)
   }
 }
 
-void USBStartTx(uint8_t *pbData, uint16_t sDataLen)
+void USBStartTx(const uint8_t *pbData, uint16_t sDataLen)
 {
+  if ((pbData == NULL) || (sDataLen == 0U))
+  {
+    return;
+  }
+
+  if (sDataLen > sizeof(SUSBTransmitter.baData))
+  {
+    sDataLen = sizeof(SUSBTransmitter.baData);
+  }
+
   memset(&SUSBTransmitter.baData[0], 0, sizeof(SUSBTransmitter.baData));
   memcpy(&SUSBTransmitter.baData[0], pbData, sDataLen);
 
