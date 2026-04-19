@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 
+#include "Domain/Services/RelayControlService.h"
 #include "Ports/IMmuPort.h"
 #include "Ports/IRelayPort.h"
 
@@ -28,10 +29,13 @@ typedef struct
   uint8_t lastRelayDrive;
   MmuControlAction_t safetyAction;
   MmuRelayTopology_t relayTopology;
+  RelayControlService_t *relayControlService;
 } MmuAdapterCtx_t;
 
 void MmuAdapterInit(MmuAdapterCtx_t *ctx);
 void MmuAdapterBindRelayPort(MmuAdapterCtx_t *ctx, IRelayPort_t *relayPort);
+void MmuAdapterBindRelayControlService(MmuAdapterCtx_t *ctx,
+                                       RelayControlService_t *service);
 void MmuAdapterSetRelayTopology(MmuAdapterCtx_t *ctx,
                                 MmuRelayTopology_t topology);
 void MmuAdapterSetForceAllRed(MmuAdapterCtx_t *ctx, uint8_t forceAllRed);

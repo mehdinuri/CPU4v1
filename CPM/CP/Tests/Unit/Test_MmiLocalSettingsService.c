@@ -463,7 +463,7 @@ void test_MmiLocalSettingsServiceReadGetsModemAndGps(void)
   TEST_ASSERT_EQUAL_UINT8(4U, clockSettings.month);
   TEST_ASSERT_EQUAL_UINT8(26U, clockSettings.year);
   TEST_ASSERT_EQUAL_UINT8(21U, clockSettings.century);
-  TEST_ASSERT_EQUAL_UINT8(1U, clockSettings.daylightSavingEnabled);
+  TEST_ASSERT_EQUAL_UINT8(20U, clockSettings.globalDaylightSaving);
 }
 
 void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
@@ -493,7 +493,7 @@ void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
   MmiLocalUserFlagsV2_t userFlags = { 1U, 1U, 0U, 1U };
   MmiLocalBrokenInputSettingsV2_t brokenInput = { 0U, 1U, { 0U, 0U } };
   MmiLocalAdminPasswordChangeV2_t adminPasswordChange = { 1234U, 2468U };
-  MmiLocalClockSettingsV2_t clockSettings = { 50U, 59U, 18U, 21U, 4U, 26U, 21U, 0U };
+  MmiLocalClockSettingsV2_t clockSettings = { 50U, 59U, 18U, 21U, 4U, 26U, 21U, 2U };
 
   modemPort.ctx = &modemCtx;
   modemPort.GetModemType = TestGetModemType;
@@ -610,9 +610,9 @@ void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
   TEST_ASSERT_EQUAL_UINT8(4U, rtcCtx.snapshot.Month);
   TEST_ASSERT_EQUAL_UINT8(26U, rtcCtx.snapshot.Year);
   TEST_ASSERT_EQUAL_UINT8(21U, rtcCtx.snapshot.Century);
-  TEST_ASSERT_NOT_EQUAL(20U,
-                        ConfigurationServiceGetActiveConfig(
-                          &configurationService)->globalTimeManagement.globalDaylightSaving);
+  TEST_ASSERT_EQUAL_UINT8(2U,
+                          ConfigurationServiceGetActiveConfig(
+                            &configurationService)->globalTimeManagement.globalDaylightSaving);
 }
 
 void test_MmiLocalSettingsServiceRejectsInvalidValuesAndUnsupportedResources(void)

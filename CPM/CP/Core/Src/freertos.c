@@ -50,7 +50,6 @@
 #include "lcd.h"
 #include "lcdDrv.h"
 #include "MCS.h"
-#include "mmi.h"
 #include "program.h"
 #include "rng.h"
 #include "rtc.h"
@@ -88,7 +87,6 @@ typedef enum
   APP_TASK_CPMP_COMM,
   APP_TASK_GPS_MSG_PARSER,
   APP_TASK_GPS,
-  APP_TASK_MMI,
   APP_TASK_MCS,
   APP_TASK_MCS_ASYNCH_MSG_PARSER,
   APP_TASK_MCS_ASYNCH_MSG_SENDER,
@@ -169,19 +167,6 @@ const osMemoryPoolAttr_t GPSTimeMemPool_attributes = {
   .cb_size = sizeof(GPSTimeMemPoolCtrlBlk),
   .mp_mem = &GPSTimeMemPoolBuf,
   .mp_size = sizeof(GPSTimeMemPoolBuf)
-};
-
-/* Definitions for MMIReqsMemPool */
-osMemoryPoolId_t MMIReqsMemPoolHandle;
-__attribute__((section(".dtcm_bss"), aligned(32)))
-uint8_t MMIReqsMemPoolBuf[16 * sizeof(tSFDCANRxMsg)];
-osStaticMemPoolDef_t MMIReqsMemPoolCtrlBlk;
-const osMemoryPoolAttr_t MMIReqsMemPool_attributes = {
-  .name = "MMIReqsMemPool",
-  .cb_mem = &MMIReqsMemPoolCtrlBlk,
-  .cb_size = sizeof(MMIReqsMemPoolCtrlBlk),
-  .mp_mem = &MMIReqsMemPoolBuf,
-  .mp_size = sizeof(MMIReqsMemPoolBuf)
 };
 
 /* Definitions for MCSAsyRxReqsMemPool */
@@ -410,18 +395,6 @@ const osThreadAttr_t GPSTask_attributes = {
   .stack_size = sizeof(GPSTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for MMITask */
-osThreadId_t MMITaskHandle;
-uint32_t MMITaskBuf[ 256 ];
-osStaticThreadDef_t MMITaskCtrlBlk;
-const osThreadAttr_t MMITask_attributes = {
-  .name = "MMITask",
-  .cb_mem = &MMITaskCtrlBlk,
-  .cb_size = sizeof(MMITaskCtrlBlk),
-  .stack_mem = &MMITaskBuf[0],
-  .stack_size = sizeof(MMITaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for MCSTask */
 osThreadId_t MCSTaskHandle;
 uint32_t MCSTaskBuf[ 512 ];
@@ -633,17 +606,6 @@ const osMessageQueueAttr_t GPSTimeQue_attributes = {
   .cb_size = sizeof(GPSTimeQueCtrlBlk),
   .mq_mem = &GPSTimeQueBuf,
   .mq_size = sizeof(GPSTimeQueBuf)
-};
-/* Definitions for MMIReqsQue */
-osMessageQueueId_t MMIReqsQueHandle;
-uint8_t MMIReqsQueBuf[ 16 * sizeof( tpSFDCANRxMsg ) ];
-osStaticMessageQDef_t MMIReqsQueCtrlBlk;
-const osMessageQueueAttr_t MMIReqsQue_attributes = {
-  .name = "MMIReqsQue",
-  .cb_mem = &MMIReqsQueCtrlBlk,
-  .cb_size = sizeof(MMIReqsQueCtrlBlk),
-  .mq_mem = &MMIReqsQueBuf,
-  .mq_size = sizeof(MMIReqsQueBuf)
 };
 /* Definitions for MCSAsyRxReqsQue */
 osMessageQueueId_t MCSAsyRxReqsQueHandle;
@@ -863,7 +825,6 @@ extern void IntersectionControlTaskFunc(void *argument);
 extern void CPMPComTaskFunc(void *argument);
 extern void GPSMsgParserTaskFunc(void *argument);
 extern void GPSTaskFunc(void *argument);
-extern void MMITaskFunc(void *argument);
 extern void MCSTaskFunc(void *argument);
 extern void MCSAsyMsgParserTaskFunc(void *argument);
 extern void MCSAsyMsgSenderTaskFunc(void *argument);
@@ -931,10 +892,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
   else if (xTask == GPSTaskHandle)
   {
     eTask = APP_TASK_GPS;
-  }
-  else if (xTask == MMITaskHandle)
-  {
-    eTask = APP_TASK_MMI;
   }
   else if (xTask == MCSTaskHandle)
   {
@@ -1063,9 +1020,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of GPSTimeQue */
   GPSTimeQueHandle = osMessageQueueNew (8, sizeof(tpSTime), &GPSTimeQue_attributes);
 
-  /* creation of MMIReqsQue */
-  MMIReqsQueHandle = osMessageQueueNew (16, sizeof(tpSFDCANRxMsg), &MMIReqsQue_attributes);
-
   /* creation of MCSAsyRxReqsQue */
   MCSAsyRxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSMCSAsynchRxTxMsg), &MCSAsyRxReqsQue_attributes);
 
@@ -1110,11 +1064,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (GPSTimeQueHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MMIReqsQueHandle == NULL)
   {
     Error_Handler();
   }
@@ -1185,11 +1134,6 @@ void MX_FREERTOS_Init(void) {
                                          sizeof(tSTime),
                                          &GPSTimeMemPool_attributes);
 
-  /* creation of MMIReqsMemPool */
-  MMIReqsMemPoolHandle = osMemoryPoolNew(16,
-                                         sizeof(tSFDCANRxMsg),
-                                         &MMIReqsMemPool_attributes);
-
   /* creation of MCSAsyRxReqsMemPool */
   MCSAsyRxReqsMemPoolHandle = osMemoryPoolNew(4,
                                               sizeof(tSMCSAsynchRxTxMsg),
@@ -1251,11 +1195,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (GPSTimeMemPoolHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MMIReqsMemPoolHandle == NULL)
   {
     Error_Handler();
   }
@@ -1343,9 +1282,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of GPSTask */
   GPSTaskHandle = osThreadNew(GPSTaskFunc, NULL, &GPSTask_attributes);
 
-  /* creation of MMITask */
-  MMITaskHandle = osThreadNew(MMITaskFunc, NULL, &MMITask_attributes);
-
   /* creation of MCSTask */
   MCSTaskHandle = osThreadNew(MCSTaskFunc, NULL, &MCSTask_attributes);
 
@@ -1415,11 +1351,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (GPSTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MMITaskHandle == NULL)
   {
     Error_Handler();
   }

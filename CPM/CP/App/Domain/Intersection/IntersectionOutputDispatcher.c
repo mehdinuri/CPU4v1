@@ -93,6 +93,18 @@ void IntersectionOutputDispatcherBind(
   dispatcher->lastDispatchOk = 0U;
 }
 
+void IntersectionOutputDispatcherBindOutputTestService(
+  IntersectionOutputDispatcher_t *dispatcher,
+  const OutputTestService_t *outputTestService)
+{
+  if (dispatcher == NULL)
+  {
+    return;
+  }
+
+  dispatcher->outputTestService = outputTestService;
+}
+
 uint8_t IntersectionOutputDispatcherDispatch(
   IntersectionOutputDispatcher_t *dispatcher)
 {
@@ -113,6 +125,13 @@ uint8_t IntersectionOutputDispatcherDispatch(
   }
 
   ConvertOutputIntentImage(&outputIntentImage, &dispatcher->lastRequestedImage);
+
+  if (dispatcher->outputTestService != NULL)
+  {
+    (void) OutputTestServiceApply(dispatcher->outputTestService,
+                                  &dispatcher->lastRequestedImage,
+                                  &dispatcher->lastRequestedImage);
+  }
 
   if (MmuFilterOutputImage(dispatcher->mmuPort,
                            &dispatcher->lastRequestedImage,

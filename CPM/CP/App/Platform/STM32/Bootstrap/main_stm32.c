@@ -33,8 +33,9 @@
 #include "Adapters/STM32/FieldOutputCanAdapter.h"
 #include "Adapters/STM32/ControlBusAdapter.h"
 #include "Adapters/STM32/MmiCanAdapter.h"
-#include "Adapters/STM32/MmiLegacyStatusAdapter.h"
-#include "Adapters/STM32/MmiMaintenanceAdapter.h"
+#include "Adapters/STM32/CommsStatusAdapter.h"
+#include "Adapters/STM32/ControllerModeControlAdapter.h"
+#include "Adapters/STM32/FactoryResetAdapter.h"
 #include "Adapters/STM32/MmuAdapter.h"
 #include "Adapters/STM32/FieldInputCanAdapter.h"
 #include "Adapters/STM32/CompositeModuleBusPort.h"
@@ -105,8 +106,9 @@ static UnitInputAdapterCtx_t s_unitInputCtx;
 static FieldOutputCanAdapterCtx_t s_fieldOutputCanCtx;
 static ControlBusAdapterCtx_t s_controlBusCtx;
 static MmiCanAdapterCtx_t s_mmiCanCtx;
-static MmiLegacyStatusAdapterCtx_t s_mmiLegacyStatusCtx;
-static MmiMaintenanceAdapterCtx_t s_mmiMaintenanceCtx;
+static CommsStatusAdapterCtx_t s_commsStatusCtx;
+static ControllerModeControlAdapterCtx_t s_controllerModeCtx;
+static FactoryResetAdapterCtx_t s_factoryResetCtx;
 static MmuAdapterCtx_t s_mmuCtx;
 static FieldInputCanAdapterCtx_t s_fieldInputCanCtx;
 static CompositeModuleBusPortCtx_t s_compositeModuleBusCtx;
@@ -167,13 +169,15 @@ static IEepromStoragePort_t s_eepromStoragePort;
 static IModuleBusPort_t s_fieldInputModuleBusPort;
 static IModuleBusPort_t s_internalModuleBusPort;
 static IControlBusPort_t s_controlBusPort;
+static ICommsStatusPort_t s_commsStatusPort;
+static IControllerModeControlPort_t s_controllerModePort;
+static IFactoryResetPort_t s_factoryResetPort;
 static IUserAuthStorePort_t s_userAuthStorePort;
 static IBrokenInputSettingsPort_t s_brokenInputSettingsPort;
 static IModemConfigPort_t s_modemConfigPort;
 static IGpsPort_t s_gpsConfigPort;
 static IGpsTimeSyncPort_t s_gpsTimeSyncPort;
 static IUserSettingsPort_t s_userSettingsPort;
-static IMmiMaintenancePort_t s_mmiMaintenancePort;
 
 ConfigurationService_t g_configurationService;
 CpMpLinkService_t g_cpMpLinkService;
@@ -184,12 +188,16 @@ DetectorReportService_t g_detectorReportService;
 GlobalTimeManagementService_t g_globalTimeManagementService;
 IntersectionOutputDispatcher_t g_intersectionOutputDispatcher;
 UserAuthService_t g_userAuthService;
+UiPowerService_t g_uiPowerService;
+UiCommsIdentityService_t g_uiCommsIdentityService;
+UiDoorService_t g_uiDoorService;
+RelayControlService_t g_relayControlService;
+OutputTestService_t g_outputTestService;
 MmiEventLogService_t g_mmiEventLogService;
 MmiLocalSettingsService_t g_mmiLocalSettingsService;
 MmiMaintenanceService_t g_mmiMaintenanceService;
 MmiService_t g_mmiService;
 MmiSnapshotCache_t g_mmiSnapshotCache;
-IMmiLegacyStatusPort_t g_mmiLegacyStatusPort;
 ISystemResetPort_t g_systemResetPort;
 
 /* ------------------------------------------------------------------
@@ -254,7 +262,8 @@ void MainApplication_Init(void)
   HeaterAdapterInit(&s_heaterCtx);
   g_heaterPort = HeaterAdapterCreatePort(&s_heaterCtx);
 
-  PowerMonitorAdapterInit(&s_powerMonitorCtx);
+  UiPowerServiceInit(&g_uiPowerService);
+  PowerMonitorAdapterInit(&s_powerMonitorCtx, &g_uiPowerService);
   g_powerMonitorPort = PowerMonitorAdapterCreatePort(&s_powerMonitorCtx);
 
   RelayAdapterInit(&s_relayCtx);
@@ -304,10 +313,13 @@ void MainApplication_Init(void)
   s_gpsTimeSyncPort = GpsTimeSyncAdapterCreatePort(&s_gpsTimeSyncCtx);
   UserSettingsAdapterInit(&s_userSettingsCtx);
   s_userSettingsPort = UserSettingsAdapterCreatePort(&s_userSettingsCtx);
-  MmiLegacyStatusAdapterInit(&s_mmiLegacyStatusCtx);
-  g_mmiLegacyStatusPort = MmiLegacyStatusAdapterCreatePort(&s_mmiLegacyStatusCtx);
-  MmiMaintenanceAdapterInit(&s_mmiMaintenanceCtx);
-  s_mmiMaintenancePort = MmiMaintenanceAdapterCreatePort(&s_mmiMaintenanceCtx);
+  CommsStatusAdapterInit(&s_commsStatusCtx);
+  s_commsStatusPort = CommsStatusAdapterCreatePort(&s_commsStatusCtx);
+  ControllerModeControlAdapterInit(&s_controllerModeCtx);
+  s_controllerModePort =
+    ControllerModeControlAdapterCreatePort(&s_controllerModeCtx);
+  FactoryResetAdapterInit(&s_factoryResetCtx);
+  s_factoryResetPort = FactoryResetAdapterCreatePort(&s_factoryResetCtx);
   SystemResetAdapterInit(&s_systemResetCtx);
   g_systemResetPort = SystemResetAdapterCreatePort(&s_systemResetCtx);
 
@@ -318,6 +330,11 @@ void MainApplication_Init(void)
   UserAuthServiceBind(&g_userAuthService, &s_userAuthStorePort);
 
   ConfigurationServiceInit(&g_configurationService, &g_configRepositoryPort);
+  UiCommsIdentityServiceInit(&g_uiCommsIdentityService);
+  UiCommsIdentityServiceBind(&g_uiCommsIdentityService, &s_commsStatusPort);
+  UiDoorServiceInit(&g_uiDoorService);
+  RelayControlServiceInit(&g_relayControlService);
+  OutputTestServiceInit(&g_outputTestService);
   UnitClockAdapterInit(&s_unitClockCtx, &g_configurationService);
   g_unitClockPort = UnitClockAdapterCreatePort(&s_unitClockCtx);
   IntersectionEngineInit(&g_intersectionEngine);
@@ -331,7 +348,8 @@ void MainApplication_Init(void)
                                         &g_configurationService));
   FieldInputCanAdapterInit(&s_fieldInputCanCtx,
                            ConfigurationServiceGetActiveSetId(
-                             &g_configurationService));
+                             &g_configurationService),
+                           &g_uiPowerService);
   s_fieldInputModuleBusPort =
     FieldInputCanAdapterCreatePort(&s_fieldInputCanCtx);
   (void) memset(&s_internalModuleBusPort, 0, sizeof(s_internalModuleBusPort));
@@ -350,6 +368,7 @@ void MainApplication_Init(void)
 
   MmuAdapterInit(&s_mmuCtx);
   MmuAdapterBindRelayPort(&s_mmuCtx, &g_relayPort);
+  MmuAdapterBindRelayControlService(&s_mmuCtx, &g_relayControlService);
   MmuAdapterSetRelayTopology(&s_mmuCtx,
                              MMU_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE);
   g_mmuPort = MmuAdapterCreatePort(&s_mmuCtx);
@@ -359,6 +378,9 @@ void MainApplication_Init(void)
                                    &g_intersectionEngine,
                                    &g_mmuPort,
                                    &g_outputDriverPort);
+  IntersectionOutputDispatcherBindOutputTestService(
+    &g_intersectionOutputDispatcher,
+    &g_outputTestService);
   IntersectionControllerInit(&g_intersectionController);
   IntersectionControllerBind(&g_intersectionController,
                              &g_intersectionEngine,
@@ -391,6 +413,12 @@ void MainApplication_Init(void)
                  &g_detectorReportService,
                  &g_globalTimeManagementService,
                  &g_cpMpLinkService);
+  MmiServiceBindUiPowerService(&g_mmiService, &g_uiPowerService);
+  MmiServiceBindUiCommsIdentityService(&g_mmiService,
+                                       &g_uiCommsIdentityService);
+  MmiServiceBindUiDoorService(&g_mmiService, &g_uiDoorService);
+  MmiServiceBindRelayControlService(&g_mmiService, &g_relayControlService);
+  MmiServiceBindOutputTestService(&g_mmiService, &g_outputTestService);
   MmiSnapshotCacheInit(&g_mmiSnapshotCache);
   MmiSnapshotCacheBind(&g_mmiSnapshotCache,
                        &g_configurationService,
@@ -399,6 +427,14 @@ void MainApplication_Init(void)
                        &g_detectorReportService,
                        &g_globalTimeManagementService,
                        &g_cpMpLinkService);
+  MmiSnapshotCacheBindUiPowerService(&g_mmiSnapshotCache, &g_uiPowerService);
+  MmiSnapshotCacheBindUiCommsIdentityService(&g_mmiSnapshotCache,
+                                             &g_uiCommsIdentityService);
+  MmiSnapshotCacheBindUiDoorService(&g_mmiSnapshotCache, &g_uiDoorService);
+  MmiSnapshotCacheBindRelayControlService(&g_mmiSnapshotCache,
+                                          &g_relayControlService);
+  MmiSnapshotCacheBindOutputTestService(&g_mmiSnapshotCache,
+                                        &g_outputTestService);
   MmiLocalSettingsServiceInit(&g_mmiLocalSettingsService);
   MmiLocalSettingsServiceBind(&g_mmiLocalSettingsService,
                               &s_modemConfigPort,
@@ -412,9 +448,14 @@ void MainApplication_Init(void)
                               &g_userAuthService);
   MmiMaintenanceServiceInit(&g_mmiMaintenanceService);
   MmiMaintenanceServiceBind(&g_mmiMaintenanceService,
-                            &s_mmiMaintenancePort,
+                            &s_controllerModePort,
                             &g_moduleBusPort,
-                            &g_mmiLocalSettingsService);
+                            &g_mmiLocalSettingsService,
+                            &s_factoryResetPort);
+  MmiMaintenanceServiceBindRelayControlService(&g_mmiMaintenanceService,
+                                               &g_relayControlService);
+  MmiMaintenanceServiceBindOutputTestService(&g_mmiMaintenanceService,
+                                             &g_outputTestService);
   MmiCanAdapterInit(&s_mmiCanCtx,
                     &hfdcan1,
                     &g_mmiService,
@@ -444,6 +485,8 @@ void MainApplication_Init(void)
   g_logRepositoryPort = LogRepositoryAdapterCreatePort(&s_logRepositoryCtx);
   MmiEventLogServiceInit(&g_mmiEventLogService);
   MmiEventLogServiceBind(&g_mmiEventLogService, &g_logRepositoryPort);
+  UiDoorServiceBind(&g_uiDoorService, &g_doorPort, &g_mmiEventLogService);
+  UiDoorServiceRefreshLatestLogIndices(&g_uiDoorService);
   MmiCanAdapterBindEventLogService(&s_mmiCanCtx, &g_mmiEventLogService);
 
   /* Serial adapters — init order matches UART numbering for clarity.

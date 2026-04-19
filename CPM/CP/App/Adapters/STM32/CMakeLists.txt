@@ -10,8 +10,9 @@ target_sources(Adapters_STM32 PRIVATE
     FieldCanQueueTx.c
     FieldOutputCanAdapter.c
     MmiCanAdapter.c
-    MmiLegacyStatusAdapter.c
-    MmiMaintenanceAdapter.c
+    CommsStatusAdapter.c
+    ControllerModeControlAdapter.c
+    FactoryResetAdapter.c
     SystemResetAdapter.c
     ShadowOutputDriverAdapter.c
     MmuAdapter.c

@@ -9,12 +9,14 @@
 #include <stdint.h>
 
 #include "Domain/Intersection/IntersectionEngine.h"
+#include "Domain/Services/OutputTestService.h"
 #include "Ports/IMmuPort.h"
 #include "Ports/IOutputDriverPort.h"
 
 typedef struct
 {
   const IntersectionEngine_t *engine;
+  const OutputTestService_t *outputTestService;
   IMmuPort_t                 *mmuPort;
   IOutputDriverPort_t        *outputDriverPort;
   OutputDriverImage_t lastRequestedImage;
@@ -29,6 +31,9 @@ void IntersectionOutputDispatcherBind(
   const IntersectionEngine_t *engine,
   IMmuPort_t *mmuPort,
   IOutputDriverPort_t *outputDriverPort);
+void IntersectionOutputDispatcherBindOutputTestService(
+  IntersectionOutputDispatcher_t *dispatcher,
+  const OutputTestService_t *outputTestService);
 uint8_t IntersectionOutputDispatcherDispatch(
   IntersectionOutputDispatcher_t *dispatcher);
 uint8_t IntersectionOutputDispatcherGetLastRequestedImage(

@@ -286,54 +286,90 @@ static uint8_t LcdGetSetRuntime(void *ctx,
   return TRUE;
 }
 
-static uint8_t LcdGetModemType(void *ctx)
+static void CopyAscii(char *target, uint32_t targetLength, const char *source)
 {
-  (void) ctx; return MCSGetModemType();
+  uint32_t index;
+
+  if ((target == NULL) || (targetLength == 0U))
+  {
+    return;
+  }
+
+  (void) memset(target, 0, targetLength);
+  if (source == NULL)
+  {
+    return;
+  }
+
+  for (index = 0U; index < (targetLength - 1U); index++)
+  {
+    if (source[index] == '\0')
+    {
+      break;
+    }
+
+    target[index] = source[index];
+  }
 }
 
-static uint8_t LcdGetModemAlive(void *ctx)
+static void PopulateCommsSnapshot(CommsStatusSnapshot_t *snapshot)
 {
-  (void) ctx; return (uint8_t) MCSGetModemAlive();
+  char jobBuffer[UI_COMMS_JOB_TEXT_MAX_LEN + 1U];
+  uint8_t jobIndex;
+
+  if (snapshot == NULL)
+  {
+    return;
+  }
+
+  (void) memset(snapshot, 0, sizeof(*snapshot));
+  snapshot->modemType = MCSGetModemType();
+  snapshot->gprsState = MCSGetGPRSState();
+  snapshot->signalQuality = MCSGetGprsSignalQuality();
+  snapshot->connected = MCSGetConnected();
+  snapshot->modemAlive = MCSGetModemAlive();
+  snapshot->simReady = MCSSimStatusGet();
+  CopyAscii(&snapshot->imei[0], sizeof(snapshot->imei), MCSGetGprsModemIMEI());
+  CopyAscii(&snapshot->usrMac[0], sizeof(snapshot->usrMac), MCSGetUSRModuleMAC());
+  CopyAscii(&snapshot->ethernetMac[0],
+            sizeof(snapshot->ethernetMac),
+            MCSGetRuntimeEthernetMAC());
+  CopyAscii(&snapshot->operatorName[0],
+            sizeof(snapshot->operatorName),
+            MCSGetGprsGsmOperator());
+  CopyAscii(&snapshot->localIp[0], sizeof(snapshot->localIp), MCSGetRuntimeLocalIPv4());
+  CopyAscii(&snapshot->remoteIp[0],
+            sizeof(snapshot->remoteIp),
+            MCSGetRuntimeRemoteIPv4());
+
+  for (jobIndex = 0U; jobIndex < UI_COMMS_JOB_COUNT; jobIndex++)
+  {
+    (void) memset(&jobBuffer[0], 0, sizeof(jobBuffer));
+    if (MCSJobCurrentGet(&jobBuffer[0], jobIndex) != 0U)
+    {
+      CopyAscii(&snapshot->jobCurrent[jobIndex][0],
+                sizeof(snapshot->jobCurrent[jobIndex]),
+                &jobBuffer[0]);
+    }
+  }
 }
 
-static uint8_t LcdGetAsynchConnected(void *ctx)
+static uint8_t LcdReadCommsSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
 {
-  (void) ctx; return (uint8_t) MCSAsynchConnectedGet();
-}
+  (void) ctx;
 
-static const char *LcdGetImei(void *ctx)
-{
-  (void) ctx; return MCSGetGprsModemIMEI();
-}
+  if (snapshot == NULL)
+  {
+    return 0U;
+  }
 
-static const char *LcdGetUsrMac(void *ctx)
-{
-  (void) ctx; return MCSGetUSRModuleMAC();
-}
+  if (UiCommsIdentityServiceGetSnapshot(&g_uiCommsIdentityService, snapshot) != 0U)
+  {
+    return 1U;
+  }
 
-static const char *LcdGetEthMac(void *ctx)
-{
-  (void) ctx; return MCSGetRuntimeEthernetMAC();
-}
-
-static uint8_t LcdGetSignalQuality(void *ctx)
-{
-  (void) ctx; return MCSGetGprsSignalQuality();
-}
-
-static uint8_t LcdGetJobCurrent(void *ctx, char *buf, uint8_t shift)
-{
-  (void) ctx; return (uint8_t) MCSJobCurrentGet(buf, shift);
-}
-
-static const char *LcdGetLocalIp(void *ctx)
-{
-  (void) ctx; return MCSGetRuntimeLocalIPv4();
-}
-
-static const char *LcdGetRemoteIp(void *ctx)
-{
-  (void) ctx; return MCSGetRuntimeRemoteIPv4();
+  PopulateCommsSnapshot(snapshot);
+  return 1U;
 }
 
 static uint8_t LcdGpsGetPortType(void *ctx)
@@ -404,16 +440,7 @@ void InitLCDTask(void)
   s_lcdSystemPort.SetLanguage = LcdSetLanguage;
 
   s_lcdCommsPort.ctx = NULL;
-  s_lcdCommsPort.GetModemType = LcdGetModemType;
-  s_lcdCommsPort.GetModemAlive = LcdGetModemAlive;
-  s_lcdCommsPort.GetAsynchConnected = LcdGetAsynchConnected;
-  s_lcdCommsPort.GetImei = LcdGetImei;
-  s_lcdCommsPort.GetUsrMac = LcdGetUsrMac;
-  s_lcdCommsPort.GetEthMac = LcdGetEthMac;
-  s_lcdCommsPort.GetSignalQuality = LcdGetSignalQuality;
-  s_lcdCommsPort.GetJobCurrent = LcdGetJobCurrent;
-  s_lcdCommsPort.GetLocalIp = LcdGetLocalIp;
-  s_lcdCommsPort.GetRemoteIp = LcdGetRemoteIp;
+  s_lcdCommsPort.ReadSnapshot = LcdReadCommsSnapshot;
 
   s_lcdUserPort.ctx = NULL;
   s_lcdUserPort.Login = LcdLogin;

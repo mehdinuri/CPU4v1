@@ -12,15 +12,39 @@ void MmiMaintenanceServiceInit(MmiMaintenanceService_t *service)
 }
 
 void MmiMaintenanceServiceBind(MmiMaintenanceService_t *service,
-                               IMmiMaintenancePort_t *maintenancePort,
+                               IControllerModeControlPort_t *controllerModePort,
                                IModuleBusPort_t *moduleBusPort,
-                               MmiLocalSettingsService_t *localSettingsService)
+                               MmiLocalSettingsService_t *localSettingsService,
+                               IFactoryResetPort_t *factoryResetPort)
 {
   if (service != NULL)
   {
-    service->maintenancePort = maintenancePort;
+    service->controllerModePort = controllerModePort;
     service->moduleBusPort = moduleBusPort;
     service->localSettingsService = localSettingsService;
+    service->factoryResetPort = factoryResetPort;
+    service->relayControlService = NULL;
+    service->outputTestService = NULL;
+  }
+}
+
+void MmiMaintenanceServiceBindRelayControlService(
+  MmiMaintenanceService_t *service,
+  RelayControlService_t *relayControlService)
+{
+  if (service != NULL)
+  {
+    service->relayControlService = relayControlService;
+  }
+}
+
+void MmiMaintenanceServiceBindOutputTestService(
+  MmiMaintenanceService_t *service,
+  OutputTestService_t *outputTestService)
+{
+  if (service != NULL)
+  {
+    service->outputTestService = outputTestService;
   }
 }
 
@@ -29,59 +53,86 @@ uint8_t MmiMaintenanceServiceRequestModeControl(
   uint8_t requestedControl)
 {
   return (service == NULL) ? 0U
-         : MmiMaintenancePortRequestModeControl(service->maintenancePort,
-                                                requestedControl);
+         : ControllerModeControlPortRequest(service->controllerModePort,
+                                            requestedControl);
 }
 
 uint8_t MmiMaintenanceServiceRequestRelayState(
   MmiMaintenanceService_t *service,
   uint8_t requestedState)
 {
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortRequestRelayState(service->maintenancePort,
-                                               requestedState);
-}
-
-uint8_t MmiMaintenanceServiceEnterIapMode(MmiMaintenanceService_t *service)
-{
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortEnterIapMode(service->maintenancePort);
+  return ((service == NULL) || (service->relayControlService == NULL)) ? 0U
+         : RelayControlServiceSetUserOutputPowerEnabled(
+           service->relayControlService,
+           requestedState);
 }
 
 uint8_t MmiMaintenanceServiceFactoryReset(MmiMaintenanceService_t *service)
 {
   return (service == NULL) ? 0U
-         : MmiMaintenancePortFactoryReset(service->maintenancePort);
+         : FactoryResetPortRequest(service->factoryResetPort);
 }
 
 uint8_t MmiMaintenanceServiceStartOutputTest(MmiMaintenanceService_t *service)
 {
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortStartOutputTest(service->maintenancePort);
+  return ((service == NULL) || (service->outputTestService == NULL)) ? 0U
+         : OutputTestServiceSetEnabled(service->outputTestService, 1U);
 }
 
 uint8_t MmiMaintenanceServiceStopOutputTest(MmiMaintenanceService_t *service)
 {
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortStopOutputTest(service->maintenancePort);
+  return ((service == NULL) || (service->outputTestService == NULL)) ? 0U
+         : OutputTestServiceSetEnabled(service->outputTestService, 0U);
 }
 
 uint8_t MmiMaintenanceServiceSelectOutputTest(
   MmiMaintenanceService_t *service,
   uint8_t outputNumber)
 {
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortSelectOutputTest(service->maintenancePort,
-                                              outputNumber);
+  return ((service == NULL) || (service->outputTestService == NULL)) ? 0U
+         : OutputTestServiceSetChannelAspect(service->outputTestService,
+                                             outputNumber,
+                                             OUTPUT_DRIVER_ASPECT_GREEN);
 }
 
 uint8_t MmiMaintenanceServiceReadOutputTestStatus(
   MmiMaintenanceService_t *service,
   MmiMaintenanceOutputTestStatus_t *status)
 {
-  return (service == NULL) ? 0U
-         : MmiMaintenancePortReadOutputTestStatus(service->maintenancePort,
-                                                  status);
+  uint8_t channelIndex;
+  uint16_t forcedMask;
+  OutputDriverAspect_t aspect = OUTPUT_DRIVER_ASPECT_DARK;
+
+  if (service == NULL)
+  {
+    return 0U;
+  }
+
+  if ((service->outputTestService == NULL) || (status == NULL))
+  {
+    return 0U;
+  }
+
+  (void) memset(status, 0, sizeof(*status));
+  forcedMask = OutputTestServiceGetForcedMask(service->outputTestService);
+
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex++)
+  {
+    if ((forcedMask & (uint16_t) (1U << channelIndex)) != 0U)
+    {
+      status->outputNumber = (uint8_t) (channelIndex + 1U);
+      if (OutputTestServiceGetChannelAspect(service->outputTestService,
+                                            status->outputNumber,
+                                            &aspect) != 0U)
+      {
+        status->state = (uint8_t) aspect;
+      }
+      break;
+    }
+  }
+
+  return 1U;
 }
 
 static MmiProtocolStatus_t ExecuteTimeSet(MmiMaintenanceService_t *service,
@@ -206,6 +257,20 @@ static MmiProtocolStatus_t ExecuteOutputTest(MmiMaintenanceService_t *service,
       {
         ok = MmiMaintenanceServiceSelectOutputTest(service,
                                                    request.outputNumber);
+        break;
+      }
+
+      case MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_FORCE:
+      {
+        if (service->outputTestService == NULL)
+        {
+          return MMI_PROTOCOL_V2_STATUS_UNSUPPORTED;
+        }
+
+        ok = OutputTestServiceSetChannelAspect(service->outputTestService,
+                                               request.outputNumber,
+                                               (OutputDriverAspect_t)
+                                               request.aspect);
         break;
       }
 

@@ -523,6 +523,164 @@ static void RefreshClock(MmiSnapshotCache_t *cache)
     cache->globalTimeManagementService->lastAppliedActionNumber;
 }
 
+static void RefreshPower(MmiSnapshotCache_t *cache)
+{
+  UiPowerMeasurement_t measurement;
+  uint16_t voltageTenthsVrms;
+  uint8_t psmIndex;
+
+  (void) memset(&cache->powerSummary, 0, sizeof(cache->powerSummary));
+  if (cache->uiPowerService == NULL)
+  {
+    return;
+  }
+
+  for (psmIndex = 0U; psmIndex < 2U; psmIndex++)
+  {
+    if (UiPowerServiceGetMeasurement(cache->uiPowerService,
+                                     (uint8_t) (psmIndex + 1U),
+                                     &measurement) != 0U)
+    {
+      cache->powerSummary.psmVoltageRaw[psmIndex] = measurement.netVoltageRaw;
+      cache->powerSummary.psmFrequencyRaw[psmIndex] =
+        measurement.netFrequencyRaw;
+      cache->powerSummary.psmIsolatedVoltage[psmIndex] =
+        measurement.isolatedVoltagePresent;
+      voltageTenthsVrms = 0U;
+      (void) UiPowerServiceGetLineVoltageTenthsVrms(cache->uiPowerService,
+                                                    (uint8_t) (psmIndex + 1U),
+                                                    &voltageTenthsVrms);
+      cache->powerSummary.psmVoltageTenthsVrms[psmIndex] = voltageTenthsVrms;
+    }
+  }
+}
+
+static void RefreshComms(MmiSnapshotCache_t *cache)
+{
+  CommsStatusSnapshot_t snapshot;
+
+  (void) memset(&cache->commsSummary, 0, sizeof(cache->commsSummary));
+  if ((cache->uiCommsIdentityService == NULL)
+      || (UiCommsIdentityServiceGetSnapshot(cache->uiCommsIdentityService,
+                                            &snapshot) == 0U))
+  {
+    return;
+  }
+
+  cache->commsSummary.modemType = snapshot.modemType;
+  cache->commsSummary.gprsState = snapshot.gprsState;
+  cache->commsSummary.signalQuality = snapshot.signalQuality;
+  cache->commsSummary.connected = snapshot.connected;
+  cache->commsSummary.modemAlive = snapshot.modemAlive;
+  cache->commsSummary.simReady = snapshot.simReady;
+  (void) memcpy(&cache->commsSummary.imei[0],
+                &snapshot.imei[0],
+                sizeof(cache->commsSummary.imei));
+  (void) memcpy(&cache->commsSummary.usrMac[0],
+                &snapshot.usrMac[0],
+                sizeof(cache->commsSummary.usrMac));
+  (void) memcpy(&cache->commsSummary.ethernetMac[0],
+                &snapshot.ethernetMac[0],
+                sizeof(cache->commsSummary.ethernetMac));
+  (void) memcpy(&cache->commsSummary.operatorName[0],
+                &snapshot.operatorName[0],
+                sizeof(cache->commsSummary.operatorName));
+}
+
+static void RefreshRelay(MmiSnapshotCache_t *cache)
+{
+  (void) memset(&cache->relaySummary, 0, sizeof(cache->relaySummary));
+
+  if (cache->relayControlService != NULL)
+  {
+    cache->relaySummary.userOutputPowerEnabled =
+      RelayControlServiceGetUserOutputPowerEnabled(cache->relayControlService);
+    cache->relaySummary.permitOutputPower =
+      RelayControlServiceGetEffectivePermitOutputPower(
+        cache->relayControlService);
+    cache->relaySummary.relayDrive =
+      RelayControlServiceGetRelayDrive(cache->relayControlService);
+    cache->relaySummary.relayTopology =
+      RelayControlServiceGetRelayTopology(cache->relayControlService);
+    cache->relaySummary.safetyAction =
+      RelayControlServiceGetSafetyAction(cache->relayControlService);
+  }
+}
+
+static void RefreshOutputTest(MmiSnapshotCache_t *cache)
+{
+  uint8_t channelIndex;
+
+  (void) memset(&cache->outputTestSummary, 0, sizeof(cache->outputTestSummary));
+  if (cache->outputTestService == NULL)
+  {
+    return;
+  }
+
+  cache->outputTestSummary.enabled =
+    OutputTestServiceIsEnabled(cache->outputTestService);
+  cache->outputTestSummary.forcedMask =
+    OutputTestServiceGetForcedMask(cache->outputTestService);
+
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex++)
+  {
+    OutputDriverAspect_t aspect;
+
+    if (OutputTestServiceGetChannelAspect(cache->outputTestService,
+                                          (uint8_t) (channelIndex + 1U),
+                                          &aspect) == 0U)
+    {
+      continue;
+    }
+
+    switch (aspect)
+    {
+        case OUTPUT_DRIVER_ASPECT_RED:
+        {
+          cache->outputTestSummary.redMask |= (uint16_t) (1U << channelIndex);
+          break;
+        }
+
+        case OUTPUT_DRIVER_ASPECT_YELLOW:
+        {
+          cache->outputTestSummary.yellowMask |=
+            (uint16_t) (1U << channelIndex);
+          break;
+        }
+
+        case OUTPUT_DRIVER_ASPECT_GREEN:
+        {
+          cache->outputTestSummary.greenMask |= (uint16_t) (1U << channelIndex);
+          break;
+        }
+
+        default:
+        {
+          break;
+        }
+    }
+  }
+}
+
+static void RefreshDoor(MmiSnapshotCache_t *cache)
+{
+  (void) memset(&cache->doorSummary, 0, sizeof(cache->doorSummary));
+
+  if (cache->uiDoorService == NULL)
+  {
+    return;
+  }
+
+  cache->doorSummary.open = UiDoorServiceIsOpen(cache->uiDoorService);
+  cache->doorSummary.latestOpenLogIndex =
+    UiDoorServiceGetLatestOpenLogIndex(cache->uiDoorService);
+  cache->doorSummary.latestCloseLogIndex =
+    UiDoorServiceGetLatestCloseLogIndex(cache->uiDoorService);
+  cache->doorSummary.changeSequence =
+    UiDoorServiceGetChangeSequence(cache->uiDoorService);
+}
+
 void MmiSnapshotCacheInit(MmiSnapshotCache_t *cache)
 {
   if (cache != NULL)
@@ -547,6 +705,53 @@ void MmiSnapshotCacheBind(MmiSnapshotCache_t *cache,
     cache->detectorReportService = detectorReportService;
     cache->globalTimeManagementService = globalTimeManagementService;
     cache->cpMpLinkService = cpMpLinkService;
+  }
+}
+
+void MmiSnapshotCacheBindUiPowerService(MmiSnapshotCache_t *cache,
+                                        UiPowerService_t *uiPowerService)
+{
+  if (cache != NULL)
+  {
+    cache->uiPowerService = uiPowerService;
+  }
+}
+
+void MmiSnapshotCacheBindUiCommsIdentityService(
+  MmiSnapshotCache_t *cache,
+  UiCommsIdentityService_t *uiCommsIdentityService)
+{
+  if (cache != NULL)
+  {
+    cache->uiCommsIdentityService = uiCommsIdentityService;
+  }
+}
+
+void MmiSnapshotCacheBindUiDoorService(MmiSnapshotCache_t *cache,
+                                       UiDoorService_t *uiDoorService)
+{
+  if (cache != NULL)
+  {
+    cache->uiDoorService = uiDoorService;
+  }
+}
+
+void MmiSnapshotCacheBindRelayControlService(
+  MmiSnapshotCache_t *cache,
+  RelayControlService_t *relayControlService)
+{
+  if (cache != NULL)
+  {
+    cache->relayControlService = relayControlService;
+  }
+}
+
+void MmiSnapshotCacheBindOutputTestService(MmiSnapshotCache_t *cache,
+                                           OutputTestService_t *outputTestService)
+{
+  if (cache != NULL)
+  {
+    cache->outputTestService = outputTestService;
   }
 }
 
@@ -576,6 +781,11 @@ uint8_t MmiSnapshotCacheRefresh(MmiSnapshotCache_t *cache)
   RefreshModuleStatus(cache, snapshotPtr);
   RefreshSafety(cache, runtime);
   RefreshClock(cache);
+  RefreshPower(cache);
+  RefreshComms(cache);
+  RefreshRelay(cache);
+  RefreshOutputTest(cache);
+  RefreshDoor(cache);
   cache->refreshValid = 1U;
 
   return 1U;
@@ -745,5 +955,66 @@ uint8_t MmiSnapshotCacheGetClockSummary(const MmiSnapshotCache_t *cache,
   }
 
   *summary = cache->clockSummary;
+  return 1U;
+}
+
+uint8_t MmiSnapshotCacheGetPowerSummary(const MmiSnapshotCache_t *cache,
+                                        MmiRuntimePowerSummaryV2_t *summary)
+{
+  if ((cache == NULL) || (summary == NULL) || (cache->refreshValid == 0U))
+  {
+    return 0U;
+  }
+
+  *summary = cache->powerSummary;
+  return 1U;
+}
+
+uint8_t MmiSnapshotCacheGetCommsSummary(const MmiSnapshotCache_t *cache,
+                                        MmiRuntimeCommsSummaryV2_t *summary)
+{
+  if ((cache == NULL) || (summary == NULL) || (cache->refreshValid == 0U))
+  {
+    return 0U;
+  }
+
+  *summary = cache->commsSummary;
+  return 1U;
+}
+
+uint8_t MmiSnapshotCacheGetRelaySummary(const MmiSnapshotCache_t *cache,
+                                        MmiRuntimeRelaySummaryV2_t *summary)
+{
+  if ((cache == NULL) || (summary == NULL) || (cache->refreshValid == 0U))
+  {
+    return 0U;
+  }
+
+  *summary = cache->relaySummary;
+  return 1U;
+}
+
+uint8_t MmiSnapshotCacheGetOutputTestSummary(
+  const MmiSnapshotCache_t *cache,
+  MmiRuntimeOutputTestSummaryV2_t *summary)
+{
+  if ((cache == NULL) || (summary == NULL) || (cache->refreshValid == 0U))
+  {
+    return 0U;
+  }
+
+  *summary = cache->outputTestSummary;
+  return 1U;
+}
+
+uint8_t MmiSnapshotCacheGetDoorSummary(const MmiSnapshotCache_t *cache,
+                                       MmiRuntimeDoorSummaryV2_t *summary)
+{
+  if ((cache == NULL) || (summary == NULL) || (cache->refreshValid == 0U))
+  {
+    return 0U;
+  }
+
+  *summary = cache->doorSummary;
   return 1U;
 }

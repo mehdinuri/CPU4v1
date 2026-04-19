@@ -26,6 +26,11 @@ target_sources(Domain PRIVATE
     Services/MmiLocalSettingsService.c
     Services/MmiEventLogService.c
     Services/MmiMaintenanceService.c
+    Services/UiPowerService.c
+    Services/UiDoorService.c
+    Services/UiCommsIdentityService.c
+    Services/RelayControlService.c
+    Services/OutputTestService.c
     Services/UserAuthService.c
     Lcd/LcdEngine.c
     Lcd/LcdLanguage.c

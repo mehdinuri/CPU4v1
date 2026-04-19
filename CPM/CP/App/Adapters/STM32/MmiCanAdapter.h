@@ -19,6 +19,19 @@
 #include "Domain/Services/MmiService.h"
 #include "Domain/Services/MmiSnapshotCache.h"
 
+#define MMI_CAN_ADAPTER_SUBSCRIPTION_MAX 16U
+
+typedef struct
+{
+  uint8_t active;
+  uint8_t topicId;
+  uint8_t recordIndex;
+  uint8_t sequence;
+  uint8_t dirty;
+  uint16_t periodTicks;
+  uint16_t ticksUntilDue;
+} MmiRuntimeSubscription_t;
+
 typedef struct
 {
   FDCAN_HandleTypeDef *hfdcan;
@@ -40,6 +53,12 @@ typedef struct
   uint8_t rxNextSegmentIndex;
   uint16_t rxExpectedLength;
   uint8_t rxBuffer[512];
+  uint8_t subscribeActive;
+  uint8_t subscribeTransferId;
+  uint8_t subscribeNextSegmentIndex;
+  uint8_t subscribeBuffer[sizeof(MmiProtocolSubscribeRequestV2_t)];
+  uint8_t publishTransferId;
+  MmiRuntimeSubscription_t subscriptions[MMI_CAN_ADAPTER_SUBSCRIPTION_MAX];
   uint32_t rxDrops;
   uint32_t txDrops;
   uint32_t txErrors;
@@ -80,5 +99,6 @@ void MmiCanAdapterBindMaintenanceService(MmiCanAdapterCtx_t *ctx,
 void MmiCanAdapterOnRxIsr(const FDCAN_RxHeaderTypeDef *header,
                           const uint8_t *data);
 void MmiCanAdapterStep(void);
+void MmiCanAdapterNotifyRuntimeTopic(uint8_t topicId, uint8_t recordIndex);
 
 #endif /* MMI_CAN_ADAPTER_H */

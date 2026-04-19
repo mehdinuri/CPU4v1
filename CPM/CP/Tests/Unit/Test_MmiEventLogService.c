@@ -120,9 +120,10 @@ void test_find_latest_by_event_code_returns_newest_matching_record(void)
                                                            64U,
                                                            &latestDoorIndex));
   TEST_ASSERT_EQUAL_UINT16(2U, latestDoorIndex);
-  TEST_ASSERT_FALSE(MmiEventLogServiceFindLatestByEventCode(&s_service,
-                                                            99U,
-                                                            &latestDoorIndex));
+  TEST_ASSERT_TRUE(MmiEventLogServiceFindLatestByEventCode(&s_service,
+                                                           99U,
+                                                           &latestDoorIndex));
+  TEST_ASSERT_EQUAL_UINT16(MMI_PROTOCOL_V2_EVENT_CURSOR_NONE, latestDoorIndex);
 }
 
 void test_page_returns_requested_records_and_more_available_flag(void)

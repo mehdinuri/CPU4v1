@@ -9,6 +9,7 @@
 #define MMI_CAN_ADAPTER_TX_DEPTH 32U
 #define MMI_CAN_ADAPTER_TRANSFER_BUFFER_BYTES 512U
 #define MMI_CAN_ADAPTER_CONTROLLER_ROLE_CP 1U
+#define MMI_CAN_ADAPTER_TASK_TICK_MS 10U
 
 static const uint32_t kDbCreateTransactionOid[] =
 {
@@ -187,6 +188,19 @@ static void ResetRxTransfer(MmiCanAdapterCtx_t *ctx)
   (void) memset(&ctx->rxBuffer[0], 0, sizeof(ctx->rxBuffer));
 }
 
+static void ResetSubscribeTransfer(MmiCanAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->subscribeActive = 0U;
+  ctx->subscribeTransferId = 0U;
+  ctx->subscribeNextSegmentIndex = 0U;
+  (void) memset(&ctx->subscribeBuffer[0], 0, sizeof(ctx->subscribeBuffer));
+}
+
 static uint8_t QueueAck(MmiCanAdapterCtx_t *ctx,
                         MmiProtocolMessageClass_t messageClass,
                         uint8_t transferId,
@@ -227,6 +241,7 @@ static uint8_t QueueHelloResponse(MmiCanAdapterCtx_t *ctx,
   if (ctx->service != NULL)
   {
     response.capabilityFlags |= MMI_PROTOCOL_V2_CAPABILITY_STANDARD_OBJECTS;
+    response.capabilityFlags |= MMI_PROTOCOL_V2_CAPABILITY_VENDOR_PRIVATE;
   }
   if (ctx->localSettingsService != NULL)
   {
@@ -236,6 +251,11 @@ static uint8_t QueueHelloResponse(MmiCanAdapterCtx_t *ctx,
   {
     response.capabilityFlags |= MMI_PROTOCOL_V2_CAPABILITY_EVENT_LOG;
   }
+  if (ctx->maintenanceService != NULL)
+  {
+    response.capabilityFlags |= MMI_PROTOCOL_V2_CAPABILITY_MAINTENANCE;
+  }
+  response.capabilityFlags |= MMI_PROTOCOL_V2_CAPABILITY_SUBSCRIPTIONS;
   response.assignedSessionId = ctx->sessionId;
 
   if ((ctx->service != NULL) && (ctx->service->configurationService != NULL))
@@ -332,6 +352,22 @@ static uint8_t QueueSegmentedTransfer(MmiCanAdapterCtx_t *ctx,
   }
 
   return 1U;
+}
+
+static uint8_t AllocatePublishTransferId(MmiCanAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 1U;
+  }
+
+  ctx->publishTransferId++;
+  if (ctx->publishTransferId == 0U)
+  {
+    ctx->publishTransferId = 1U;
+  }
+
+  return ctx->publishTransferId;
 }
 
 static uint8_t QueueCommandResponse(MmiCanAdapterCtx_t *ctx,
@@ -1255,6 +1291,76 @@ static MmiProtocolStatus_t BuildRuntimePayload(
         break;
       }
 
+      case MMI_PROTOCOL_V2_RUNTIME_TOPIC_POWER:
+      {
+        MmiRuntimePowerSummaryV2_t record;
+
+        if (MmiSnapshotCacheGetPowerSummary(snapshotCache, &record) == 0U)
+        {
+          return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
+        }
+
+        *payloadLength = (uint16_t) sizeof(record);
+        (void) memcpy(payload, &record, sizeof(record));
+        break;
+      }
+
+      case MMI_PROTOCOL_V2_RUNTIME_TOPIC_COMMS:
+      {
+        MmiRuntimeCommsSummaryV2_t record;
+
+        if (MmiSnapshotCacheGetCommsSummary(snapshotCache, &record) == 0U)
+        {
+          return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
+        }
+
+        *payloadLength = (uint16_t) sizeof(record);
+        (void) memcpy(payload, &record, sizeof(record));
+        break;
+      }
+
+      case MMI_PROTOCOL_V2_RUNTIME_TOPIC_RELAY:
+      {
+        MmiRuntimeRelaySummaryV2_t record;
+
+        if (MmiSnapshotCacheGetRelaySummary(snapshotCache, &record) == 0U)
+        {
+          return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
+        }
+
+        *payloadLength = (uint16_t) sizeof(record);
+        (void) memcpy(payload, &record, sizeof(record));
+        break;
+      }
+
+      case MMI_PROTOCOL_V2_RUNTIME_TOPIC_OUTPUT_TEST:
+      {
+        MmiRuntimeOutputTestSummaryV2_t record;
+
+        if (MmiSnapshotCacheGetOutputTestSummary(snapshotCache, &record) == 0U)
+        {
+          return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
+        }
+
+        *payloadLength = (uint16_t) sizeof(record);
+        (void) memcpy(payload, &record, sizeof(record));
+        break;
+      }
+
+      case MMI_PROTOCOL_V2_RUNTIME_TOPIC_DOOR:
+      {
+        MmiRuntimeDoorSummaryV2_t record;
+
+        if (MmiSnapshotCacheGetDoorSummary(snapshotCache, &record) == 0U)
+        {
+          return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
+        }
+
+        *payloadLength = (uint16_t) sizeof(record);
+        (void) memcpy(payload, &record, sizeof(record));
+        break;
+      }
+
       default:
       {
         (void) descriptor;
@@ -1263,6 +1369,109 @@ static MmiProtocolStatus_t BuildRuntimePayload(
   }
 
   return MMI_PROTOCOL_V2_STATUS_OK;
+}
+
+static uint8_t QueueRuntimePublish(MmiCanAdapterCtx_t *ctx,
+                                   uint8_t topicId,
+                                   uint8_t recordIndex,
+                                   uint8_t sequence)
+{
+  MmiProtocolCommandHeaderV2_t request;
+  MmiProtocolPublishHeaderV2_t publishHeader;
+  MmiResourceDescriptor_t descriptor;
+  uint16_t recordCount = 0U;
+  uint8_t payload[MMI_CAN_ADAPTER_TRANSFER_BUFFER_BYTES];
+  uint16_t payloadLength = 0U;
+  uint8_t transfer[MMI_CAN_ADAPTER_TRANSFER_BUFFER_BYTES];
+  uint16_t totalLength;
+  MmiProtocolStatus_t status;
+
+  if ((ctx == NULL) || (ctx->service == NULL) || (ctx->snapshotCache == NULL))
+  {
+    return 0U;
+  }
+
+  if (MmiServiceLookupResource(ctx->service,
+                               MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+                               topicId,
+                               &descriptor) == 0U)
+  {
+    return 0U;
+  }
+
+  if (MmiServiceResolveRecordCount(ctx->service, &descriptor, &recordCount) == 0U)
+  {
+    return 0U;
+  }
+
+  (void) memset(&request, 0, sizeof(request));
+  request.namespaceId = MMI_PROTOCOL_V2_NAMESPACE_RUNTIME;
+  request.resourceId = topicId;
+  request.recordIndex = recordIndex;
+  status = NormalizeRecordIndex(&descriptor, recordCount, &request.recordIndex);
+  if (status != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return 0U;
+  }
+
+  status = BuildRuntimePayload(&request,
+                               &payload[0],
+                               &payloadLength,
+                               &descriptor,
+                               ctx->snapshotCache);
+  if (status != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return 0U;
+  }
+
+  (void) memset(&publishHeader, 0, sizeof(publishHeader));
+  publishHeader.topicId = topicId;
+  publishHeader.recordIndex = request.recordIndex;
+  publishHeader.sequence = sequence;
+  publishHeader.payloadLength = payloadLength;
+
+  totalLength = (uint16_t) (sizeof(publishHeader) + payloadLength);
+  if (totalLength > sizeof(transfer))
+  {
+    return 0U;
+  }
+
+  (void) memcpy(&transfer[0], &publishHeader, sizeof(publishHeader));
+  if (payloadLength > 0U)
+  {
+    (void) memcpy(&transfer[sizeof(publishHeader)], &payload[0], payloadLength);
+  }
+
+  return QueueSegmentedTransfer(ctx,
+                                MMI_PROTOCOL_V2_CAN_ID_PUBLISH_SEG,
+                                ctx->sessionId,
+                                AllocatePublishTransferId(ctx),
+                                &transfer[0],
+                                totalLength);
+}
+
+static void MarkSubscriptionsDirty(MmiCanAdapterCtx_t *ctx,
+                                   uint8_t topicId,
+                                   uint8_t recordIndex)
+{
+  uint8_t index;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  for (index = 0U; index < MMI_CAN_ADAPTER_SUBSCRIPTION_MAX; index++)
+  {
+    if ((ctx->subscriptions[index].active != 0U)
+        && (ctx->subscriptions[index].topicId == topicId)
+        && ((ctx->subscriptions[index].recordIndex == recordIndex)
+            || (ctx->subscriptions[index].recordIndex == 0U)
+            || (recordIndex == 0U)))
+    {
+      ctx->subscriptions[index].dirty = 1U;
+    }
+  }
 }
 
 static void ProcessCommandTransfer(MmiCanAdapterCtx_t *ctx)
@@ -1478,6 +1687,235 @@ static void ProcessCommandTransfer(MmiCanAdapterCtx_t *ctx)
   ResetRxTransfer(ctx);
 }
 
+static void ProcessSubscribeTransfer(MmiCanAdapterCtx_t *ctx)
+{
+  MmiProtocolSubscribeRequestV2_t request;
+  MmiResourceDescriptor_t descriptor;
+  uint16_t recordCount = 0U;
+  uint8_t normalizedIndex;
+  uint8_t slotIndex;
+  uint8_t foundSlot = 0U;
+
+  if ((ctx == NULL) || (ctx->service == NULL))
+  {
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  (void) memcpy(&request, &ctx->subscribeBuffer[0], sizeof(request));
+  if (MmiServiceLookupResource(ctx->service,
+                               MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+                               request.topicId,
+                               &descriptor) == 0U)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_BAD_RESOURCE);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  if (descriptor.supportsSubscription == 0U)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_UNSUPPORTED);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  if (MmiServiceResolveRecordCount(ctx->service, &descriptor, &recordCount) == 0U)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  normalizedIndex = request.recordIndex;
+  if (NormalizeRecordIndex(&descriptor, recordCount, &normalizedIndex)
+      != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_BAD_INDEX);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  for (slotIndex = 0U; slotIndex < MMI_CAN_ADAPTER_SUBSCRIPTION_MAX; slotIndex++)
+  {
+    if ((ctx->subscriptions[slotIndex].active != 0U)
+        && (ctx->subscriptions[slotIndex].topicId == request.topicId)
+        && (ctx->subscriptions[slotIndex].recordIndex == normalizedIndex))
+    {
+      foundSlot = 1U;
+      break;
+    }
+  }
+
+  if (foundSlot == 0U)
+  {
+    for (slotIndex = 0U; slotIndex < MMI_CAN_ADAPTER_SUBSCRIPTION_MAX; slotIndex++)
+    {
+      if (ctx->subscriptions[slotIndex].active == 0U)
+      {
+        foundSlot = 1U;
+        break;
+      }
+    }
+  }
+
+  if (foundSlot == 0U)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_BUSY);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  if ((request.leaseSeconds == 0U) || (request.periodDeciseconds == 0U))
+  {
+    ctx->subscriptions[slotIndex].active = 0U;
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    ctx->subscribeTransferId,
+                    MMI_PROTOCOL_V2_STATUS_OK);
+    ResetSubscribeTransfer(ctx);
+    return;
+  }
+
+  ctx->subscriptions[slotIndex].active = 1U;
+  ctx->subscriptions[slotIndex].topicId = request.topicId;
+  ctx->subscriptions[slotIndex].recordIndex = normalizedIndex;
+  ctx->subscriptions[slotIndex].periodTicks =
+    (uint16_t) request.periodDeciseconds * 10U;
+  if (ctx->subscriptions[slotIndex].periodTicks == 0U)
+  {
+    ctx->subscriptions[slotIndex].periodTicks = 1U;
+  }
+  ctx->subscriptions[slotIndex].ticksUntilDue = 0U;
+  ctx->subscriptions[slotIndex].dirty = 1U;
+
+  (void) QueueAck(ctx,
+                  MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                  ctx->subscribeTransferId,
+                  MMI_PROTOCOL_V2_STATUS_OK);
+  ResetSubscribeTransfer(ctx);
+}
+
+static void ProcessSubscribeSegment(MmiCanAdapterCtx_t *ctx,
+                                    const MmiProtocolSegmentV2_t *segment)
+{
+  uint16_t offset;
+
+  if ((ctx == NULL) || (segment == NULL))
+  {
+    return;
+  }
+
+  if (ctx->sessionId == 0U)
+  {
+    ctx->sessionId = (segment->sessionId != 0U) ? segment->sessionId : 1U;
+  }
+
+  if (segment->sessionId != ctx->sessionId)
+  {
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    segment->transferId,
+                    MMI_PROTOCOL_V2_STATUS_BUSY);
+    return;
+  }
+
+  if (MmiProtocolV2SegmentIsFirst(segment) != 0U)
+  {
+    ResetSubscribeTransfer(ctx);
+    ctx->subscribeActive = 1U;
+    ctx->subscribeTransferId = segment->transferId;
+    ctx->subscribeNextSegmentIndex = 0U;
+  }
+
+  if ((ctx->subscribeActive == 0U)
+      || (ctx->subscribeTransferId != segment->transferId)
+      || (ctx->subscribeNextSegmentIndex != segment->segmentIndex))
+  {
+    ResetSubscribeTransfer(ctx);
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    segment->transferId,
+                    MMI_PROTOCOL_V2_STATUS_BUSY);
+    return;
+  }
+
+  offset = (uint16_t) segment->segmentIndex * MMI_PROTOCOL_V2_SEGMENT_DATA_BYTES;
+  if ((offset + MMI_PROTOCOL_V2_SEGMENT_DATA_BYTES)
+      > sizeof(ctx->subscribeBuffer))
+  {
+    ResetSubscribeTransfer(ctx);
+    (void) QueueAck(ctx,
+                    MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
+                    segment->transferId,
+                    MMI_PROTOCOL_V2_STATUS_INVALID_VALUE);
+    return;
+  }
+
+  (void) memcpy(&ctx->subscribeBuffer[offset],
+                &segment->bytes[0],
+                MMI_PROTOCOL_V2_SEGMENT_DATA_BYTES);
+  ctx->subscribeNextSegmentIndex++;
+
+  if (MmiProtocolV2SegmentIsLast(segment) != 0U)
+  {
+    ProcessSubscribeTransfer(ctx);
+  }
+}
+
+static void ProcessSubscriptions(MmiCanAdapterCtx_t *ctx)
+{
+  uint8_t index;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  for (index = 0U; index < MMI_CAN_ADAPTER_SUBSCRIPTION_MAX; index++)
+  {
+    MmiRuntimeSubscription_t *subscription = &ctx->subscriptions[index];
+
+    if (subscription->active == 0U)
+    {
+      continue;
+    }
+
+    if ((subscription->ticksUntilDue == 0U) || (subscription->dirty != 0U))
+    {
+      if (QueueRuntimePublish(ctx,
+                              subscription->topicId,
+                              subscription->recordIndex,
+                              subscription->sequence) != 0U)
+      {
+        subscription->sequence++;
+      }
+
+      subscription->dirty = 0U;
+      subscription->ticksUntilDue = subscription->periodTicks;
+    }
+    else
+    {
+      subscription->ticksUntilDue--;
+    }
+  }
+}
+
 static void ProcessCommandSegment(MmiCanAdapterCtx_t *ctx,
                                   const MmiProtocolSegmentV2_t *segment)
 {
@@ -1630,14 +2068,7 @@ static void ProcessRxFrame(MmiCanAdapterCtx_t *ctx,
         }
 
         (void) memcpy(&segment, &frame->data[0], sizeof(segment));
-        if (ctx->sessionId == 0U)
-        {
-          ctx->sessionId = (segment.sessionId != 0U) ? segment.sessionId : 1U;
-        }
-        (void) QueueAck(ctx,
-                        MMI_PROTOCOL_V2_MESSAGE_CLASS_SUBSCRIBE,
-                        segment.transferId,
-                        MMI_PROTOCOL_V2_STATUS_UNSUPPORTED);
+        ProcessSubscribeSegment(ctx, &segment);
         break;
       }
 
@@ -1676,6 +2107,7 @@ void MmiCanAdapterInit(MmiCanAdapterCtx_t *ctx,
   }
   CreateOsObjects(ctx);
   ResetRxTransfer(ctx);
+  ResetSubscribeTransfer(ctx);
   s_registeredCtx = ctx;
 }
 
@@ -1838,6 +2270,8 @@ void MmiCanAdapterStep(void)
     (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
   }
 
+  ProcessSubscriptions(ctx);
+
   while ((ctx->txQueue != NULL)
          && (osMessageQueueGet(ctx->txQueue, &queuedFrame, NULL, 0U) == osOK))
   {
@@ -1870,4 +2304,9 @@ void MmiCanAdapterStep(void)
 
     (void) osMemoryPoolFree(ctx->txPool, queuedFrame);
   }
+}
+
+void MmiCanAdapterNotifyRuntimeTopic(uint8_t topicId, uint8_t recordIndex)
+{
+  MarkSubscriptionsDirty(s_registeredCtx, topicId, recordIndex);
 }

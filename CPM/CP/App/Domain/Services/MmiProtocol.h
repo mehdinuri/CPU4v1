@@ -115,7 +115,12 @@ typedef enum
   MMI_PROTOCOL_V2_RUNTIME_TOPIC_MODULE_STATUS = 9U,
   MMI_PROTOCOL_V2_RUNTIME_TOPIC_SAFETY_SUMMARY = 10U,
   MMI_PROTOCOL_V2_RUNTIME_TOPIC_SAFETY_CHANNELS = 11U,
-  MMI_PROTOCOL_V2_RUNTIME_TOPIC_CLOCK = 12U
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_CLOCK = 12U,
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_POWER = 13U,
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_COMMS = 14U,
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_RELAY = 15U,
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_OUTPUT_TEST = 16U,
+  MMI_PROTOCOL_V2_RUNTIME_TOPIC_DOOR = 17U
 } MmiProtocolRuntimeTopic_t;
 
 typedef enum
@@ -409,6 +414,57 @@ typedef struct
 
 typedef struct
 {
+  uint16_t psmVoltageRaw[2];
+  uint16_t psmVoltageTenthsVrms[2];
+  uint8_t psmFrequencyRaw[2];
+  uint8_t psmIsolatedVoltage[2];
+} __attribute__((packed)) MmiRuntimePowerSummaryV2_t;
+
+typedef struct
+{
+  uint8_t modemType;
+  uint8_t gprsState;
+  uint8_t signalQuality;
+  uint8_t connected;
+  uint8_t modemAlive;
+  uint8_t simReady;
+  char imei[16];
+  char usrMac[13];
+  char ethernetMac[13];
+  char operatorName[21];
+} __attribute__((packed)) MmiRuntimeCommsSummaryV2_t;
+
+typedef struct
+{
+  uint8_t userOutputPowerEnabled;
+  uint8_t permitOutputPower;
+  uint8_t relayDrive;
+  uint8_t relayTopology;
+  uint8_t safetyAction;
+  uint8_t reserved0[3];
+} __attribute__((packed)) MmiRuntimeRelaySummaryV2_t;
+
+typedef struct
+{
+  uint8_t enabled;
+  uint8_t reserved0;
+  uint16_t forcedMask;
+  uint16_t redMask;
+  uint16_t yellowMask;
+  uint16_t greenMask;
+} __attribute__((packed)) MmiRuntimeOutputTestSummaryV2_t;
+
+typedef struct
+{
+  uint8_t open;
+  uint8_t reserved0;
+  uint16_t latestOpenLogIndex;
+  uint16_t latestCloseLogIndex;
+  uint32_t changeSequence;
+} __attribute__((packed)) MmiRuntimeDoorSummaryV2_t;
+
+typedef struct
+{
   uint8_t modemType;
   uint8_t reserved0[3];
 } __attribute__((packed)) MmiLocalModemSettingsV2_t;
@@ -457,7 +513,7 @@ typedef struct
   uint8_t month;
   uint8_t year;
   uint8_t century;
-  uint8_t daylightSavingEnabled;
+  uint8_t globalDaylightSaving;
 } __attribute__((packed)) MmiLocalClockSettingsV2_t;
 
 typedef struct
@@ -517,7 +573,8 @@ typedef struct
 {
   uint8_t command;
   uint8_t outputNumber;
-  uint8_t reserved0[2];
+  uint8_t aspect;
+  uint8_t reserved0;
 } __attribute__((packed)) MmiMaintenanceOutputTestCommandV2_t;
 
 typedef struct

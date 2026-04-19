@@ -4,30 +4,56 @@
 
 #include <stdint.h>
 
+#include "Domain/Services/OutputTestService.h"
+#include "Domain/Services/RelayControlService.h"
 #include "Domain/Services/MmiLocalSettingsService.h"
 #include "Domain/Services/MmiProtocol.h"
-#include "Ports/IMmiMaintenancePort.h"
+#include "Ports/IControllerModeControlPort.h"
+#include "Ports/IFactoryResetPort.h"
 #include "Ports/IModuleBusPort.h"
 
 enum
 {
   MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_START = 1U,
   MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_STOP = 2U,
-  MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_SELECT = 3U
+  MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_SELECT = 3U,
+  MMI_MAINTENANCE_OUTPUT_TEST_COMMAND_FORCE = 4U
 };
 
 typedef struct
 {
-  IMmiMaintenancePort_t *maintenancePort;
+  uint8_t outputNumber;
+  uint8_t powerNet;
+  uint8_t power;
+  uint8_t state;
+  uint8_t net;
+  uint16_t currentNow;
+  uint16_t currentMin;
+  uint16_t currentMax;
+} MmiMaintenanceOutputTestStatus_t;
+
+typedef struct
+{
+  IControllerModeControlPort_t *controllerModePort;
+  IFactoryResetPort_t *factoryResetPort;
   IModuleBusPort_t *moduleBusPort;
   MmiLocalSettingsService_t *localSettingsService;
+  RelayControlService_t *relayControlService;
+  OutputTestService_t *outputTestService;
 } MmiMaintenanceService_t;
 
 void MmiMaintenanceServiceInit(MmiMaintenanceService_t *service);
 void MmiMaintenanceServiceBind(MmiMaintenanceService_t *service,
-                               IMmiMaintenancePort_t *maintenancePort,
+                               IControllerModeControlPort_t *controllerModePort,
                                IModuleBusPort_t *moduleBusPort,
-                               MmiLocalSettingsService_t *localSettingsService);
+                               MmiLocalSettingsService_t *localSettingsService,
+                               IFactoryResetPort_t *factoryResetPort);
+void MmiMaintenanceServiceBindRelayControlService(
+  MmiMaintenanceService_t *service,
+  RelayControlService_t *relayControlService);
+void MmiMaintenanceServiceBindOutputTestService(
+  MmiMaintenanceService_t *service,
+  OutputTestService_t *outputTestService);
 MmiProtocolStatus_t MmiMaintenanceServiceExecute(
   MmiMaintenanceService_t *service,
   uint8_t resourceId,
@@ -39,7 +65,6 @@ uint8_t MmiMaintenanceServiceRequestModeControl(
 uint8_t MmiMaintenanceServiceRequestRelayState(
   MmiMaintenanceService_t *service,
   uint8_t requestedState);
-uint8_t MmiMaintenanceServiceEnterIapMode(MmiMaintenanceService_t *service);
 uint8_t MmiMaintenanceServiceFactoryReset(MmiMaintenanceService_t *service);
 uint8_t MmiMaintenanceServiceStartOutputTest(MmiMaintenanceService_t *service);
 uint8_t MmiMaintenanceServiceStopOutputTest(MmiMaintenanceService_t *service);

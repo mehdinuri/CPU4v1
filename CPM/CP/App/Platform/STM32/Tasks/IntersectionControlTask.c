@@ -35,7 +35,13 @@ void IntersectionControlTaskFunc(void *argument)
     FieldOutputCanAdapterStep();
     DetectorReportServiceStep(&g_detectorReportService);
     GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
+    (void) UiCommsIdentityServiceRefresh(&g_uiCommsIdentityService);
+    (void) UiDoorServiceStep(&g_uiDoorService);
     (void) MmiSnapshotCacheRefresh(&g_mmiSnapshotCache);
+    if (UiDoorServiceConsumeChanged(&g_uiDoorService) != 0U)
+    {
+      MmiCanAdapterNotifyRuntimeTopic(MMI_PROTOCOL_V2_RUNTIME_TOPIC_DOOR, 0U);
+    }
     MmiCanAdapterStep();
 
     wakeTick += INTERSECTION_CONTROL_TASK_PERIOD_MS;

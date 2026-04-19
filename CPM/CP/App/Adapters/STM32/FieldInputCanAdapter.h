@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "cmsis_os2.h"
+#include "Domain/Services/UiPowerService.h"
 #include "fdcan.h"
 #include "Ports/IModuleBusPort.h"
 
@@ -34,10 +35,12 @@ typedef struct
   osMemoryPoolId_t rxPool;
   osMessageQueueId_t rxQueue;
   uint32_t droppedFrames;
+  UiPowerService_t *powerService;
 } FieldInputCanAdapterCtx_t;
 
 void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
-                              uint16_t configEpoch);
+                              uint16_t configEpoch,
+                              UiPowerService_t *powerService);
 void FieldInputCanAdapterSetConfigEpoch(FieldInputCanAdapterCtx_t *ctx,
                                         uint16_t configEpoch);
 IModuleBusPort_t FieldInputCanAdapterCreatePort(FieldInputCanAdapterCtx_t *ctx);

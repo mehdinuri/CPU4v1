@@ -3,8 +3,6 @@
 
 #include <stddef.h>
 
-#include "data.h"
-
 enum
 {
   POWER_MONITOR_SOURCE_UNKNOWN = 1,
@@ -43,18 +41,26 @@ static uint8_t AdapterGetLineVoltageTenthsVrms(void *ctx, uint16_t *lineVoltage)
     return 1U;
   }
 
-  converted = (uint32_t) (((float) GetPowerSupplyNet(0U) * 0.73029f) + 0.5f);
-  if (converted > 6000U)
+  if ((adapter->powerService == NULL)
+      || (UiPowerServiceGetLineVoltageTenthsVrms(adapter->powerService,
+                                                 1U,
+                                                 lineVoltage) == 0U))
   {
-    converted = 6000U;
+    *lineVoltage = 3001U;
+    return 1U;
   }
 
-  *lineVoltage = (uint16_t) converted;
+  converted = *lineVoltage;
+  if (converted > 6000U)
+  {
+    *lineVoltage = 6000U;
+  }
 
   return 1U;
 }
 
-void PowerMonitorAdapterInit(PowerMonitorAdapterCtx_t *ctx)
+void PowerMonitorAdapterInit(PowerMonitorAdapterCtx_t *ctx,
+                             UiPowerService_t *powerService)
 {
   if (ctx == NULL)
   {
@@ -62,6 +68,7 @@ void PowerMonitorAdapterInit(PowerMonitorAdapterCtx_t *ctx)
   }
 
   ctx->primarySource = POWER_MONITOR_SOURCE_AC_LINE;
+  ctx->powerService = powerService;
 }
 
 IPowerMonitorPort_t PowerMonitorAdapterCreatePort(PowerMonitorAdapterCtx_t *ctx)

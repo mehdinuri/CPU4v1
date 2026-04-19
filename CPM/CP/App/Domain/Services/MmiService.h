@@ -18,7 +18,12 @@
 #include "Domain/Intersection/GlobalTimeManagementService.h"
 #include "Domain/Intersection/IntersectionController.h"
 #include "Domain/Intersection/IntersectionEngine.h"
+#include "Domain/Services/OutputTestService.h"
 #include "Domain/Services/MmiProtocol.h"
+#include "Domain/Services/RelayControlService.h"
+#include "Domain/Services/UiCommsIdentityService.h"
+#include "Domain/Services/UiDoorService.h"
+#include "Domain/Services/UiPowerService.h"
 
 typedef enum
 {
@@ -64,6 +69,11 @@ typedef struct
   DetectorReportService_t *detectorReportService;
   GlobalTimeManagementService_t *globalTimeManagementService;
   CpMpLinkService_t *cpMpLinkService;
+  UiPowerService_t *uiPowerService;
+  UiCommsIdentityService_t *uiCommsIdentityService;
+  UiDoorService_t *uiDoorService;
+  RelayControlService_t *relayControlService;
+  OutputTestService_t *outputTestService;
 } MmiService_t;
 
 void MmiServiceInit(MmiService_t *service);
@@ -74,6 +84,17 @@ void MmiServiceBind(MmiService_t *service,
                     DetectorReportService_t *detectorReportService,
                     GlobalTimeManagementService_t *globalTimeManagementService,
                     CpMpLinkService_t *cpMpLinkService);
+void MmiServiceBindUiPowerService(MmiService_t *service,
+                                  UiPowerService_t *uiPowerService);
+void MmiServiceBindUiCommsIdentityService(
+  MmiService_t *service,
+  UiCommsIdentityService_t *uiCommsIdentityService);
+void MmiServiceBindUiDoorService(MmiService_t *service,
+                                 UiDoorService_t *uiDoorService);
+void MmiServiceBindRelayControlService(MmiService_t *service,
+                                       RelayControlService_t *relayControlService);
+void MmiServiceBindOutputTestService(MmiService_t *service,
+                                     OutputTestService_t *outputTestService);
 uint8_t MmiServiceLookupResource(const MmiService_t *service,
                                  uint8_t namespaceId,
                                  uint8_t resourceId,

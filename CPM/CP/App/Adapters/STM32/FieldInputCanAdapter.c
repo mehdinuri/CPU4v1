@@ -22,6 +22,7 @@
 #define FIELD_INPUT_FEIG_HEARTBEAT_BASE 0x700U
 #define FIELD_INPUT_FEIG_EMCY_BASE 0x300U
 #define FIELD_INPUT_PED_LEGACY_BASE LEGACY_FIELD_CAN_ID_IO_INPUTS0
+#define FIELD_INPUT_PSM_MEASURE_BASE 0x05AU
 
 #define FIELD_INPUT_FEIG_TIMEOUT_MS 1500U
 #define FIELD_INPUT_PED_TIMEOUT_MS 500U
@@ -44,6 +45,11 @@ static FieldInputCanAdapterCtx_t *s_registeredCtx = NULL;
 static uint16_t ReadLe16(const uint8_t *data)
 {
   return (uint16_t) ((uint16_t) data[0] | ((uint16_t) data[1] << 8U));
+}
+
+static uint16_t ReadPsmField(uint8_t low, uint8_t high)
+{
+  return (uint16_t) (low + ((uint16_t) high << 8U));
 }
 
 static uint32_t CurrentTickMs(void)
@@ -641,7 +647,8 @@ void FieldInputCanAdapterOnRxIsr(const FDCAN_RxHeaderTypeDef *header,
 }
 
 void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
-                              uint16_t configEpoch)
+                              uint16_t configEpoch,
+                              UiPowerService_t *powerService)
 {
   if (ctx == NULL)
   {
@@ -651,6 +658,7 @@ void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
   memset(ctx, 0, sizeof(*ctx));
   CreateOsObjects(ctx);
   ctx->configEpoch = configEpoch;
+  ctx->powerService = powerService;
   ctx->nextHealthPollSubindex = 4U;
   SeedSnapshot(ctx);
   s_registeredCtx = ctx;
@@ -693,6 +701,33 @@ static void ProcessRxFrame(FieldInputCanAdapterCtx_t *ctx,
   }
 
   now = CurrentTickMs();
+
+  if ((standardId >= FIELD_INPUT_PSM_MEASURE_BASE)
+      && (standardId < (uint16_t) (FIELD_INPUT_PSM_MEASURE_BASE + 2U))
+      && (length >= 8U) && (ctx->powerService != NULL))
+  {
+    UiPowerMeasurement_t measurement;
+    uint8_t psmNumber = (uint8_t) ((standardId - FIELD_INPUT_PSM_MEASURE_BASE)
+                                   + 1U);
+
+    (void) memset(&measurement, 0, sizeof(measurement));
+    measurement.netVoltageRaw =
+      ReadPsmField(data[0], (uint8_t) (data[5] & 0x03U));
+    measurement.voltage24v1Raw =
+      ReadPsmField(data[1], (uint8_t) ((data[5] >> 2U) & 0x03U));
+    measurement.voltage24v2Raw =
+      ReadPsmField(data[2], (uint8_t) ((data[5] >> 4U) & 0x03U));
+    measurement.voltage5v1Raw =
+      ReadPsmField(data[3], (uint8_t) ((data[5] >> 6U) & 0x03U));
+    measurement.voltage5v2Raw =
+      ReadPsmField(data[4], (uint8_t) (data[6] & 0x03U));
+    measurement.isolatedVoltagePresent =
+      (uint8_t) ((data[6] & 0x04U) != 0U);
+    measurement.netFrequencyRaw = data[7];
+    measurement.valid = 1U;
+    UiPowerServiceUpdateMeasurement(ctx->powerService, psmNumber, &measurement);
+    return;
+  }
 
   if ((standardId == FIELD_INPUT_PED_LEGACY_BASE)
       || (standardId == (FIELD_INPUT_PED_LEGACY_BASE + 1U)))

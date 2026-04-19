@@ -407,8 +407,8 @@ static MmiProtocolStatus_t ReadClockSettings(
   settings.month = snapshot.Month;
   settings.year = snapshot.Year;
   settings.century = snapshot.Century;
-  settings.daylightSavingEnabled =
-    (uint8_t) (globalTimeManagement.globalDaylightSaving == 20U);
+  settings.globalDaylightSaving =
+    globalTimeManagement.globalDaylightSaving;
   (void) memcpy(payload, &settings, sizeof(settings));
   *payloadLength = (uint16_t) sizeof(settings);
   return MMI_PROTOCOL_V2_STATUS_OK;
@@ -488,7 +488,8 @@ static MmiProtocolStatus_t WriteClockSettings(
                                      settings.month))
       || (settings.hour > 23U)
       || (settings.minute > 59U) || (settings.second > 59U)
-      || (settings.daylightSavingEnabled > 1U))
+      || (settings.globalDaylightSaving < 1U)
+      || (settings.globalDaylightSaving > 20U))
   {
     return MMI_PROTOCOL_V2_STATUS_INVALID_VALUE;
   }
@@ -501,7 +502,7 @@ static MmiProtocolStatus_t WriteClockSettings(
   }
 
   globalTimeManagement.globalDaylightSaving =
-    (settings.daylightSavingEnabled != 0U) ? 20U : 1U;
+    settings.globalDaylightSaving;
   if (ConfigurationServiceCreateTransaction(service->configurationService) == 0U)
   {
     return MMI_PROTOCOL_V2_STATUS_BUSY;

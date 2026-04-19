@@ -20,6 +20,16 @@ typedef struct
   const IntersectionEngine_t *intersectionEngine;
 } HomeCtx_t;
 
+static void ReadCommsSnapshot(const LcdServiceRegistry_t *services,
+                              CommsStatusSnapshot_t *snapshot)
+{
+  (void) memset(snapshot, 0, sizeof(*snapshot));
+  if ((services != NULL) && (services->comms != NULL))
+  {
+    (void) CommsStatusReadSnapshot(services->comms, snapshot);
+  }
+}
+
 /* Helper to map interval to a character: R, Y, G, - */
 static char IntervalToChar(IntersectionPhaseInterval_t interval)
 {
@@ -46,11 +56,13 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 {
   HomeCtx_t *c = (HomeCtx_t *) ctx;
   char buf[41];
+  CommsStatusSnapshot_t comms;
   const IntersectionRuntime_t *r =
     IntersectionEngineGetRuntime(c->intersectionEngine);
   uint8_t lang = ISystemPort_GetLanguage(c->services->system);
 
   (void) e;
+  ReadCommsSnapshot(c->services, &comms);
 
   /* Line 1: System Info & Mode */
   const char *modeStr = "FREE";
@@ -97,8 +109,8 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 
   /* Line 4: Time & Comms */
   sprintf(buf, "12:00 MO A?G%dC%d %s",
-          (int) CommsStatusGetModemAlive(c->services->comms),
-          (int) CommsStatusGetAsynchConnected(c->services->comms),
+          (int) comms.modemAlive,
+          (int) comms.connected,
           Lcd_GetAdvanceModeStr(ISystemPort_GetTimeSource(c->services->system),
                                 lang));
   DisplayWrite(display, 3, 0, buf, (uint8_t) strlen(buf));

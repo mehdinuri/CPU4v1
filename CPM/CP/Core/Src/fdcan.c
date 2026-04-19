@@ -28,7 +28,6 @@
 #include "Adapters/STM32/FieldInputCanAdapter.h"
 #include "Adapters/STM32/MmiCanAdapter.h"
 #include "LegacyCanIngress.h"
-#include "mmi.h"
 
 extern ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void);
 /* USER CODE END 0 */
@@ -392,11 +391,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         && (SRxMsg.RxHeader.Identifier <= MMI_PROTOCOL_V2_CAN_ID_HELLO_REQ))
     {
       MmiCanAdapterOnRxIsr(&SRxMsg.RxHeader, &SRxMsg.Data[0]);
-    }
-    else if ((SRxMsg.RxHeader.Identifier >= CAN_MMI_STD_ID_FIRST)
-        && (SRxMsg.RxHeader.Identifier <= CAN_MMI_STD_ID_LAST) )
-    {
-      MMIRequest(&SRxMsg);
     }
     else
     {

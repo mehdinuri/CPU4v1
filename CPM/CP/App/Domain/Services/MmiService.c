@@ -76,7 +76,37 @@ static const MmiResourceDescriptor_t kRuntimeResources[] =
     1U, 1U, 0U,
     MMI_RESOURCE_SOURCE_ENGINE_RUNTIME,
     MMI_RESOURCE_COUNT_SINGLE,
-    (uint16_t) sizeof(MmiRuntimeClockSummaryV2_t) }
+    (uint16_t) sizeof(MmiRuntimeClockSummaryV2_t) },
+  { MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+    MMI_PROTOCOL_V2_RUNTIME_TOPIC_POWER,
+    1U, 1U, 0U,
+    MMI_RESOURCE_SOURCE_CONTROLLER_SNAPSHOT,
+    MMI_RESOURCE_COUNT_SINGLE,
+    (uint16_t) sizeof(MmiRuntimePowerSummaryV2_t) },
+  { MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+    MMI_PROTOCOL_V2_RUNTIME_TOPIC_COMMS,
+    1U, 1U, 0U,
+    MMI_RESOURCE_SOURCE_LOCAL_SETTINGS,
+    MMI_RESOURCE_COUNT_SINGLE,
+    (uint16_t) sizeof(MmiRuntimeCommsSummaryV2_t) },
+  { MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+    MMI_PROTOCOL_V2_RUNTIME_TOPIC_RELAY,
+    1U, 1U, 0U,
+    MMI_RESOURCE_SOURCE_MAINTENANCE,
+    MMI_RESOURCE_COUNT_SINGLE,
+    (uint16_t) sizeof(MmiRuntimeRelaySummaryV2_t) },
+  { MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+    MMI_PROTOCOL_V2_RUNTIME_TOPIC_OUTPUT_TEST,
+    1U, 1U, 0U,
+    MMI_RESOURCE_SOURCE_MAINTENANCE,
+    MMI_RESOURCE_COUNT_SINGLE,
+    (uint16_t) sizeof(MmiRuntimeOutputTestSummaryV2_t) },
+  { MMI_PROTOCOL_V2_NAMESPACE_RUNTIME,
+    MMI_PROTOCOL_V2_RUNTIME_TOPIC_DOOR,
+    1U, 1U, 0U,
+    MMI_RESOURCE_SOURCE_CONTROLLER_SNAPSHOT,
+    MMI_RESOURCE_COUNT_SINGLE,
+    (uint16_t) sizeof(MmiRuntimeDoorSummaryV2_t) }
 };
 
 static const MmiResourceDescriptor_t kStandardResources[] =
@@ -249,6 +279,11 @@ void MmiServiceInit(MmiService_t *service)
     service->detectorReportService = NULL;
     service->globalTimeManagementService = NULL;
     service->cpMpLinkService = NULL;
+    service->uiPowerService = NULL;
+    service->uiCommsIdentityService = NULL;
+    service->uiDoorService = NULL;
+    service->relayControlService = NULL;
+    service->outputTestService = NULL;
   }
 }
 
@@ -268,6 +303,52 @@ void MmiServiceBind(MmiService_t *service,
     service->detectorReportService = detectorReportService;
     service->globalTimeManagementService = globalTimeManagementService;
     service->cpMpLinkService = cpMpLinkService;
+  }
+}
+
+void MmiServiceBindUiPowerService(MmiService_t *service,
+                                  UiPowerService_t *uiPowerService)
+{
+  if (service != NULL)
+  {
+    service->uiPowerService = uiPowerService;
+  }
+}
+
+void MmiServiceBindUiCommsIdentityService(
+  MmiService_t *service,
+  UiCommsIdentityService_t *uiCommsIdentityService)
+{
+  if (service != NULL)
+  {
+    service->uiCommsIdentityService = uiCommsIdentityService;
+  }
+}
+
+void MmiServiceBindUiDoorService(MmiService_t *service,
+                                 UiDoorService_t *uiDoorService)
+{
+  if (service != NULL)
+  {
+    service->uiDoorService = uiDoorService;
+  }
+}
+
+void MmiServiceBindRelayControlService(MmiService_t *service,
+                                       RelayControlService_t *relayControlService)
+{
+  if (service != NULL)
+  {
+    service->relayControlService = relayControlService;
+  }
+}
+
+void MmiServiceBindOutputTestService(MmiService_t *service,
+                                     OutputTestService_t *outputTestService)
+{
+  if (service != NULL)
+  {
+    service->outputTestService = outputTestService;
   }
 }
 

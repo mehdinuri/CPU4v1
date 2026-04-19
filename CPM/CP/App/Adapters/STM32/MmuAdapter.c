@@ -10,12 +10,21 @@
 
 static uint8_t ComputePermitOutputPower(const MmuAdapterCtx_t *ctx)
 {
+  uint8_t userEnabled = 1U;
+
   if (ctx == NULL)
   {
     return 0U;
   }
 
-  return (uint8_t) (ctx->safetyAction != MMU_CONTROL_ACTION_DARK);
+  if (ctx->relayControlService != NULL)
+  {
+    userEnabled = RelayControlServiceGetUserOutputPowerEnabled(
+      ctx->relayControlService);
+  }
+
+  return (uint8_t) ((ctx->safetyAction != MMU_CONTROL_ACTION_DARK)
+                    && (userEnabled != 0U));
 }
 
 static void RefreshRelayDrive(MmuAdapterCtx_t *ctx)
@@ -40,6 +49,15 @@ static void RefreshRelayDrive(MmuAdapterCtx_t *ctx)
   if (ctx->relayPort != NULL)
   {
     RelaySet(ctx->relayPort, relayDrive);
+  }
+
+  if (ctx->relayControlService != NULL)
+  {
+    RelayControlServiceSetAppliedState(ctx->relayControlService,
+                                       ctx->permitOutputPower,
+                                       relayDrive,
+                                       (uint8_t) ctx->relayTopology,
+                                       (uint8_t) ctx->safetyAction);
   }
 }
 
@@ -147,6 +165,18 @@ void MmuAdapterBindRelayPort(MmuAdapterCtx_t *ctx, IRelayPort_t *relayPort)
   }
 
   ctx->relayPort = relayPort;
+  RefreshRelayDrive(ctx);
+}
+
+void MmuAdapterBindRelayControlService(MmuAdapterCtx_t *ctx,
+                                       RelayControlService_t *service)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->relayControlService = service;
   RefreshRelayDrive(ctx);
 }
 
