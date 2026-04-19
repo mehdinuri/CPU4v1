@@ -5,7 +5,37 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "stm32g4xx_hal.h"
+#define CONTROL_BUS_ADAPTER_RX_DEPTH 16U
+#define CONTROL_BUS_ADAPTER_TX_DEPTH 16U
+
+typedef struct
+{
+  ControlBusFrame_t frame;
+} ControlBusQueuedFrame_t;
+
+static uint8_t DlcToLength(uint32_t dlc)
+{
+  switch (dlc)
+  {
+      case FDCAN_DLC_BYTES_0: return 0U;
+      case FDCAN_DLC_BYTES_1: return 1U;
+      case FDCAN_DLC_BYTES_2: return 2U;
+      case FDCAN_DLC_BYTES_3: return 3U;
+      case FDCAN_DLC_BYTES_4: return 4U;
+      case FDCAN_DLC_BYTES_5: return 5U;
+      case FDCAN_DLC_BYTES_6: return 6U;
+      case FDCAN_DLC_BYTES_7: return 7U;
+      case FDCAN_DLC_BYTES_8: return 8U;
+      case FDCAN_DLC_BYTES_12: return 12U;
+      case FDCAN_DLC_BYTES_16: return 16U;
+      case FDCAN_DLC_BYTES_20: return 20U;
+      case FDCAN_DLC_BYTES_24: return 24U;
+      case FDCAN_DLC_BYTES_32: return 32U;
+      case FDCAN_DLC_BYTES_48: return 48U;
+      case FDCAN_DLC_BYTES_64: return 64U;
+      default: return CONTROL_BUS_FRAME_MAX_LENGTH;
+  }
+}
 
 static uint32_t LengthToDlc(uint8_t length)
 {
@@ -31,50 +61,100 @@ static uint32_t LengthToDlc(uint8_t length)
     { 48U, FDCAN_DLC_BYTES_48 },
     { 64U, FDCAN_DLC_BYTES_64 }
   };
-  uint32_t i;
+  uint32_t index;
 
-  for (i = 0U; i < (sizeof(table) / sizeof(table[0])); i++)
+  for (index = 0U; index < (sizeof(table) / sizeof(table[0])); index++)
   {
-    if (table[i].bytes >= length)
+    if (table[index].bytes >= length)
     {
-      return table[i].dlc;
+      return table[index].dlc;
     }
   }
 
   return FDCAN_DLC_BYTES_64;
 }
 
+static void CreateOsObjects(ControlBusAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  if (ctx->rxPool == NULL)
+  {
+    ctx->rxPool = osMemoryPoolNew(CONTROL_BUS_ADAPTER_RX_DEPTH,
+                                  sizeof(ControlBusQueuedFrame_t),
+                                  NULL);
+  }
+
+  if (ctx->txPool == NULL)
+  {
+    ctx->txPool = osMemoryPoolNew(CONTROL_BUS_ADAPTER_TX_DEPTH,
+                                  sizeof(ControlBusQueuedFrame_t),
+                                  NULL);
+  }
+
+  if (ctx->rxQueue == NULL)
+  {
+    ctx->rxQueue = osMessageQueueNew(CONTROL_BUS_ADAPTER_RX_DEPTH,
+                                     sizeof(ControlBusQueuedFrame_t *),
+                                     NULL);
+  }
+
+  if (ctx->txQueue == NULL)
+  {
+    ctx->txQueue = osMessageQueueNew(CONTROL_BUS_ADAPTER_TX_DEPTH,
+                                     sizeof(ControlBusQueuedFrame_t *),
+                                     NULL);
+  }
+}
+
+static uint8_t QueueFrame(osMemoryPoolId_t pool,
+                          osMessageQueueId_t queue,
+                          const ControlBusFrame_t *frame)
+{
+  ControlBusQueuedFrame_t *queuedFrame;
+
+  if ((pool == NULL) || (queue == NULL) || (frame == NULL))
+  {
+    return 0U;
+  }
+
+  queuedFrame = (ControlBusQueuedFrame_t *) osMemoryPoolAlloc(pool, 0U);
+  if (queuedFrame == NULL)
+  {
+    return 0U;
+  }
+
+  queuedFrame->frame = *frame;
+  if (osMessageQueuePut(queue, &queuedFrame, 0U, 0U) != osOK)
+  {
+    (void) osMemoryPoolFree(pool, queuedFrame);
+    return 0U;
+  }
+
+  return 1U;
+}
+
 static uint8_t AdapterSendFrame(void *ctx, const ControlBusFrame_t *frame)
 {
   ControlBusAdapterCtx_t *self = (ControlBusAdapterCtx_t *) ctx;
-  FDCAN_TxHeaderTypeDef header = { 0 };
 
   if ((self == NULL) || (frame == NULL) || (self->hfdcan == NULL))
   {
     return 0U;
   }
 
-  if (frame->length > CONTROL_BUS_FRAME_MAX_LENGTH)
+  if ((frame->length > CONTROL_BUS_FRAME_MAX_LENGTH)
+      || (frame->standardId > 0x7FFU))
   {
     return 0U;
   }
 
-  header.Identifier = frame->extendedId;
-  header.IdType = FDCAN_EXTENDED_ID;
-  header.TxFrameType = FDCAN_DATA_FRAME;
-  header.DataLength = LengthToDlc(frame->length);
-  header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-  header.BitRateSwitch = FDCAN_BRS_OFF;
-  header.FDFormat = FDCAN_FD_CAN;
-  header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-  header.MessageMarker = 0U;
-
-  if (HAL_FDCAN_AddMessageToTxFifoQ(self->hfdcan,
-                                    &header,
-                                    (uint8_t *) frame->data) != HAL_OK)
+  if (QueueFrame(self->txPool, self->txQueue, frame) == 0U)
   {
-    self->txErrors++;
-
+    self->txDrops++;
     return 0U;
   }
 
@@ -108,6 +188,7 @@ void ControlBusAdapterInit(ControlBusAdapterCtx_t *ctx,
 
   (void) memset(ctx, 0, sizeof(*ctx));
   ctx->hfdcan = hfdcan;
+  CreateOsObjects(ctx);
 }
 
 IControlBusPort_t ControlBusAdapterCreatePort(ControlBusAdapterCtx_t *ctx)
@@ -132,13 +213,13 @@ void ControlBusAdapterOnRxIsr(ControlBusAdapterCtx_t *ctx,
     return;
   }
 
-  if (header->IdType != FDCAN_EXTENDED_ID)
+  if (header->IdType != FDCAN_STANDARD_ID)
   {
     return;
   }
 
-  frame.extendedId = header->Identifier;
-  frame.length = (uint8_t) (header->DataLength);
+  frame.standardId = (uint16_t) header->Identifier;
+  frame.length = DlcToLength(header->DataLength);
 
   if (frame.length > CONTROL_BUS_FRAME_MAX_LENGTH)
   {
@@ -147,8 +228,67 @@ void ControlBusAdapterOnRxIsr(ControlBusAdapterCtx_t *ctx,
 
   (void) memcpy(frame.data, data, frame.length);
 
-  if (ctx->rxCallback != NULL)
+  if (QueueFrame(ctx->rxPool, ctx->rxQueue, &frame) == 0U)
   {
-    ctx->rxCallback(ctx->rxCallbackCtx, &frame);
+    ctx->rxDrops++;
+  }
+}
+
+void ControlBusAdapterStep(ControlBusAdapterCtx_t *ctx)
+{
+  ControlBusQueuedFrame_t *queuedFrame;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  while ((ctx->rxQueue != NULL)
+         && (osMessageQueueGet(ctx->rxQueue,
+                               &queuedFrame,
+                               NULL,
+                               0U) == osOK))
+  {
+    if (ctx->rxCallback != NULL)
+    {
+      ctx->rxCallback(ctx->rxCallbackCtx, &queuedFrame->frame);
+    }
+
+    (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
+  }
+
+  while ((ctx->txQueue != NULL)
+         && (osMessageQueueGet(ctx->txQueue,
+                               &queuedFrame,
+                               NULL,
+                               0U) == osOK))
+  {
+    FDCAN_TxHeaderTypeDef header = { 0 };
+
+    header.Identifier = queuedFrame->frame.standardId;
+    header.IdType = FDCAN_STANDARD_ID;
+    header.TxFrameType = FDCAN_DATA_FRAME;
+    header.DataLength = LengthToDlc(queuedFrame->frame.length);
+    header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    header.BitRateSwitch = FDCAN_BRS_ON;
+    header.FDFormat = FDCAN_FD_CAN;
+    header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    header.MessageMarker = 0U;
+
+    if (HAL_FDCAN_AddMessageToTxFifoQ(ctx->hfdcan,
+                                      &header,
+                                      (uint8_t *) queuedFrame->frame.data)
+        != HAL_OK)
+    {
+      if ((ctx->txQueue == NULL)
+          || (osMessageQueuePut(ctx->txQueue, &queuedFrame, 0U, 0U) != osOK))
+      {
+        ctx->txErrors++;
+        (void) osMemoryPoolFree(ctx->txPool, queuedFrame);
+      }
+      break;
+    }
+
+    (void) osMemoryPoolFree(ctx->txPool, queuedFrame);
   }
 }

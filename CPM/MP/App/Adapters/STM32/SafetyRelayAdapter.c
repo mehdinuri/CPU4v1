@@ -8,16 +8,31 @@
 #include "main.h"
 #include "stm32g4xx_hal.h"
 
-static void DrivePins(SafetyRelayState_t state)
+static void DrivePins(SafetyRelayAdapterCtx_t *ctx, SafetyRelayState_t state)
 {
-  GPIO_PinState relay = (state == SAFETY_RELAY_STATE_CLOSED)
-                        ? GPIO_PIN_SET : GPIO_PIN_RESET;
-  /* TRIAC_Pin is active-low per the legacy wiring. */
-  GPIO_PinState triac = (state == SAFETY_RELAY_STATE_CLOSED)
-                        ? GPIO_PIN_RESET : GPIO_PIN_SET;
+  uint8_t relayDrive = (state == SAFETY_RELAY_STATE_CLOSED) ? 1U : 0U;
+  uint8_t triacDrive = (state == SAFETY_RELAY_STATE_CLOSED) ? 0U : 1U;
+  GPIO_PinState relay;
+  GPIO_PinState triac;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  if (ctx->topology == SAFETY_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP)
+  {
+    relayDrive = (uint8_t) (relayDrive == 0U);
+  }
+
+  relay = (relayDrive != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+  triac = (triacDrive != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET;
 
   HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, relay);
   HAL_GPIO_WritePin(TRIAC_GPIO_Port, TRIAC_Pin, triac);
+
+  ctx->lastRelayDrive = relayDrive;
+  ctx->lastTriacDrive = triacDrive;
 }
 
 static uint8_t AdapterSetState(void *ctx, SafetyRelayState_t state)
@@ -29,7 +44,7 @@ static uint8_t AdapterSetState(void *ctx, SafetyRelayState_t state)
     return 0U;
   }
 
-  DrivePins(state);
+  DrivePins(self, state);
   self->commandedState = state;
 
   return 1U;
@@ -51,15 +66,28 @@ static uint8_t AdapterGetCommandedState(void *ctx, SafetyRelayState_t *state)
 
 static uint8_t AdapterGetActualState(void *ctx, SafetyRelayState_t *state)
 {
-  if ((ctx == NULL) || (state == NULL))
+  const SafetyRelayAdapterCtx_t *self = (const SafetyRelayAdapterCtx_t *) ctx;
+  GPIO_PinState pin;
+  uint8_t relayDrive;
+
+  if ((self == NULL) || (state == NULL))
   {
     return 0U;
   }
 
-  GPIO_PinState pin = HAL_GPIO_ReadPin(RELAY_GPIO_Port, RELAY_Pin);
+  pin = HAL_GPIO_ReadPin(RELAY_GPIO_Port, RELAY_Pin);
+  relayDrive = (pin == GPIO_PIN_SET) ? 1U : 0U;
 
-  *state = (pin == GPIO_PIN_SET) ? SAFETY_RELAY_STATE_CLOSED
-           : SAFETY_RELAY_STATE_OPEN;
+  if (self->topology == SAFETY_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP)
+  {
+    *state = (relayDrive != 0U) ? SAFETY_RELAY_STATE_OPEN
+             : SAFETY_RELAY_STATE_CLOSED;
+  }
+  else
+  {
+    *state = (relayDrive != 0U) ? SAFETY_RELAY_STATE_CLOSED
+             : SAFETY_RELAY_STATE_OPEN;
+  }
 
   return 1U;
 }
@@ -72,7 +100,42 @@ void SafetyRelayAdapterInit(SafetyRelayAdapterCtx_t *ctx)
   }
 
   ctx->commandedState = SAFETY_RELAY_STATE_OPEN;
-  DrivePins(SAFETY_RELAY_STATE_OPEN);
+  ctx->topology = SAFETY_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE;
+  ctx->lastRelayDrive = 0U;
+  ctx->lastTriacDrive = 1U;
+  DrivePins(ctx, SAFETY_RELAY_STATE_OPEN);
+}
+
+void SafetyRelayAdapterSetTopology(SafetyRelayAdapterCtx_t *ctx,
+                                   SafetyRelayTopology_t topology)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->topology = topology;
+  DrivePins(ctx, ctx->commandedState);
+}
+
+uint8_t SafetyRelayAdapterGetLastRelayDrive(const SafetyRelayAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0U;
+  }
+
+  return ctx->lastRelayDrive;
+}
+
+uint8_t SafetyRelayAdapterGetLastTriacDrive(const SafetyRelayAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0U;
+  }
+
+  return ctx->lastTriacDrive;
 }
 
 ISafetyRelayPort_t SafetyRelayAdapterCreatePort(SafetyRelayAdapterCtx_t *ctx)

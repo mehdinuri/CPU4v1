@@ -39,7 +39,7 @@ void test_control_bus_port_round_trip(void)
   MockControlBusAdapterInit(&ctx);
   IControlBusPort_t port = MockControlBusAdapterCreatePort(&ctx);
 
-  frame.extendedId = 0x4300U;
+  frame.standardId = 0x183U;
   frame.length = 3U;
   frame.data[0] = 0x01U;
   frame.data[1] = 0x02U;
@@ -47,7 +47,7 @@ void test_control_bus_port_round_trip(void)
 
   TEST_ASSERT_EQUAL_UINT8(1U, ControlBusSendFrame(&port, &frame));
   TEST_ASSERT_EQUAL_UINT32(1U, ctx.txCount);
-  TEST_ASSERT_EQUAL_UINT32(0x4300U, ctx.txBuffer[0].extendedId);
+  TEST_ASSERT_EQUAL_UINT16(0x183U, ctx.txBuffer[0].standardId);
 }
 
 void test_field_bus_port_returns_snapshot(void)

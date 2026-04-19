@@ -8,11 +8,13 @@
 
 #include "Alarm/UnitAlarmService.h"
 #include "FaultMonitor/FaultMonitorService.h"
+#include "Intersection/CpMpLinkService.h"
 #include "Intersection/ConfigurationService.h"
 #include "Malfunction/MalfunctionEngine.h"
 #include "Malfunction/SafetyDecisionService.h"
 
 extern ConfigurationService_t g_configurationService;
+extern CpMpLinkService_t g_cpMpLinkService;
 extern SafetyDecisionService_t g_safetyDecisionService;
 extern FaultMonitorService_t g_faultMonitorService;
 extern UnitAlarmService_t g_unitAlarmService;

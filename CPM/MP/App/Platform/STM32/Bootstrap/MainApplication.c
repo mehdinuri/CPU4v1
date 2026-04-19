@@ -34,6 +34,7 @@ IUnitAlarmPort_t g_unitAlarmPort;
 
 /* Global domain service instances */
 ConfigurationService_t g_configurationService;
+CpMpLinkService_t g_cpMpLinkService;
 SafetyDecisionService_t g_safetyDecisionService;
 FaultMonitorService_t g_faultMonitorService;
 UnitAlarmService_t g_unitAlarmService;
@@ -64,9 +65,11 @@ ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void)
 void MainApplication_Init(void)
 {
   /* 1. Hardware adapters -------------------------------------------- */
-  ControlBusAdapterInit(&s_controlBusCtx, &hfdcan1);
-  FieldBusAdapterInit(&s_fieldBusCtx, &hfdcan2);
+  ControlBusAdapterInit(&s_controlBusCtx, &hfdcan2);
+  FieldBusAdapterInit(&s_fieldBusCtx, &hfdcan1);
   SafetyRelayAdapterInit(&s_safetyRelayCtx);
+  SafetyRelayAdapterSetTopology(&s_safetyRelayCtx,
+                                SAFETY_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE);
   StatusLEDAdapterInit(&s_statusLEDCtx);
   EventLogAdapterInit(&s_eventLogCtx);
   PersistenceAdapterInit(&s_persistenceCtx);
@@ -90,6 +93,7 @@ void MainApplication_Init(void)
   /* 3. Domain services --------------------------------------------- */
   ConfigurationServiceInit(&g_configurationService, &g_persistencePort);
   SafetyDecisionServiceInit(&g_safetyDecisionService, &g_safetyRelayPort);
+  SafetyDecisionServiceReset(&g_safetyDecisionService);
   FaultMonitorServiceInit(&g_faultMonitorService);
   UnitAlarmServiceInit(&g_unitAlarmService, &g_unitAlarmPort);
   MalfunctionEngineInit(&g_malfunctionEngine,
@@ -99,6 +103,14 @@ void MainApplication_Init(void)
                         &g_safetyDecisionService,
                         &g_faultMonitorService,
                         &g_unitAlarmService);
+  CpMpLinkServiceInit(&g_cpMpLinkService,
+                      &g_controlBusPort,
+                      &g_configurationService,
+                      &g_safetyDecisionService,
+                      &g_faultMonitorService);
+
+  CANStart(&hfdcan1);
+  CANStart(&hfdcan2);
 
   /* 4. Application tasks ------------------------------------------- */
   Tasks_Start();

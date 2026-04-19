@@ -41,5 +41,7 @@ void SafetyDecisionServiceOnFault(SafetyDecisionService_t *service,
 void SafetyDecisionServiceReset(SafetyDecisionService_t *service);
 SafetyAction_t SafetyDecisionServiceGetLatchedAction(
   const SafetyDecisionService_t *service);
+FaultCode_t SafetyDecisionServiceGetLastLatchedCode(
+  const SafetyDecisionService_t *service);
 
 #endif /* SAFETY_DECISION_SERVICE_H */

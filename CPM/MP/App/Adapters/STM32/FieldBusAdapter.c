@@ -7,6 +7,54 @@
 
 #include "stm32g4xx_hal.h"
 
+#define FIELD_BUS_ADAPTER_RX_DEPTH 32U
+
+typedef struct
+{
+  uint16_t standardId;
+  uint8_t length;
+  uint8_t data[8];
+} FieldBusQueuedFrame_t;
+
+static uint8_t DlcToLength(uint32_t dlc)
+{
+  switch (dlc)
+  {
+      case FDCAN_DLC_BYTES_0: return 0U;
+      case FDCAN_DLC_BYTES_1: return 1U;
+      case FDCAN_DLC_BYTES_2: return 2U;
+      case FDCAN_DLC_BYTES_3: return 3U;
+      case FDCAN_DLC_BYTES_4: return 4U;
+      case FDCAN_DLC_BYTES_5: return 5U;
+      case FDCAN_DLC_BYTES_6: return 6U;
+      case FDCAN_DLC_BYTES_7: return 7U;
+      case FDCAN_DLC_BYTES_8: return 8U;
+      default: return 8U;
+  }
+}
+
+static void CreateOsObjects(FieldBusAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  if (ctx->rxPool == NULL)
+  {
+    ctx->rxPool = osMemoryPoolNew(FIELD_BUS_ADAPTER_RX_DEPTH,
+                                  sizeof(FieldBusQueuedFrame_t),
+                                  NULL);
+  }
+
+  if (ctx->rxQueue == NULL)
+  {
+    ctx->rxQueue = osMessageQueueNew(FIELD_BUS_ADAPTER_RX_DEPTH,
+                                     sizeof(FieldBusQueuedFrame_t *),
+                                     NULL);
+  }
+}
+
 static void DecodeLoadSwitchLow(FieldBusAdapterCtx_t *ctx,
                                 const uint8_t *data,
                                 uint8_t length)
@@ -173,6 +221,7 @@ void FieldBusAdapterInit(FieldBusAdapterCtx_t *ctx,
 
   (void) memset(ctx, 0, sizeof(*ctx));
   ctx->hfdcan = hfdcan;
+  CreateOsObjects(ctx);
 }
 
 IFieldBusPort_t FieldBusAdapterCreatePort(FieldBusAdapterCtx_t *ctx)
@@ -189,8 +238,7 @@ void FieldBusAdapterOnRxIsr(FieldBusAdapterCtx_t *ctx,
                             const FDCAN_RxHeaderTypeDef *header,
                             const uint8_t *data)
 {
-  uint32_t id;
-  uint8_t length;
+  FieldBusQueuedFrame_t *queuedFrame;
 
   if ((ctx == NULL) || (header == NULL) || (data == NULL))
   {
@@ -202,45 +250,91 @@ void FieldBusAdapterOnRxIsr(FieldBusAdapterCtx_t *ctx,
     return;
   }
 
-  id = header->Identifier;
-  length = (uint8_t) header->DataLength;
+  if ((ctx->rxPool == NULL) || (ctx->rxQueue == NULL))
+  {
+    ctx->droppedFrames++;
+    return;
+  }
 
-  if (id == CAN_MID_CPU_SO0)
+  queuedFrame = (FieldBusQueuedFrame_t *) osMemoryPoolAlloc(ctx->rxPool, 0U);
+  if (queuedFrame == NULL)
   {
-    DecodeLoadSwitchLow(ctx, data, length);
+    ctx->droppedFrames++;
+    return;
   }
-  else if (id == CAN_MID_CPU_SO1)
-  {
-    DecodeLoadSwitchHigh(ctx, data, length);
-  }
-  else if (id == CAN_MID_CPU_FLASH_SIGNALS0)
-  {
-    DecodeFlashSignalsLow(ctx, data, length);
-  }
-  else if (id == CAN_MID_CPU_FLASH_SIGNALS1)
-  {
-    DecodeFlashSignalsHigh(ctx, data, length);
-  }
-  else if ((id >= CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS0)
-           && (id <= CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS7))
-  {
-    uint8_t ssmIdx =
-      (uint8_t) (id - CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS0);
 
-    DecodeSsmTelemetry(ctx, ssmIdx, data, length);
-  }
-  else if ((id == CAN_MID_PSM_VOLT_MEASUREMENTS0)
-           || (id == CAN_MID_PSM_VOLT_MEASUREMENTS1))
+  queuedFrame->standardId = (uint16_t) header->Identifier;
+  queuedFrame->length = DlcToLength(header->DataLength);
+  if (queuedFrame->length > sizeof(queuedFrame->data))
   {
-    uint8_t psmIdx = (uint8_t) (id - CAN_MID_PSM_VOLT_MEASUREMENTS0);
+    queuedFrame->length = sizeof(queuedFrame->data);
+  }
+  (void) memcpy(queuedFrame->data, data, queuedFrame->length);
 
-    DecodePsmTelemetry(ctx, psmIdx, data, length);
-  }
-  else
+  if (osMessageQueuePut(ctx->rxQueue, &queuedFrame, 0U, 0U) != osOK)
   {
+    (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
     ctx->droppedFrames++;
   }
 } /* FieldBusAdapterOnRxIsr */
+
+void FieldBusAdapterStep(FieldBusAdapterCtx_t *ctx)
+{
+  FieldBusQueuedFrame_t *queuedFrame;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  while ((ctx->rxQueue != NULL)
+         && (osMessageQueueGet(ctx->rxQueue,
+                               &queuedFrame,
+                               NULL,
+                               0U) == osOK))
+  {
+    uint32_t id = queuedFrame->standardId;
+    uint8_t length = queuedFrame->length;
+
+    if (id == CAN_MID_CPU_SO0)
+    {
+      DecodeLoadSwitchLow(ctx, queuedFrame->data, length);
+    }
+    else if (id == CAN_MID_CPU_SO1)
+    {
+      DecodeLoadSwitchHigh(ctx, queuedFrame->data, length);
+    }
+    else if (id == CAN_MID_CPU_FLASH_SIGNALS0)
+    {
+      DecodeFlashSignalsLow(ctx, queuedFrame->data, length);
+    }
+    else if (id == CAN_MID_CPU_FLASH_SIGNALS1)
+    {
+      DecodeFlashSignalsHigh(ctx, queuedFrame->data, length);
+    }
+    else if ((id >= CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS0)
+             && (id <= CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS7))
+    {
+      uint8_t ssmIdx =
+        (uint8_t) (id - CAN_MID_SSM_VOLT_CURRENT_MEASUREMENTS0);
+
+      DecodeSsmTelemetry(ctx, ssmIdx, queuedFrame->data, length);
+    }
+    else if ((id == CAN_MID_PSM_VOLT_MEASUREMENTS0)
+             || (id == CAN_MID_PSM_VOLT_MEASUREMENTS1))
+    {
+      uint8_t psmIdx = (uint8_t) (id - CAN_MID_PSM_VOLT_MEASUREMENTS0);
+
+      DecodePsmTelemetry(ctx, psmIdx, queuedFrame->data, length);
+    }
+    else
+    {
+      ctx->droppedFrames++;
+    }
+
+    (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
+  }
+}
 
 void FieldBusAdapterCommit(FieldBusAdapterCtx_t *ctx, uint32_t nowTicks)
 {

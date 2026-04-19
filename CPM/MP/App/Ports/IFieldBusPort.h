@@ -1,6 +1,6 @@
 /* App/Ports/IFieldBusPort.h
  *
- * Port interface for the shared field bus (FDCAN2). MP is a read-only
+ * Port interface for the shared field bus (FDCAN1). MP is a read-only
  * witness on this bus: it observes the same commanded load-switch
  * image CP broadcasts to SSMs (0x040/0x041, 0x0B0/0x0B1) plus raw SSM
  * telemetry (0x050..0x057) and PSM telemetry (0x05A/0x05B).

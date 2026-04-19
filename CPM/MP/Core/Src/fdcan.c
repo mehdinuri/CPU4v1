@@ -22,8 +22,13 @@
 
 /* USER CODE BEGIN 0 */
 #include "cmsis_os.h"
+#include "Adapters/STM32/ControlBusAdapter.h"
+#include "Adapters/STM32/FieldBusAdapter.h"
 #include "CANRxTx.h"
 #include <string.h>
+
+extern ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void);
+extern FieldBusAdapterCtx_t *MainApplicationGetFieldBusAdapter(void);
 /* USER CODE END 0 */
 
 FDCAN_HandleTypeDef hfdcan1;
@@ -56,7 +61,7 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.DataTimeSeg1 = 1;
   hfdcan1.Init.DataTimeSeg2 = 1;
   hfdcan1.Init.StdFiltersNbr = 1;
-  hfdcan1.Init.ExtFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 0;
   hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
   if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
   {
@@ -70,17 +75,6 @@ void MX_FDCAN1_Init(void)
   SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
   SFilterConfig.FilterID1 = CAN_MID_CPU_SO0;
   SFilterConfig.FilterID2 = CAN_MID_CPU_DATE_TIME;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-	
-	SFilterConfig.IdType = FDCAN_EXTENDED_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = CAN_TX_CP_EXT_ID_SIGNAL_DEFS_0;
-  SFilterConfig.FilterID2 = CAN_TX_CP_EXT_ID_RESET;
   if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
   {
     Error_Handler();
@@ -131,25 +125,14 @@ void MX_FDCAN2_Init(void)
   SFilterConfig.FilterIndex = 0;
   SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
   SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = CAN_MID_CPU_SO0;
-  SFilterConfig.FilterID2 = CAN_MID_CPU_DATE_TIME;
+  SFilterConfig.FilterID1 = 0x100U;
+  SFilterConfig.FilterID2 = 0x186U;
   if (HAL_FDCAN_ConfigFilter(&hfdcan2, &SFilterConfig) != HAL_OK)
   {
     Error_Handler();
   }
 	
-	SFilterConfig.IdType = FDCAN_EXTENDED_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = CAN_TX_CP_EXT_ID_SIGNAL_DEFS_0;
-  SFilterConfig.FilterID2 = CAN_TX_CP_EXT_ID_RESET;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &SFilterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-	
-	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan2, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
+	if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan2, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
   {
     Error_Handler();
   }
@@ -352,17 +335,30 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 	tSCanRxMsg xCANRxMsg;
 	memset(&xCANRxMsg, 0, sizeof(xCANRxMsg));
 	
+	if(HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &xCANRxMsg.RxHeader, xCANRxMsg.baData) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
 	if (hfdcan->Instance == FDCAN1)
 	{
-		if(HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &xCANRxMsg.RxHeader, xCANRxMsg.baData) != HAL_OK)
-		{
-			Error_Handler();
-		}
-		
-		xCANRxMsg.RxHeader.DataLength = CANGetRxDataLength(xCANRxMsg.RxHeader.DataLength);
-		xCANRxMsg.hfdcan = hfdcan;
-		
-		CanRxRequest(&xCANRxMsg);
+    FieldBusAdapterCtx_t *fieldBus = MainApplicationGetFieldBusAdapter();
+
+    if (fieldBus != NULL)
+    {
+      FieldBusAdapterOnRxIsr(fieldBus, &xCANRxMsg.RxHeader, xCANRxMsg.baData);
+    }
+	}
+  else if (hfdcan->Instance == FDCAN2)
+  {
+    ControlBusAdapterCtx_t *controlBus = MainApplicationGetControlBusAdapter();
+
+    if (controlBus != NULL)
+    {
+      ControlBusAdapterOnRxIsr(controlBus,
+                               &xCANRxMsg.RxHeader,
+                               xCANRxMsg.baData);
+    }
 	}
 }
 /* USER CODE END 1 */

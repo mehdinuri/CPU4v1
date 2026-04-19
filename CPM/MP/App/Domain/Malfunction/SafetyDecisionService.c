@@ -141,3 +141,14 @@ SafetyAction_t SafetyDecisionServiceGetLatchedAction(
 
   return service->latchedAction;
 }
+
+FaultCode_t SafetyDecisionServiceGetLastLatchedCode(
+  const SafetyDecisionService_t *service)
+{
+  if (service == NULL)
+  {
+    return FAULT_CODE_NONE;
+  }
+
+  return service->lastLatchedCode;
+}

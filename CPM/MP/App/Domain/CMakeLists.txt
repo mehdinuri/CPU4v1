@@ -3,6 +3,7 @@
 add_library(mp_domain STATIC
     # Intersection
     ${CMAKE_CURRENT_SOURCE_DIR}/Intersection/ChannelStateResolver.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Intersection/CpMpLinkService.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Intersection/ConfigurationService.c
     # Malfunction monitors + services
     ${CMAKE_CURRENT_SOURCE_DIR}/Malfunction/ClearanceMonitor.c

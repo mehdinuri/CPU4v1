@@ -32,7 +32,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "data.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,16 +71,57 @@ uint8_t bResetSource = 0;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
+void MainApplication_Init(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static void ClearAllFlagsLocal(void)
+{
+  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+  __HAL_RCC_CLEAR_RESET_FLAGS();
+}
+
+static void DisableDebugLocal(void)
+{
+#ifndef DEBUG
+  DBGMCU->CR = 0x00000000;
+#endif
+}
+
+static void EnableDebugLocal(void)
+{
+#ifdef DEBUG
+  HAL_DBGMCU_EnableDBGSleepMode();
+  HAL_DBGMCU_EnableDBGStopMode();
+  HAL_DBGMCU_EnableDBGStandbyMode();
+#endif
+}
+
+static void CheckWakeupOnResetLocal(void)
+{
+  if (__HAL_PWR_GET_FLAG(PWR_FLAG_SB))
+  {
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+
+    if (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF1) == 0U)
+    {
+      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+      __HAL_RCC_CLEAR_RESET_FLAGS();
+    }
+  }
+}
+
 void PeripheralsInit(void)
 {
 	MX_GPIO_Init();
   MX_DMA_Init();
   MX_FDCAN1_Init();
+  MX_FDCAN2_Init();
+  MX_I2C3_Init();
+  MX_IWDG_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
 }
@@ -131,9 +171,9 @@ int main(void)
   /* USER CODE BEGIN 1 */
 #if	defined(DEBUG) || defined(TRACE)
 	#warning NEVER FORGET REMOVING PREPROCESSOR SYMBOLS "DEBUG/TRACE" BEFORE FINAL BUILD & RELEASE
- 	EnableDebug();
+ 	EnableDebugLocal();
 #else
-	DisableDebug();
+	DisableDebugLocal();
 #endif
   /* USER CODE END 1 */
 
@@ -151,8 +191,8 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 	SetResetSource();
-	CheckWakeupOnReset();
-	ClearAllFlags();
+	CheckWakeupOnResetLocal();
+	ClearAllFlagsLocal();
 	
   /* USER CODE END SysInit */
 
@@ -166,7 +206,7 @@ int main(void)
 
   /* Init scheduler */
   osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
-  MX_FREERTOS_Init();
+  MainApplication_Init();
 
   /* Start scheduler */
   osKernelStart();
@@ -236,7 +276,9 @@ void SystemClock_Config(void)
 void SystemReset(void)
 {
 #ifdef DEBUG
-	while(TRUE);
+	while(1)
+	{
+	}
 #else
 	HAL_NVIC_SystemReset();
 #endif

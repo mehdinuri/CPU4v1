@@ -1,10 +1,9 @@
 /* App/Ports/IControlBusPort.h
  *
- * Port interface for the dedicated CP <-> MP back-channel (FDCAN1).
- * Transport-only: the domain sends and receives raw extended-ID CAN
- * frames. Any packet-state-machine / segmentation semantics belongs in
- * the adapter (which mirrors CP's cpmpcomm.c) or in a Domain service
- * layered on top of this port.
+ * Port interface for the dedicated CP <-> MP back-channel (FDCAN2).
+ * Transport-only: the domain sends and receives raw standard-ID CAN FD
+ * frames. Any segmentation or protocol state machine belongs in a domain
+ * service layered on top of this port.
  *
  * MP never transmits on the field bus; all outgoing traffic goes
  * through this port.
@@ -19,7 +18,7 @@
 
 typedef struct
 {
-  uint32_t extendedId;
+  uint16_t standardId;
   uint8_t length;
   uint8_t data[CONTROL_BUS_FRAME_MAX_LENGTH];
 } ControlBusFrame_t;

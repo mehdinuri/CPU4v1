@@ -36,6 +36,13 @@ Add_Unity_Domain_Test(Test_DomainSurface
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockUnitAlarmAdapter.c
 )
 
+Add_Unity_Domain_Test(Test_CpMpLinkService
+    ${CMAKE_CURRENT_SOURCE_DIR}/Test_CpMpLinkService.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockControlBusAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockSafetyRelayAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockUnitAlarmAdapter.c
+)
+
 # --- All ports + mock adapters (compile + link sanity) ---
 Add_Unity_Test(Test_AllPortsAndMocks
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_AllPortsAndMocks.c
