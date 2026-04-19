@@ -486,7 +486,7 @@ static NtcipError_t GetAscIoInputObject(
   NtcipContext_t *context = (NtcipContext_t *) groupContext;
   IntersectionIoMapConfig_t ioMap;
   uint8_t rowIndex;
-  uint8_t functionIndex;
+  uint8_t functionIndex = 0U;
 
   (void) requestContext;
 

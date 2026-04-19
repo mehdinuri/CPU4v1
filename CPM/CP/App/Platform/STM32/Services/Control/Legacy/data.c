@@ -19,7 +19,7 @@
 #include "i2c.h"
 #include "crc.h"
 #include "gpio.h"
-#include "program.h"
+#include "LegacyControllerModeBridge.h"
 #include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "PersistencePorts.h"
@@ -70,13 +70,6 @@ static uint8_t DataPersistenceRead(PersistenceObjectId_t objectId,
                                    uint32_t size)
 {
   return PersistenceRead(&g_persistencePort, objectId, offset, dst, size);
-}
-
-static uint8_t DataPersistenceErase(PersistenceObjectId_t objectId,
-                                    uint32_t offset,
-                                    uint32_t size)
-{
-  return PersistenceErase(&g_persistencePort, objectId, offset, size);
 }
 
 /*  ssm */
@@ -1597,23 +1590,6 @@ uint8_t SetTotalGet(void)
   return bSetTotal;
 }
 
-void SetRuntimesInit(void)
-{
-  uint8_t bSetNo;
-  uint8_t bSetTotal = SetTotalGet();
-
-  memset(&SRuntimes.SaSetRuntime, 0, sizeof(SRuntimes.SaSetRuntime));
-  for (bSetNo = 0; bSetNo < bSetTotal; bSetNo++)
-  {
-    if (IsSetValid(bSetNo))
-    {
-      SetSigModeSet(bSetNo, SIGNALING_MODE_NORMAL);
-      SRuntimes.SaSignalStateRuntimes[SignalStateRuntimeCurNoGet()].bSetNo =
-        bSetNo + 1;
-    }
-  }
-}
-
 uint8_t SetSigModeIsOK(void)
 {
   uint8_t bSetNo = 0;
@@ -2586,13 +2562,10 @@ uint8_t SeqSet(uint8_t bSeqNo, tpSSeqDef pSSignalSeqBuffer)
 
 uint8_t SeqSave(uint8_t bSeqNo, uint8_t bSeqProc, uint8_t LCDReq)
 {
+  (void) LCDReq;
+
   if (bSeqNo < SIGNAL_SEQS_MAX)
   {
-    if (LCDReq)
-    {
-      ProgramDataSet();
-    }
-
     if (bSeqProc == SEQ_PROC_ADD)
     {
       if (SCP.SConsumed.baSeqStepTotal[bSeqNo] == 0) /* first step definition means a new sequence definition */
@@ -3090,7 +3063,7 @@ uint16_t PhaseTotalElapsedDurGet(void)
     }
   }
 
-  return sTotalDur + PhaseElapsedDurGet(ProgramCurrentNoGet() - 1);
+  return sTotalDur;
 }
 
 uint8_t PhaseCurrentDurGet(uint8_t bPhaseNo)
@@ -4909,124 +4882,6 @@ void WorkScheduleDefaultSettings(void)
          sizeof(tSaSPPlan));
 }
 
-void WorkScheduleUpdate(void)
-{
-  uint8_t bWorkScheduleEntry = 0, bWorkPlan = 0, bSigProgPlan = 0,
-          bWorkPlanEntry = 0, bSPPlanEntry = 0;
-
-  /* if there is no schedule in Maestro, default work plan will run */
-  if (WorkScheduleTotalGet())
-  {
-      /* get work plan number */
-      for (bWorkScheduleEntry = 0;
-           bWorkScheduleEntry < WorkScheduleTotalGet();
-           bWorkScheduleEntry++)
-      {
-        /*
-         ************************************************************
-         *  Here, start and end year info are not considered in order to
-         *  maintain Config Tool version compatibility.
-         *  Start and end year are not sent through Config Tool for now.
-         *  If start and end year info are to be sent through Config
-         *  Tool then the below parts of code must be revised.
-         ************************************************************
-         */
-        uint16_t sStartDayOfYear =
-          TimeDayOfYearCalc(SCP.SaWorkSchedule[bWorkScheduleEntry].bStartMonth,
-                            SCP.SaWorkSchedule[
-                              bWorkScheduleEntry].bStartDay,
-                            TimeFullYearGet());
-        uint16_t sEndDayOfYear =
-          TimeDayOfYearCalc(SCP.SaWorkSchedule[bWorkScheduleEntry].bEndMonth,
-                            SCP.SaWorkSchedule[
-                              bWorkScheduleEntry].bEndDay, TimeFullYearGet());
-
-        if ((sStartDayOfYear <= TimeDayOfYearGet())
-            && (TimeDayOfYearGet() <= sEndDayOfYear))
-        {
-          if (TimeWeekdayGet())
-          {
-            if (SCP.SaWorkSchedule[bWorkScheduleEntry].bDays
-                & laValue2Bit[TimeWeekdayGet() - 1])
-            {
-              bWorkPlan = SCP.SaWorkSchedule[bWorkScheduleEntry].bWorkPlanNo;
-              bSigProgPlan =
-                SCP.SaWorkSchedule[bWorkScheduleEntry].bSigProgPlan;
-              bWorkScheduleEntry = WorkScheduleTotalGet(); /* end loop */
-            }
-          }
-        }
-      }
-
-      /* requested bWorkPlan must be loaded to ram */
-      if (bWorkPlan != WorkPlanCurNoGet())
-      {
-        /* update current plan ids */
-        WorkPlanCurNoSet(bWorkPlan);
-        if (StateCurrentGet() != STATES_SEQ)
-        {
-          LogRequest(LOG_REQ_APPEND_ASYNCH,
-                     NULL,
-                     EVENT_WORK_PLAN_CHANGE,
-                     WorkPlanCurNoGet(),
-                     0,
-                     0,
-                     0);
-        }
-      }
-
-      bWorkPlanEntry = WorkPlanEntryCurNoGet();
-
-      /* requested bSigProgPlan must be loaded to ram */
-      if (bSigProgPlan != SigProgPlanCurNoGet())
-      {
-        SigProgPlanCurNoSet(bSigProgPlan);
-        LogRequest(LOG_REQ_APPEND_ASYNCH,
-                   NULL,
-                   EVENT_SIGNAL_PROGRAM_PLAN_CHANGE,
-                   SigProgPlanCurNoGet(),
-                   0,
-                   0,
-                   0);
-      }
-
-      /* get current active entry in current signal program plan */
-      bSPPlanEntry = SigProgPlanEntryCurNoGet();
-
-      /* requested bSigProg must be loaded to ram */
-      if (bSPPlanEntry)
-      {
-        if (SCP.SaSPPlan[SigProgPlanCurNoGet()][bSPPlanEntry - 1].bSigProg
-            != SigProgCurNoGet())
-        {
-          /* execute statements */
-          StatementExecuteRange(SCP.SaSignalPrograms[SigProgCurNoGet()
-                                                     - 1].SSigProg.bStaStart,
-                                SCP.SaSignalPrograms[SigProgCurNoGet()
-                                                     - 1].SSigProg.bStaEnd);
-          /* successful operations, update current plan ids */
-          SigProgCurNoSet(SCP.SaSPPlan[SigProgPlanCurNoGet()][bSPPlanEntry
-                                                              - 1].bSigProg);
-          /* init signal program runtime values */
-          SigProgCurTimeInPerClr();
-          LogRequest(LOG_REQ_APPEND_ASYNCH,
-                     NULL,
-                     EVENT_SIGNAL_PROGRAM_CHANGE,
-                     SigProgCurNoGet(),
-                     TimeSourceGet(),
-                     0,
-                     0);
-          ProgramSigProgChangeSet(TRUE);
-        }
-      }
-
-      SAscCoord.SaPatterns[SigProgCurNoGet() - 1].bSplitNumber = bWorkPlanEntry;
-      STRPatternsAndCoords.SaaPatterns[TRPatternsAndCoordsGetCurJunctionNo()][
-        SigProgCurNoGet() - 1].bSplitNo =
-        bWorkPlanEntry;
-  }
-} /* WorkScheduleUpdate */
-
 uint8_t WorkScheduleTotalGet(void)
 {
   return SCP.SConsumed.bWSEntriesTotal;
@@ -5565,7 +5420,37 @@ uint8_t StatementExecute(uint8_t bAddress)
 
         case COMMAND_USER_STATE_TO_CURRENT_STATE:
         {
-          StateCurrentSet(UserStateCurrentGet());
+          switch (UserStateCurrentGet())
+          {
+              case STATES_NO_CONTROL:
+              {
+                (void) LegacyControllerModeBridgeRequest(
+                  CONTROLLER_MODE_REQUEST_DARK);
+                break;
+              }
+
+              case STATES_FLASH:
+              {
+                (void) LegacyControllerModeBridgeRequest(
+                  CONTROLLER_MODE_REQUEST_FLASH);
+                break;
+              }
+
+              case STATES_CLOSED:
+              {
+                (void) LegacyControllerModeBridgeRequest(
+                  CONTROLLER_MODE_REQUEST_ALL_RED);
+                break;
+              }
+
+              default:
+              {
+                (void) LegacyControllerModeBridgeRequest(
+                  CONTROLLER_MODE_REQUEST_PLAN_RETURN);
+                break;
+              }
+          }
+
           UserStateReqEnd(); /* user request ends, namely transition to user */
           /* requested mode is successfully completed */
           break;
@@ -6567,7 +6452,7 @@ long OperandState(tpSOperand pSOperand)
         {
             case OP_SUBFIELD_TRANSITION_LAST:
             {
-              return ProgramCurrentTransitionGet();
+              return 0;
             }
         }
 
@@ -6584,397 +6469,6 @@ long OperandState(tpSOperand pSOperand)
 } /* OperandState */
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
-/*  Data Operations */
-void DataInit(uint8_t keepConnectionInfo, uint8_t fInitSOPowers)
-{
-  uint8_t bIndex = 0;
-
-  RelayStateRequestSet(TRUE);
-
-  memset(&SaSeqExtDur, 0, sizeof(SaSeqExtDur));
-
-  memset(&SCPRuntime.SPeripheralStates, 0,
-         sizeof(SCPRuntime.SPeripheralStates));
-
-  if (keepConnectionInfo == FALSE)
-  {
-    memset(&SCP.SDevInfo, 0, sizeof(SCP.SDevInfo));
-  }
-
-  memset(&SCP.SaSignalDefs, 0, sizeof(SCP.SaSignalDefs));
-  memset(&SCP.SSignalsDefined, 0, sizeof(SCP.SSignalsDefined));
-  memset(&SCP.SaSGDefs, 0, sizeof(SCP.SaSGDefs));
-  memset(&SCP.SaSODefs, 0, sizeof(SCP.SaSODefs));
-  memset(&SCP.SCVSDef, 0, sizeof(SCP.SCVSDef));
-  memset(&SCP.SConflictsEM, 0, sizeof(SCP.SConflictsEM));
-  memset(&SCP.SaSeqDefs, 0, sizeof(SCP.SaSeqDefs));
-  memset(&SCP.SaPhaseDefs, 0, sizeof(SCP.SaPhaseDefs));
-  memset(&SCP.SaDetectorDefs, 0, sizeof(SCP.SaDetectorDefs));
-  memset(&SCP.SaInputDefs, 0, sizeof(SCP.SaInputDefs));
-  memset(&SCP.SaOutputDefs, 0, sizeof(SCP.SaOutputDefs));
-  memset(&SCP.SaWorkPlan, 0, sizeof(SCP.SaWorkPlan));
-  memset(&SCP.SaSPPlan, 0, sizeof(SCP.SaSPPlan));
-  memset(&SCP.SaSignalPlans, 0, sizeof(SCP.SaSignalPlans));
-  memset(&SCP.SaWorkSchedule, 0, sizeof(SCP.SaWorkSchedule));
-  memset(&SCP.SaSignalPrograms, 0, sizeof(SCP.SaSignalPrograms));
-  memset(&SCP.SConsumed, 0, sizeof(SCP.SConsumed));
-  memset(&SCP.SChecksum, 0, sizeof(SCP.SChecksum));
-  memset(&SCP.SFlashPeriods, 0, sizeof(SCP.SFlashPeriods));
-
-  memset(&SRuntimes, 0, sizeof(SRuntimes)); /*  Init Runtimes */
-  memset(&SMCSTrafficCountsRuntimes, 0, sizeof(SMCSTrafficCountsRuntimes)); /* Init MCS traffic count runtime */
-  memset(&SCPRuntime.SUserState, 0, sizeof(tSUserState)); /*  Initialize User State// Initialize Flash Periods */
-
-  /* so powers */
-  if (fInitSOPowers)
-  {
-    InitSOPowers();
-  }
-
-  /* io input values */
-  memset(&SaPrevCanDigitalIOInputs, 0xFF, sizeof(SaPrevCanDigitalIOInputs));
-  memset(&SaPrevCanDetectorIOInputs, 0xFF, sizeof(SaPrevCanDetectorIOInputs));
-
-  /* store last demands from detectors and inputs */
-  bLastDetectorDemandIssued = 0;
-  bLastInputDemandIssued = 0;
-
-  /* time source */
-  TimeSourceSet(TIME_SOURCE_RTC);
-
-  /* ssm test */
-  SSSMTest.bSSMTestSource = SSM_TEST_FROM_NONE;
-  SSSMTest.bTurnOnSONo = 0;
-
-  SignalPlanCurrentSet(0);
-  bCurrentSeqNo = SIGNAL_SEQS_MAX;
-  sSGFlashers = 0;
-
-  /* Set Default Flash Periods */
-  SCP.SFlashPeriods.sFlashPeriod = FLASH_PERIOD_1000ms;
-  SCP.SFlashPeriods.sEmergencyFlashPeriod = FLASH_PERIOD_500ms;
-
-  /* transition lock mechanism init */
-  memset(&laTransitonsLock, 0, sizeof(laTransitonsLock));
-
-  /* Init Signal Program */
-  SigProgCurClr();
-
-  /* default work plan */
-  SCP.SaWorkPlan[WORK_PLAN_DEFAULT][0].bHours = 0;
-  SCP.SaWorkPlan[WORK_PLAN_DEFAULT][0].bMinutes = 0;
-  SCP.SConsumed.baWPEntriesTotal[WORK_PLAN_DEFAULT] = 1;
-
-  WorkPlanCurNoSet(WORK_PLAN_DEFAULT);
-
-  /* power supply */
-  memset(&SaPSMs, 0, sizeof(SaPSMs));
-
-  for (bIndex = 0; bIndex < SIGNAL_OUTPUT_CURRENT_GROUPS_MAX; bIndex++)
-  {
-    SaCurrents[bIndex].sMin = 1024;
-    SaCurrents[bIndex].sNow = 0;
-    SaCurrents[bIndex].sMax = 0;
-  }
-
-  /* io inputs */
-  memset(&SaCanDigitalIOInputs, 0xFF, sizeof(SaCanDigitalIOInputs));
-  memset(&SaCanDetectorIOInputs, 0xFF, sizeof(SaCanDetectorIOInputs));
-
-  memset(&baIOMessagePeriodCounter, 0, sizeof(baIOMessagePeriodCounter));
-  memset(&baLDMessagePeriodCounter, 0, sizeof(baLDMessagePeriodCounter));
-
-  SCPRuntime.bVoltageState = EVENT_NONE;
-  SCPRuntime.bFrequencyState = EVENT_NONE;
-
-  /* Function Conf */
-  memset(&SFuncConf, 0, sizeof(tSFuncConf));
-
-  /* Error Info */
-  InitErrorInfo();
-
-  /* Traffic Counts Timer */
-  SetTrafficCountsTimer(0);
-
-  /* Modules version */
-  SetModulesVersion();
-
-  SignalStateRuntimeCurNoSet(SIGNAL_STATE_DEFAULT);
-
-  UserOperationsInit();
-
-  SignalStateRuntimeInit();
-
-  ChannelErrorsInit();
-
-  TRPatternsAndCoordsInit();
-
-  GCInit();
-  GTMInit();
-
-  AscPhaseInit();
-
-  UnitInit();
-
-  CoordInit();
-
-  TimebaseAscInit();
-
-  RingInit();
-
-  OverlapInit();
-
-  AscBlockInit();
-
-  PreemptInit();
-
-  ASCCabinetEnvironmentInit();
-} /* DataInit */
-
-uint8_t ProgramDataErase(void)
-{
-  uint32_t lSize = ((sizeof(SCP) + 31) / 32) * 32;
-
-  return DataPersistenceErase(PERSIST_OBJECT_PROGRAM_DATA, 0U, lSize);
-}
-
-uint8_t ProgramDataWrite(void)
-{
-  uint32_t lSize = ((sizeof(SCP) + 31) / 32) * 32;
-
-  return DataPersistenceWrite(PERSIST_OBJECT_PROGRAM_DATA,
-                              0U,
-                              &SCP,
-                              lSize);
-}
-
-uint8_t ProgramDataRead(void)
-{
-  uint32_t lSize = ((sizeof(SCP) + 31) / 32) * 32;
-
-  return DataPersistenceRead(PERSIST_OBJECT_PROGRAM_DATA,
-                             0U,
-                             &SCP,
-                             lSize);
-}
-
-uint8_t ProgramDataStartMagicRead(void)
-{
-  uint32_t lSize = ((sizeof(SCP.laStartMagic) + 31) / 32) * 32;
-
-  return DataPersistenceRead(PERSIST_OBJECT_PROGRAM_DATA,
-                             0U,
-                             &SCP.laStartMagic,
-                             lSize);
-}
-
-uint32_t ProgramDataStartMagicGet(uint8_t bIdx)
-{
-  return SCP.laStartMagic[bIdx];
-}
-
-void ProgramDataStartMagicSet(void)
-{
-  uint8_t bIdx;
-
-  for (bIdx = 0; bIdx < SCP_MAGIC_MAX; bIdx++)
-  {
-    SCP.laStartMagic[bIdx] = SCP_START_MAGIC;
-  }
-}
-
-uint8_t ProgramPlanUpdateTimeRead(void)
-{
-  return DataPersistenceRead(PERSIST_OBJECT_PROGRAM_LAST_CHANGE_TIME,
-                             0U,
-                             &SRuntimes.lPlanLastChangeTime,
-                             sizeof(void *));
-}
-
-void ProgramPlanUpdateTimeSet(void)
-{
-  tSTime STimeNow = { 0 };
-
-  TimeGet(&STimeNow);
-  TimeEpochCalculate(&STimeNow, &SRuntimes.lPlanLastChangeTime);
-}
-
-uint8_t ProgramPlanUpdateTimeWrite(void)
-{
-  return DataPersistenceWrite(PERSIST_OBJECT_PROGRAM_LAST_CHANGE_TIME,
-                              0U,
-                              &SRuntimes.lPlanLastChangeTime,
-                              sizeof(void *));
-}
-
-uint8_t ProgramDataGet(void)
-{
-  if (ProgramDataRead() == FALSE)
-  {
-    LogRequest(LOG_REQ_APPEND_ASYNCH,
-               NULL,
-               EVENT_MAIN_STORAGE_GET_ERROR,
-               0,
-               0,
-               FLASH_STORAGE_ADDR_SCP,
-               0);
-
-    return FALSE;
-  }
-
-  ProgramPlanUpdateTimeRead();
-
-  if ((GetSOTotal() > SIGNAL_OUTPUTS_MAX)
-      || (SGTotalGet() > SIGNAL_GROUPS_MAX) || (SeqTotalGet() > SIGNAL_SEQS_MAX)
-      || (PhaseTotalGet() > PHASES_MAX)
-      || (SignalPlanTotalGet() > SIGNAL_PLANS_MAX)
-      || (WorkPlanTotalGet() > WORK_PLANS_MAX)
-      || (SigProgPlanTotalGet() > SIGNAL_PROGRAM_PLANS_MAX)
-      || (SigProgTotalGet() > SIGNAL_PROGRAMS_MAX)
-      || (WorkScheduleTotalGet() > WORK_SCHEDULE_ENTRIES_MAX)
-      || (InputTotalGet(INPUT_TYPE_DETECTOR) > INPUTS_DETECTOR_MAX)
-      || (InputTotalGet(INPUT_TYPE_DIGITAL) > INPUTS_DIGITAL_MAX)
-      || (OutputTotalGet() > OUTPUTS_MAX))
-  {
-    return FALSE;
-  }
-
-  if (DataChecksumIsCorrect() == FALSE)
-  {
-    return FALSE;
-  }
-
-  DataChecksumTotalSet(DataChecksumTotalCalculate());
-
-  return TRUE;
-}
-
-void ProgramRelativeDataInit(void)
-{
-  /* The following initialization must be done after reading program from Flash */
-  GTMInit();
-
-  GCSetASCModuleID(DataChecksumTotalGet());
-
-  SetRuntimeSSMStatus();
-
-  ASCChannelInit();
-
-  ASCDetectorInit();
-}
-
-void DataValidate(void)
-{
-  #if defined(CHECK_DEVICE_UID)
-  if (!CheckDeviceUIDs())
-  {
-    /* Legacy LCD state machine is removed from the active UI path. */
-  }
-
-  #endif
-
-  /* Init User Settings */
-  UserSettingsRead();
-  if (!IsUserSettingsChanged())
-  {
-    UserSettingsInit();
-  }
-
-  SetExternalBatteryState(UserSettingsStandbyFlagGet());
-
-  UserStateReqRead();
-  if (!UserStateIsValid())
-  {
-    UserStateReqInit();
-    UserStateReqWrite();
-  }
-
-  /* Init Log Settings */
-  LogSettingsRead();
-  if (!IsLogSettingsChanged())
-  {
-    LogSettingsInit();
-  }
-
-  ReadFunctionConf();
-  if (GetFunctionConf() == UINT8_MAX)
-  {
-    SetFunctionConf(0);
-    WriteFunctionConf();
-  }
-
-  /* Check DST Flag */
-  ReadDaylightSavingTimeFlag();
-  CheckDaylightSavingTimeFlag();
-
-  /* Init System Start Time */
-  SystemStartTimeRead();
-  if (!IsSystemStartTimeWritten())
-  {
-    SystemStartTimeInit();
-  }
-
-  /* Init Broken Loop Settings */
-  BrokenInputSettingsRead();
-  if (!IsBrokenInputSettingsSet())
-  {
-    BrokenInputSettingsInit();
-  }
-
-  /* Init Server Settings */
-  ServerSettingsRead();
-  if (!IsServerSettingsSet())
-  {
-    ServerSettingsInit();
-  }
-
-  /* Set LRLF Detect Time */
-  LRLFDetectTimeCheck();
-
-  ReadSOPowers();
-} /* DataValidate */
-
-uint8_t ProgramDataSet(void)
-{
-  DataChecksumCalculate(&(SCP.SChecksum));
-
-  DataChecksumTotalSet(DataChecksumTotalCalculate());
-
-  GCSetASCModuleID(DataChecksumTotalGet());
-
-  if (ProgramDataStartMagicRead())
-  {
-    if ((ProgramDataStartMagicGet(0) == SCP_START_MAGIC)
-        && (ProgramDataStartMagicGet(SCP_MAGIC_MAX - 1) == SCP_START_MAGIC) )
-    {
-      if (!ProgramDataErase())
-      {
-        return FALSE;
-      }
-    }
-  }
-
-  ProgramDataStartMagicSet();
-  if (!ProgramDataWrite())
-  {
-    LogRequest(LOG_REQ_APPEND_ASYNCH,
-               NULL,
-               EVENT_MAIN_STORAGE_SET_ERROR,
-               0,
-               0,
-               FLASH_STORAGE_ADDR_SCP,
-               0);
-
-    return FALSE;
-  }
-
-  ProgramPlanUpdateTimeSet();
-
-  ProgramPlanUpdateTimeWrite();
-
-  return TRUE;
-}
-
 void DataRuntimeInit(void)
 {
   uint8_t bSGNo = 0;
@@ -7055,128 +6549,6 @@ uint16_t DataChecksumTotalGet(void)
 void DataChecksumGet(tpSChecksum pSChecksum)
 {
   memcpy(pSChecksum, &SCP.SChecksum, sizeof(tSChecksum));
-}
-
-int8_t DataChecksumIsCorrect(void)
-{
-  uint8_t bIndex;
-  tSChecksum SChecksumCur;
-  uint32_t lLogParam = 0;
-
-  /* read sequences from storage, while reading, cheksum control is already done */
-  for (bIndex = 0; bIndex < SeqTotalGet(); bIndex++)
-  {
-    if (SeqGet(bIndex) == FALSE)
-    {
-      lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_SeqDefs;
-      break;
-    }
-  }
-
-  /* calculate checksum of current data */
-  memset(&SChecksumCur, 0, sizeof(SChecksumCur));
-
-  DataChecksumCalculate(&SChecksumCur);
-
-  /* other comparisions */
-  if (SChecksumCur.bConflictsEM != SCP.SChecksum.bConflictsEM)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_ConflictsEM;
-  }
-
-  if (SChecksumCur.bDeviceInfo != SCP.SChecksum.bDeviceInfo)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_DeviceInfo;
-  }
-
-  if (SChecksumCur.bFlashPeriods != SCP.SChecksum.bFlashPeriods)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_FlashPeriods;
-  }
-
-  if (SChecksumCur.bPhaseDefs != SCP.SChecksum.bPhaseDefs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_PhaseDefs;
-  }
-
-  if (SChecksumCur.bSGDefs != SCP.SChecksum.bSGDefs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_SGDefs;
-  }
-
-  if (SChecksumCur.bSignalDefs != SCP.SChecksum.bSignalDefs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_SignalDefs;
-  }
-
-  if (SChecksumCur.bSODefs != SCP.SChecksum.bSODefs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_SODefs;
-  }
-
-  if (SChecksumCur.bConsumed != SCP.SChecksum.bConsumed)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_Consumed;
-  }
-
-  if (SChecksumCur.bSignalPlans != SCP.SChecksum.bSignalPlans)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_SignalPlans;
-  }
-
-  if (SChecksumCur.bWSDef != SCP.SChecksum.bWSDef)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_WSDef;
-  }
-
-  if (SChecksumCur.bCVSDefs != SCP.SChecksum.bCVSDefs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_CVS;
-  }
-
-  if (SChecksumCur.bDedectors != SCP.SChecksum.bDedectors)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_Detectors;
-  }
-
-  if (SChecksumCur.bInputs != SCP.SChecksum.bInputs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_Inputs;
-  }
-
-  if (SChecksumCur.bOutputs != SCP.SChecksum.bOutputs)
-  {
-    lLogParam |= EVENT_PARAM_CHECKSUM_FLASH_ERROR_Outputs;
-  }
-
-  if (lLogParam != 0)
-  {
-    LogRequest(LOG_REQ_APPEND_ASYNCH,
-               NULL,
-               EVENT_CHECKSUM_FLASH_ERROR,
-               0,
-               0,
-               lLogParam,
-               0);
-
-    return FALSE;
-  }
-
-  return TRUE;
-} /* DataChecksumIsCorrect */
-
-void ReturnFactorySettings(void)
-{
-  DataInit(FALSE, TRUE);
-  ProgramDataSet();
-
-  (void) UiLanguageServiceSet(&g_uiLanguageService, LANGUAGE_TURKISH);
-  (void) UiLanguageServiceSave(&g_uiLanguageService);
-
-  LRLFDetectTimeSet(LRLF_DETECT_TIME_800_MS);
-  LRLFDetectTimeWrite();
-
-  SecureSystemReset();
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
@@ -8441,8 +7813,7 @@ uint8_t GetProgramLoading(void)
 
 void RestartProgram(void)
 {
-  LoadProgramEnds();
-  StateCurrentInit();
+  (void) LegacyControllerModeBridgeRequest(CONTROLLER_MODE_REQUEST_PLAN_RETURN);
   SetProgramRestart(TRUE);
 }
 
@@ -8557,7 +7928,7 @@ uint8_t UserStateReqFree(void)
     SCPRuntime.SUserState.bStateReq = STATES_NONE;
 
     TransitionLockEnd();
-    StateCurrentInit();
+    (void) LegacyControllerModeBridgeRequest(CONTROLLER_MODE_REQUEST_PLAN_RETURN);
 
     return UserStateReqWrite();
   }
@@ -8697,7 +8068,7 @@ void GpsSynchro(void)
     /* period value caught, so controller works for green-wave */
     if ((lPeriod != 0) && (lPeriod == SeqDurGet(bCurrentSeqNo)))
     {
-      switch (StateCurrentGet())
+      switch (STATES_NONE)
       {
           case STATES_SEQ:
           {
@@ -9494,29 +8865,7 @@ void LRLFDetectTimeCheck(void)
 /*  Secure Transition */
 void ApplySecureTransition(void)
 {
-  if (SetSigModeIsOK())
-  {
-    switch (StateCurrentGet())
-    {
-        case STATES_SEQ:
-        case STATES_PHASE:
-        case STATES_PHASE_TRANSITION:
-        {
-          StateCurrentSet(STATES_SECURE_TRANSITION);
-          do
-          {
-            osDelay(100);
-          }while (StateCurrentGet() == STATES_SECURE_TRANSITION);
-
-          break;
-        }
-
-        default:
-        {
-          break;
-        }
-    }
-  }
+  (void) SetSigModeIsOK();
 }
 
 void SecureSystemReset(void)

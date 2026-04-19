@@ -67,16 +67,16 @@ void test_erase_resets_object_range_to_ff(void)
   uint8_t expected[4] = { 0xFFU, 0xFFU, 0xFFU, 0xFFU };
 
   TEST_ASSERT_TRUE(PersistenceWrite(&port,
-                                    PERSIST_OBJECT_PROGRAM_DATA,
+                                    PERSIST_OBJECT_CONFIG_SLOT_A,
                                     0U,
                                     written,
                                     sizeof(written)));
   TEST_ASSERT_TRUE(PersistenceErase(&port,
-                                    PERSIST_OBJECT_PROGRAM_DATA,
+                                    PERSIST_OBJECT_CONFIG_SLOT_A,
                                     0U,
                                     sizeof(written)));
   TEST_ASSERT_TRUE(PersistenceRead(&port,
-                                   PERSIST_OBJECT_PROGRAM_DATA,
+                                   PERSIST_OBJECT_CONFIG_SLOT_A,
                                    0U,
                                    readBack,
                                    sizeof(readBack)));

@@ -2,11 +2,12 @@
 #ifndef CONTROLLER_MODE_CONTROL_ADAPTER_H
 #define CONTROLLER_MODE_CONTROL_ADAPTER_H
 
+#include "Domain/Intersection/IntersectionEngine.h"
 #include "Ports/IControllerModeControlPort.h"
 
 typedef struct
 {
-  uint8_t reserved;
+  IntersectionEngine_t *engine;
 } ControllerModeControlAdapterCtx_t;
 
 void ControllerModeControlAdapterInit(ControllerModeControlAdapterCtx_t *ctx);

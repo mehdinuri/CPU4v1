@@ -70,7 +70,6 @@ typedef struct _tSCPMPComm
 /*  Public Methods */
 extern void SetFlashSignalTransmit(uint8_t fState);
 extern uint8_t GetFlashSignalTransmit(void);
-extern void ResetCPMPComm(void); /* restart sending definitions to MP from CP */
 
 /* for cp */
 extern void CPMPStateSet(uint8_t nState);

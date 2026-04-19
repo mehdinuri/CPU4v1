@@ -6,7 +6,7 @@ add_library(Platform_STM32 STATIC)
 target_sources(Platform_STM32 PRIVATE
     Bootstrap/main_stm32.c
     Services/Control/Legacy/data.c
-    Services/Control/Legacy/program.c
+    Services/Control/Legacy/LegacyControllerModeBridge.c
     Services/Persistence/MLM.c
     Services/Persistence/MSM.c
     ../../Adapters/STM32/LCDAdapter.c

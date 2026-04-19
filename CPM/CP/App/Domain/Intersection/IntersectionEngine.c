@@ -900,9 +900,18 @@ static uint8_t RemoteManualPedCallActive(const IntersectionEngine_t *engine,
 
 static uint8_t PatternCommandValid(uint8_t command)
 {
-  return (uint8_t) ((command == 0U) || (command == 254U) || (command == 255U)
+  return (uint8_t) ((command == 0U)
+                    || (command == INTERSECTION_PATTERN_COMMAND_FREE)
+                    || (command == INTERSECTION_PATTERN_COMMAND_FLASH)
                     || ((command >= 1U)
                         && (command <= INTERSECTION_PATTERN_COUNT_MAX)));
+}
+
+static uint8_t LocalManualPatternCommandActive(uint8_t command)
+{
+  return (uint8_t) ((command == INTERSECTION_PATTERN_COMMAND_ALL_RED)
+                    || (command == INTERSECTION_PATTERN_COMMAND_DARK)
+                    || (command == INTERSECTION_PATTERN_COMMAND_FLASH));
 }
 
 static uint8_t InterconnectCommandAvailable(const IntersectionEngine_t *engine)
@@ -6080,7 +6089,13 @@ static void UpdateCoordinationRuntime(IntersectionEngine_t *engine)
     }
   }
 
-  if ((controlFromTimebase != 0U)
+  if ((controlFromSystem != 0U)
+      && (LocalManualPatternCommandActive(engine->systemPatternControl) != 0U))
+  {
+    engine->runtime.unitControlStatus =
+      (uint8_t) INTERSECTION_UNIT_CONTROL_STATUS_LOCAL_MANUAL_CONTROL;
+  }
+  else if ((controlFromTimebase != 0U)
       && (UnitControlInterconnectPriorityActive(engine) != 0U)
       && (engine->localInterconnectInputsValid == 0U)
       && (timebaseAction != NULL) && (timebaseAction->pattern != 0U))
@@ -6121,7 +6136,37 @@ static void UpdateCoordinationRuntime(IntersectionEngine_t *engine)
       (uint8_t) INTERSECTION_UNIT_CONTROL_STATUS_BACKUP_MODE;
   }
 
-  if (command == 255U)
+  if (command == INTERSECTION_PATTERN_COMMAND_ALL_RED)
+  {
+    ResetCoordinationCycleFaultDiagnostics(engine);
+    ResetCoordinationAlarmDiagnostics(engine);
+    engine->coordDiagnosticCycleTicks = 0U;
+    engine->coordDiagnosticCycleZeroActive = 0U;
+    engine->shortAlarmCycleZeroActive = 0U;
+    engine->runtime.coordPatternStatus = command;
+    engine->runtime.localFreeStatus =
+      (uint8_t) INTERSECTION_LOCAL_FREE_STATUS_NOT_FREE;
+    engine->runtime.mode = INTERSECTION_CONTROL_MODE_ALL_RED;
+
+    return;
+  }
+
+  if (command == INTERSECTION_PATTERN_COMMAND_DARK)
+  {
+    ResetCoordinationCycleFaultDiagnostics(engine);
+    ResetCoordinationAlarmDiagnostics(engine);
+    engine->coordDiagnosticCycleTicks = 0U;
+    engine->coordDiagnosticCycleZeroActive = 0U;
+    engine->shortAlarmCycleZeroActive = 0U;
+    engine->runtime.coordPatternStatus = command;
+    engine->runtime.localFreeStatus =
+      (uint8_t) INTERSECTION_LOCAL_FREE_STATUS_NOT_FREE;
+    engine->runtime.mode = INTERSECTION_CONTROL_MODE_DARK;
+
+    return;
+  }
+
+  if (command == INTERSECTION_PATTERN_COMMAND_FLASH)
   {
     ResetCoordinationCycleFaultDiagnostics(engine);
     ResetCoordinationAlarmDiagnostics(engine);
@@ -7327,6 +7372,34 @@ static void RefreshOverlapOutputs(IntersectionEngine_t *engine)
 {
   uint8_t overlapIndex;
 
+  if (engine->runtime.mode == INTERSECTION_CONTROL_MODE_DARK)
+  {
+    for (overlapIndex = 0U;
+         overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+         overlapIndex++)
+    {
+      ResetOverlapTrailState(engine, overlapIndex);
+      engine->runtime.overlaps[overlapIndex].aspect =
+        INTERSECTION_OUTPUT_ASPECT_DARK;
+    }
+
+    return;
+  }
+
+  if (engine->runtime.mode == INTERSECTION_CONTROL_MODE_ALL_RED)
+  {
+    for (overlapIndex = 0U;
+         overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+         overlapIndex++)
+    {
+      ResetOverlapTrailState(engine, overlapIndex);
+      engine->runtime.overlaps[overlapIndex].aspect =
+        INTERSECTION_OUTPUT_ASPECT_RED;
+    }
+
+    return;
+  }
+
   if (PreemptModeActive(engine) != 0U)
   {
     return;
@@ -7671,6 +7744,26 @@ static void RefreshChannelOutputs(IntersectionEngine_t *engine)
       engine->runtime.outputIntentImage.channelDimmed[channelIndex] = dimmed;
       engine->runtime.outputIntentImage.channelDimAlternateHalfCycle[
         channelIndex] = dimAlternateHalfCycle;
+    }
+
+    return;
+  }
+
+  if (engine->runtime.mode == INTERSECTION_CONTROL_MODE_DARK)
+  {
+    for (channelIndex = 0U;
+         channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+         channelIndex++)
+    {
+      engine->runtime.channels[channelIndex].aspect =
+        INTERSECTION_OUTPUT_ASPECT_DARK;
+      engine->runtime.channels[channelIndex].dimmed = 0U;
+      engine->runtime.channels[channelIndex].dimAlternateHalfCycle = 0U;
+      engine->runtime.outputIntentImage.channels[channelIndex] =
+        INTERSECTION_OUTPUT_ASPECT_DARK;
+      engine->runtime.outputIntentImage.channelDimmed[channelIndex] = 0U;
+      engine->runtime.outputIntentImage.channelDimAlternateHalfCycle[
+        channelIndex] = 0U;
     }
 
     return;
@@ -8747,6 +8840,28 @@ void IntersectionEngineTick(IntersectionEngine_t *engine)
 
   if (HandlePreemptStateMachine(engine) != 0U)
   {
+    RefreshRuntimeViews(engine);
+    FinalizeRemoteManualAdvanceCommand(engine);
+
+    return;
+  }
+
+  if (engine->runtime.mode == INTERSECTION_CONTROL_MODE_ALL_RED)
+  {
+    engine->automaticFlashState =
+      (uint8_t) INTERSECTION_AUTOMATIC_FLASH_STATE_IDLE;
+    ForceControllerRedRest(engine);
+    RefreshRuntimeViews(engine);
+    FinalizeRemoteManualAdvanceCommand(engine);
+
+    return;
+  }
+
+  if (engine->runtime.mode == INTERSECTION_CONTROL_MODE_DARK)
+  {
+    engine->automaticFlashState =
+      (uint8_t) INTERSECTION_AUTOMATIC_FLASH_STATE_IDLE;
+    ForceControllerRedRest(engine);
     RefreshRuntimeViews(engine);
     FinalizeRemoteManualAdvanceCommand(engine);
 

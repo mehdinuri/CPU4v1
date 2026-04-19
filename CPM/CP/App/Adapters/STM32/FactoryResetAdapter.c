@@ -3,12 +3,61 @@
 
 #include <string.h>
 
+#include "DomainServices.h"
+#include "PersistencePorts.h"
 #include "data.h"
+
+static uint8_t EraseConfigObject(ConfigRepositoryObjectId_t objectId)
+{
+  uint32_t capacity;
+
+  if ((g_configRepositoryPort.GetCapacity == NULL)
+      || (g_configRepositoryPort.Erase == NULL))
+  {
+    return 0U;
+  }
+
+  capacity = ConfigRepositoryGetCapacity(&g_configRepositoryPort, objectId);
+
+  if (capacity == 0U)
+  {
+    return 0U;
+  }
+
+  return ConfigRepositoryErase(&g_configRepositoryPort, objectId, 0U, capacity);
+}
 
 static uint8_t RequestFactoryReset(void *ctx)
 {
+  const IntersectionConfig_t *config;
+  uint16_t setId;
+
   (void) ctx;
-  ReturnFactorySettings();
+
+  if ((EraseConfigObject(CONFIG_REPOSITORY_OBJECT_SLOT_A) == 0U)
+      || (EraseConfigObject(CONFIG_REPOSITORY_OBJECT_SLOT_B) == 0U)
+      || (EraseConfigObject(CONFIG_REPOSITORY_OBJECT_MIGRATION_JOURNAL) == 0U))
+  {
+    return 0U;
+  }
+
+  (void) ConfigurationServiceLoad(&g_configurationService);
+  config = ConfigurationServiceGetActiveConfig(&g_configurationService);
+  setId = ConfigurationServiceGetActiveSetId(&g_configurationService);
+  (void) IntersectionActivationServiceLoadCommittedLivePlan(
+    &g_intersectionActivationService,
+    config,
+    setId);
+  (void) IntersectionEngineLoadConfig(&g_intersectionEngine, config);
+
+  (void) UiLanguageServiceSet(&g_uiLanguageService, LANGUAGE_TURKISH);
+  (void) UiLanguageServiceSave(&g_uiLanguageService);
+
+  LRLFDetectTimeSet(LRLF_DETECT_TIME_800_MS);
+  (void) LRLFDetectTimeWrite();
+
+  SystemResetPortRequest(&g_systemResetPort);
+
   return 1U;
 }
 

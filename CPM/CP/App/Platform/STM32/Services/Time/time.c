@@ -895,8 +895,6 @@ void TimeTaskFunc(void *argument)
 
     osDelay(1000);
 
-    osThreadFlagsSet(ProgramTaskHandle, THREAD_FLAGS_PROGRAM_SEC_ELAPSED);
-
     if (TimeSourceGet() == TIME_SOURCE_GPS)
     {
       GpsSynchro();

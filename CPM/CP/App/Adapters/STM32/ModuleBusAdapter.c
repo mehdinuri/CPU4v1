@@ -39,12 +39,49 @@
 #define MODULE_BUS_TIMEOUT_INPUTS_MS                    100U
 #define MODULE_BUS_TIMEOUT_CRITICAL_MS                  30U
 #define MODULE_BUS_RESET_COMMAND_PAYLOAD_SIZE           8U
+#define MODULE_BUS_MAX_RX_PAYLOAD_BYTES                 64U
+#define MODULE_BUS_DETECTOR_DIAGNOSTICS_PAYLOAD_SIZE    \
+  (5U                                                   \
+   + INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX            \
+   + INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX            \
+   + INTERSECTION_PED_INPUT_COUNT_MAX                   \
+   + 1U)
 
 static ModuleBusAdapterCtx_t *s_registeredCtx = NULL;
+
+static uint8_t RequiredPayloadLength(uint32_t identifier);
 
 static uint16_t ReadLe16(const uint8_t *data)
 {
   return (uint16_t) ((uint16_t) data[0] | ((uint16_t) data[1] << 8U));
+}
+
+static uint8_t DlcToLength(uint32_t dlc)
+{
+  switch (dlc)
+  {
+      case FDCAN_DLC_BYTES_0: return 0U;
+      case FDCAN_DLC_BYTES_1: return 1U;
+      case FDCAN_DLC_BYTES_2: return 2U;
+      case FDCAN_DLC_BYTES_3: return 3U;
+      case FDCAN_DLC_BYTES_4: return 4U;
+      case FDCAN_DLC_BYTES_5: return 5U;
+      case FDCAN_DLC_BYTES_6: return 6U;
+      case FDCAN_DLC_BYTES_7: return 7U;
+      case FDCAN_DLC_BYTES_8: return 8U;
+      case FDCAN_DLC_BYTES_12: return 12U;
+      case FDCAN_DLC_BYTES_16: return 16U;
+      case FDCAN_DLC_BYTES_20: return 20U;
+      case FDCAN_DLC_BYTES_24: return 24U;
+      case FDCAN_DLC_BYTES_32: return 32U;
+      case FDCAN_DLC_BYTES_48: return 48U;
+      case FDCAN_DLC_BYTES_64: return 64U;
+
+      default:
+      {
+        return 0U;
+      }
+  }
 }
 
 static uint32_t CurrentTickMs(void)
@@ -428,11 +465,17 @@ static uint8_t CommandDetectorReset(void *ctx,
 
 static uint8_t FrameMatchesContext(const ModuleBusAdapterCtx_t *ctx,
                                    const uint8_t *data,
-                                   uint8_t expectedType)
+                                   uint8_t expectedType,
+                                   uint8_t payloadLength)
 {
   uint16_t epoch;
 
   if ((ctx == NULL) || (data == NULL))
+  {
+    return 0U;
+  }
+
+  if (payloadLength < 5U)
   {
     return 0U;
   }
@@ -494,7 +537,8 @@ static void RememberSequence(ModuleBusAdapterCtx_t *ctx,
 
 static void PublishUpdatedSnapshot(ModuleBusAdapterCtx_t *ctx,
                                    uint32_t identifier,
-                                   const uint8_t *data)
+                                   const uint8_t *data,
+                                   uint8_t payloadLength)
 {
   ModuleBusSnapshot_t nextSnapshot;
   uint8_t nextIndex;
@@ -506,6 +550,7 @@ static void PublishUpdatedSnapshot(ModuleBusAdapterCtx_t *ctx,
   uint8_t sourceIndex = 0U;
   uint8_t sourceMask = 0U;
   uint8_t expectedType = 0U;
+  uint8_t payloadMatchesMessage;
   uint16_t frameEpoch;
 
   if ((ctx == NULL) || (data == NULL))
@@ -528,7 +573,11 @@ static void PublishUpdatedSnapshot(ModuleBusAdapterCtx_t *ctx,
   nextSnapshot.configEpoch = (ctx->configEpoch != 0U) ? ctx->configEpoch
                            : frameEpoch;
   nextSnapshot.sequence = data[4];
-  frameMatchesContext = FrameMatchesContext(ctx, data, expectedType);
+  payloadMatchesMessage =
+    (uint8_t) (payloadLength >= RequiredPayloadLength(identifier));
+  frameMatchesContext =
+    (uint8_t) (FrameMatchesContext(ctx, data, expectedType, payloadLength)
+               && (payloadMatchesMessage != 0U));
   sequenceFresh = 0U;
   contextFault = (uint8_t) (frameMatchesContext == 0U);
   sequenceFault = 0U;
@@ -623,6 +672,11 @@ static void PublishUpdatedSnapshot(ModuleBusAdapterCtx_t *ctx,
           break;
         }
 
+#if (MODULE_BUS_DETECTOR_DIAGNOSTICS_PAYLOAD_SIZE <= MODULE_BUS_MAX_RX_PAYLOAD_BYTES)
+        /* The widened detector/ped diagnostics image no longer fits in one
+         * 64-byte CAN FD frame. Reject any shorter payload rather than reading
+         * past the delivered frame or inventing zero-filled alarm bytes.
+         */
         memcpy(&nextSnapshot.vehicleDetectorAlarms[0],
                &data[5],
                INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX);
@@ -635,6 +689,9 @@ static void PublishUpdatedSnapshot(ModuleBusAdapterCtx_t *ctx,
         sourceHealthy = SourceStatusIsHealthy(
           data[5U + (2U * INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX)
                + INTERSECTION_PED_INPUT_COUNT_MAX]);
+#else
+        break;
+#endif
         break;
       }
 
@@ -689,6 +746,44 @@ static uint8_t SetConfigEpoch(void *ctx, uint16_t configEpoch)
   return 1U;
 }
 
+static uint8_t RequiredPayloadLength(uint32_t identifier)
+{
+  switch (identifier)
+  {
+      case MODULE_BUS_MESSAGE_ID_DETECTOR_SNAPSHOT:
+      {
+        return 8U;
+      }
+
+      case MODULE_BUS_MESSAGE_ID_PED_SNAPSHOT:
+      case MODULE_BUS_MESSAGE_ID_PREEMPT_INPUT_SNAPSHOT:
+      case MODULE_BUS_MESSAGE_ID_PREEMPT_CONTROL_SNAPSHOT:
+      case MODULE_BUS_MESSAGE_ID_MMU_STATUS:
+      {
+        return 7U;
+      }
+
+      case MODULE_BUS_MESSAGE_ID_LOAD_SWITCH_FEEDBACK:
+      {
+        return 12U;
+      }
+
+      case MODULE_BUS_MESSAGE_ID_DETECTOR_DIAGNOSTICS:
+      {
+        return (uint8_t) (5U
+                          + INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX
+                          + INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX
+                          + INTERSECTION_PED_INPUT_COUNT_MAX
+                          + 1U);
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
 IModuleBusPort_t ModuleBusAdapterCreatePort(ModuleBusAdapterCtx_t *ctx)
 {
   IModuleBusPort_t port;
@@ -705,6 +800,7 @@ void ModuleBusAdapterHandleRxFifo0Interrupt(FDCAN_HandleTypeDef *hfdcan)
 {
   FDCAN_RxHeaderTypeDef header;
   uint8_t data[64];
+  uint8_t payloadLength;
 
   if ((s_registeredCtx == NULL) || (hfdcan == NULL)
       || (s_registeredCtx->hfdcan != hfdcan))
@@ -726,5 +822,14 @@ void ModuleBusAdapterHandleRxFifo0Interrupt(FDCAN_HandleTypeDef *hfdcan)
     return;
   }
 
-  PublishUpdatedSnapshot(s_registeredCtx, header.Identifier, data);
+  payloadLength = DlcToLength(header.DataLength);
+  if (payloadLength > sizeof(data))
+  {
+    payloadLength = sizeof(data);
+  }
+
+  PublishUpdatedSnapshot(s_registeredCtx,
+                         header.Identifier,
+                         data,
+                         payloadLength);
 }

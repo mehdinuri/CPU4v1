@@ -18,7 +18,6 @@
 #include "data.h"
 #include "iwdg.h"
 #include "main.h"
-#include "program.h"
 #include "time.h"
 #include "gpio.h"
 #include "MLM.h"
@@ -516,8 +515,7 @@ void SignalCardDriveTaskFunc(void *argument)
 
     /* -------------------------------------- Use I/O Data */
     /* --------------------------------------------------- // */
-    if ((ProgramStateGet() != PROGRAM_STATE_LOADING)
-        && (CPMPStateGet() == PACKET_TYPE_CP_DEFAULT))
+    if (CPMPStateGet() == PACKET_TYPE_CP_DEFAULT)
     {
       UseIOValues();
     }

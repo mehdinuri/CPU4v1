@@ -3546,6 +3546,58 @@ void test_timebase_dimming_requires_action_and_local_or_unit_enable(void)
   TEST_ASSERT_EQUAL_UINT8(1U, outputIntentImage.channelDimAlternateHalfCycle[0]);
 }
 
+void test_system_pattern_control_all_red_forces_red_rest_output_image(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeTwoPhasePerRingConfig();
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetSystemPatternControl(
+    &s_engine,
+    INTERSECTION_PATTERN_COMMAND_ALL_RED));
+  IntersectionEngineTick(&s_engine);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_PATTERN_COMMAND_ALL_RED,
+                          runtime->systemPatternControl);
+  TEST_ASSERT_EQUAL_UINT8(10U, runtime->unitControlStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONTROL_MODE_ALL_RED, runtime->mode);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_RED,
+                        outputIntentImage.channels[0]);
+}
+
+void test_system_pattern_control_dark_forces_dark_output_image(void)
+{
+  IntersectionConfig_t config;
+  const IntersectionRuntime_t *runtime;
+  IntersectionOutputIntentImage_t outputIntentImage;
+
+  config = MakeTwoPhasePerRingConfig();
+
+  TEST_ASSERT_TRUE(IntersectionEngineLoadConfig(&s_engine, &config));
+  IntersectionEngineTick(&s_engine);
+  TEST_ASSERT_TRUE(IntersectionEngineSetSystemPatternControl(
+    &s_engine,
+    INTERSECTION_PATTERN_COMMAND_DARK));
+  IntersectionEngineTick(&s_engine);
+
+  runtime = GetRuntime();
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_PATTERN_COMMAND_DARK,
+                          runtime->systemPatternControl);
+  TEST_ASSERT_EQUAL_UINT8(10U, runtime->unitControlStatus);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONTROL_MODE_DARK, runtime->mode);
+  TEST_ASSERT_TRUE(IntersectionEngineGetOutputIntentImage(&s_engine,
+                                                          &outputIntentImage));
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_OUTPUT_ASPECT_DARK,
+                        outputIntentImage.channels[0]);
+}
+
 void test_action_plan_control_reports_selected_timebase_action_and_can_flash(
   void)
 {
@@ -4134,6 +4186,8 @@ int main(void)
   RUN_TEST(test_unit_control_interconnect_priority_overrides_timebase);
   RUN_TEST(test_invalid_interconnect_inputs_report_interconnect_backup);
   RUN_TEST(test_timebase_dimming_requires_action_and_local_or_unit_enable);
+  RUN_TEST(test_system_pattern_control_all_red_forces_red_rest_output_image);
+  RUN_TEST(test_system_pattern_control_dark_forces_dark_output_image);
   RUN_TEST(test_action_plan_control_reports_selected_timebase_action_and_can_flash);
   RUN_TEST(test_unit_backup_timer_enters_backup_mode_and_clears_remote_controls);
   RUN_TEST(

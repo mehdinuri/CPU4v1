@@ -3,36 +3,43 @@
 
 #include <string.h>
 
-#include "data.h"
+#include "DomainServices.h"
 
 static uint8_t RequestModeControl(void *ctx, uint8_t requestedControl)
 {
-  (void) ctx;
+  ControllerModeControlAdapterCtx_t *adapterCtx =
+    (ControllerModeControlAdapterCtx_t *) ctx;
+  uint8_t command = 0U;
+
+  if ((adapterCtx == NULL) || (adapterCtx->engine == NULL))
+  {
+    return 0U;
+  }
 
   switch (requestedControl)
   {
       case CONTROLLER_MODE_REQUEST_ALL_RED:
       {
-        UserStateReqSet(STATES_CLOSED);
-        return 1U;
+        command = INTERSECTION_PATTERN_COMMAND_ALL_RED;
+        break;
       }
 
       case CONTROLLER_MODE_REQUEST_DARK:
       {
-        UserStateReqSet(STATES_NO_CONTROL);
-        return 1U;
+        command = INTERSECTION_PATTERN_COMMAND_DARK;
+        break;
       }
 
       case CONTROLLER_MODE_REQUEST_FLASH:
       {
-        UserStateReqSet(STATES_FLASH);
-        return 1U;
+        command = INTERSECTION_PATTERN_COMMAND_FLASH;
+        break;
       }
 
       case CONTROLLER_MODE_REQUEST_PLAN_RETURN:
       {
-        UserStateReqFree();
-        return 1U;
+        command = 0U;
+        break;
       }
 
       default:
@@ -40,6 +47,8 @@ static uint8_t RequestModeControl(void *ctx, uint8_t requestedControl)
         return 0U;
       }
   }
+
+  return IntersectionEngineSetSystemPatternControl(adapterCtx->engine, command);
 }
 
 void ControllerModeControlAdapterInit(ControllerModeControlAdapterCtx_t *ctx)
@@ -47,6 +56,7 @@ void ControllerModeControlAdapterInit(ControllerModeControlAdapterCtx_t *ctx)
   if (ctx != NULL)
   {
     (void) memset(ctx, 0, sizeof(*ctx));
+    ctx->engine = &g_intersectionEngine;
   }
 }
 

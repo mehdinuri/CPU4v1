@@ -11,7 +11,6 @@
 #include "MLM.h"
 #include "gpio.h"
 #include "HardwarePorts.h"
-#include "program.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Definitions */
@@ -36,19 +35,6 @@ void SetFlashSignalTransmit(uint8_t fState)
 uint8_t GetFlashSignalTransmit(void)
 {
   return fTransmitFlashSignalPackage;
-}
-
-void ResetCPMPComm(void)
-{
-  CPMPStateSet(PACKET_TYPE_CP_SIGNAL_DEFS);
-  CPMPSubStateSet(PACKET_SUB_TYPE_CP_SIGNAL_DEFS_1);
-
-  SCPMPComm.bPacketNo = 0;
-  sCPMPErrorCounter = 0;
-
-  InitErrorInfo();
-
-  SetFlashSignalTransmit(TRUE);
 }
 
 void CPMPStateSet(uint8_t nState)
@@ -328,49 +314,26 @@ void CPMPComTaskFunc(void *argument)
   while (FOREVER)
   {
     /* set relay state */
-    switch (StateCurrentGet())
+    if (CPMPStateGet() == PACKET_TYPE_CP_DEFAULT)
     {
-        case STATES_NO_CONTROL:
-        {
-          SetPowerRelay(TRUE);
-          break;
-        }
-
-        default:
-        {
-          if (CPMPStateGet() == PACKET_TYPE_CP_DEFAULT)
-          {
-            if (RelayStateRequestGet() == FALSE)
-            {
-              SetPowerRelay(TRUE);
-            }
-            else
-            {
-              if (RelayControlServiceGetUserOutputPowerEnabled(
-                    &g_relayControlService) == 0U)
-              {
-                SetPowerRelay(TRUE);
-              }
-              else
-              {
-                if (GetPowerRelay())
-                {
-                  SetPowerRelay(FALSE);
-                }
-              }
-            }
-          }
-          else
-          {
-            if (GetPowerRelay())
-            {
-              SetPowerRelay(FALSE);
-            }
-          }
-
-          break;
-        }
-    } /* switch */
+      if (RelayStateRequestGet() == FALSE)
+      {
+        SetPowerRelay(TRUE);
+      }
+      else if (RelayControlServiceGetUserOutputPowerEnabled(
+                 &g_relayControlService) == 0U)
+      {
+        SetPowerRelay(TRUE);
+      }
+      else if (GetPowerRelay())
+      {
+        SetPowerRelay(FALSE);
+      }
+    }
+    else if (GetPowerRelay())
+    {
+      SetPowerRelay(FALSE);
+    }
 
     if (CPMPCommPacketIncGet())
     {

@@ -83,6 +83,16 @@ static const char *ModeToText(uint8_t lang, uint8_t mode)
         return "FLSH";
       }
 
+      case INTERSECTION_CONTROL_MODE_ALL_RED:
+      {
+        return (lang == LANGUAGE_TURKISH) ? "KIRM" : "ARED";
+      }
+
+      case INTERSECTION_CONTROL_MODE_DARK:
+      {
+        return "DARK";
+      }
+
       case INTERSECTION_CONTROL_MODE_FREE:
       default:
       {

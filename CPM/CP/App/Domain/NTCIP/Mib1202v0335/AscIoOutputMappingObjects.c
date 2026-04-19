@@ -532,7 +532,7 @@ static NtcipError_t GetAscIoObject(void *groupContext,
   NtcipContext_t *context = (NtcipContext_t *) groupContext;
   IntersectionIoMapConfig_t ioMap;
   uint8_t rowIndex;
-  uint8_t functionIndex;
+  uint8_t functionIndex = 0U;
   NtcipError_t error;
   const char *pinName;
 

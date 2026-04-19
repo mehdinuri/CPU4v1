@@ -48,7 +48,6 @@
 #include "lcd.h"
 #include "lcdDrv.h"
 #include "MCS.h"
-#include "program.h"
 #include "rng.h"
 #include "rtc.h"
 #include "signalCardDrv.h"
@@ -89,7 +88,6 @@ typedef enum
   APP_TASK_UI_MSG_PARSER,
   APP_TASK_UI_MSG_SENDER,
   APP_TASK_LCD,
-  APP_TASK_PROGRAM,
   APP_TASK_MLM,
   APP_TASK_MSM,
   APP_TASK_PPP_ASYNCH_MSG_PARSER,
@@ -398,18 +396,6 @@ const osThreadAttr_t LCDTask_attributes = {
   .stack_size = sizeof(LCDTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for ProgramTask */
-osThreadId_t ProgramTaskHandle;
-uint32_t ProgramTaskBuf[ 1024 ];
-osStaticThreadDef_t ProgramTaskCtrlBlk;
-const osThreadAttr_t ProgramTask_attributes = {
-  .name = "ProgramTask",
-  .cb_mem = &ProgramTaskCtrlBlk,
-  .cb_size = sizeof(ProgramTaskCtrlBlk),
-  .stack_mem = &ProgramTaskBuf[0],
-  .stack_size = sizeof(ProgramTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for MLMTask */
 osThreadId_t MLMTaskHandle;
 uint32_t MLMTaskBuf[ 128 ];
@@ -687,7 +673,6 @@ extern void MCSTaskFunc(void *argument);
 extern void UIMsgParserTaskFunc(void *argument);
 extern void UIMsgSenderTaskFunc(void *argument);
 extern void LCDTaskFunc(void *argument);
-extern void ProgramTaskFunc(void *argument);
 extern void MLMTaskFunc(void *argument);
 extern void MSMTaskFunc(void *argument);
 extern void PPPOSAsyMsgParserTaskFunc(void *argument);
@@ -762,10 +747,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
   else if (xTask == LCDTaskHandle)
   {
     eTask = APP_TASK_LCD;
-  }
-  else if (xTask == ProgramTaskHandle)
-  {
-    eTask = APP_TASK_PROGRAM;
   }
   else if (xTask == MLMTaskHandle)
   {
@@ -1078,9 +1059,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of LCDTask */
   LCDTaskHandle = osThreadNew(LCDTaskFunc, NULL, &LCDTask_attributes);
 
-  /* creation of ProgramTask */
-  ProgramTaskHandle = osThreadNew(ProgramTaskFunc, NULL, &ProgramTask_attributes);
-
   /* creation of MLMTask */
   MLMTaskHandle = osThreadNew(MLMTaskFunc, NULL, &MLMTask_attributes);
 
@@ -1143,11 +1121,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (LCDTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (ProgramTaskHandle == NULL)
   {
     Error_Handler();
   }
@@ -1255,8 +1228,6 @@ void DefaultTaskFunc(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN DefaultTaskFunc */
-  DataInit(0, FALSE);  
-
   IWDGInit();
 
   /* Infinite loop */

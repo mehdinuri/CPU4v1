@@ -3854,7 +3854,6 @@ extern void SetRuntimeSet(uint8_t bSetNo, tpSSetRuntime pSSetRuntime);
 extern void SetRuntimeGet(uint8_t bSetNo, tpSSetRuntime pSSetRuntime);
 extern uint8_t IsSetValid(uint8_t bSetNo);
 extern uint8_t SetTotalGet(void);
-extern void SetRuntimesInit(void);
 extern uint8_t SetSigModeIsOK(void);
 extern uint8_t SetSigModeIsThis(uint8_t bMode);
 extern uint8_t SetSigModeGet(uint8_t bSetNo);
@@ -4084,7 +4083,6 @@ extern uint8_t WorkScheduleEntrySet(uint8_t bWorkScheduleEntry,
 extern uint8_t WorkScheduleEntryGet(uint8_t bWorkScheduleEntry,
                                     tpSWorkScheduleEntryDef pSWorkScheduleEntry);
 extern void WorkScheduleDefaultSettings(void);
-extern void WorkScheduleUpdate(void);
 extern uint8_t WorkScheduleTotalGet(void);
 
 /*  Signal Program */
@@ -4156,25 +4154,12 @@ extern long OperationState(tpSOperation pSOperation);
 extern long OperandState(tpSOperand pSOperand);
 
 /*  Data Operations */
-extern void DataInit(uint8_t keepConnectionInfo, uint8_t fInitSOPowers);
-extern uint8_t ProgramDataErase(void);
-extern uint8_t ProgramDataWrite(void);
-extern uint8_t ProgramDataRead(void);
-extern uint8_t ProgramDataStartMagicRead(void);
-extern uint32_t ProgramDataStartMagicGet(uint8_t bIdx);
-extern uint32_t ProgramDataEndMagicGet(void);
-extern uint8_t ProgramDataGet(void);
-extern void ProgramRelativeDataInit(void);
-extern uint8_t ProgramDataSet(void);
-extern void DataValidate(void);
 extern void DataRuntimeInit(void);
 extern void DataChecksumCalculate(tpSChecksum pSChecksum);
 extern uint16_t DataChecksumTotalCalculate(void);
 extern void DataChecksumTotalSet(uint16_t sSum);
 extern uint16_t DataChecksumTotalGet(void);
 extern void DataChecksumGet(tpSChecksum pSChecksum);
-extern int8_t DataChecksumIsCorrect(void);
-extern void ReturnFactorySettings(void);
 
 /*  MP Events */
 extern void EventMPCont(tpSEvent pSEvent);

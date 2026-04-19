@@ -178,8 +178,6 @@ uint8_t CanReqParser(tpSFDCANRxMsg pRxMsg)
 
                 CANTxRequest(1, CAN_ID_TYPE_STD, CAN_LRLF_DETECT_TIME, &bTime);
               }
-
-              ResetCPMPComm();
               break;
             }
 
