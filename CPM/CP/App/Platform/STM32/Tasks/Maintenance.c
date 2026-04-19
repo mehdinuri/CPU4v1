@@ -143,9 +143,6 @@ void CheckMessageQueueUsage(void)
     { "GPSRxReqsQue", GPSRxReqsQueHandle },
 
     { "GPSTimeQue", GPSTimeQueHandle },
-    { "MCSAsyRxReqsQue", MCSAsyRxReqsQueHandle },
-
-    { "MCSAsyTxReqsQue", MCSAsyTxReqsQueHandle },
     { "UIRxReqsQue", UIRxReqsQueHandle },
     { "UITxReqsQue", UITxReqsQueHandle },
 

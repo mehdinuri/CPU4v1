@@ -151,15 +151,6 @@
 #define EVENT_FLAGS_DNS_RESOLVE_ALL (EVENT_FLAGS_DNS_RESOLVED | \
                                      EVENT_FLAGS_DNS_RESOLVE_ERROR
 
-#define EVENT_FLAGS_TCP_CLIENT_CONNECTED FLAG_BIT_0
-#define EVENT_FLAGS_TCP_CLIENT_DISCONNECTED FLAG_BIT_1
-#define EVENT_FLAGS_TCP_CLIENT_ERROR FLAG_BIT_2
-#define EVENT_FLAGS_TCP_CLIENT_ALL (EVENT_FLAGS_TCP_CLIENT_CONNECTED | \
-                                    EVENT_FLAGS_TCP_CLIENT_DISCONNECTED | \
-                                    EVENT_FLAGS_TCP_CLIENT_ERROR)
-
-#define EVENT_FLAGS_MCS_ASY_CONNECTED FLAG_BIT_0
-
 #define EVENT_FLAGS_PPP_ASY_CONNECTED FLAG_BIT_0
 
 #define EVENT_FLAGS_I2C1_TX_COMPLETE FLAG_BIT_0
@@ -180,14 +171,11 @@ extern osThreadId_t DefaultTaskHandle;
 extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t MLMTaskHandle;
 extern osThreadId_t MSMTaskHandle;
-extern osThreadId_t MCSAsynchTaskHandle;
 extern osThreadId_t LCDTaskHandle;
 extern osThreadId_t SignalCardDriveTaskHandle;
 extern osThreadId_t CPMPComTaskHandle;
 extern osThreadId_t ProgramTaskHandle;
 extern osThreadId_t UIMsgParserTaskHandle;
-extern osThreadId_t MCSAsyMsgParserTaskHandle;
-extern osThreadId_t MCSAsyMsgSenderTaskHandle;
 extern osThreadId_t CANMsgParserTaskHandle;
 extern osThreadId_t CANMsgSenderTaskHandle;
 extern osThreadId_t GPSMsgParserTaskHandle;
@@ -206,8 +194,6 @@ extern osMemoryPoolId_t FDCANRxReqsMemPoolHandle;
 extern osMemoryPoolId_t FDCANTxReqsMemPoolHandle;
 extern osMemoryPoolId_t GPSRxReqsMemPoolHandle;
 extern osMemoryPoolId_t GPSTimeMemPoolHandle;
-extern osMemoryPoolId_t MCSAsyRxReqsMemPoolHandle;
-extern osMemoryPoolId_t MCSAsyTxReqsMemPoolHandle;
 extern osMemoryPoolId_t UIRxReqsMemPoolHandle;
 extern osMemoryPoolId_t UITxReqsMemPoolHandle;
 extern osMemoryPoolId_t MSMReqsMemPoolHandle;
@@ -220,8 +206,6 @@ extern osMessageQueueId_t FDCANRxReqsQueHandle;
 extern osMessageQueueId_t FDCANTxReqsQueHandle;
 extern osMessageQueueId_t GPSRxReqsQueHandle;
 extern osMessageQueueId_t GPSTimeQueHandle;
-extern osMessageQueueId_t MCSAsyRxReqsQueHandle;
-extern osMessageQueueId_t MCSAsyTxReqsQueHandle;
 extern osMessageQueueId_t UIRxReqsQueHandle;
 extern osMessageQueueId_t UITxReqsQueHandle;
 extern osMessageQueueId_t MSMReqsQueHandle;
@@ -238,9 +222,7 @@ extern osMutexId_t LCDMutexHandle;
 extern osEventFlagsId_t MaintenanceEventHandle;
 extern osEventFlagsId_t UART4EventHandle;
 extern osEventFlagsId_t PPPAsyEventHandle;
-extern osEventFlagsId_t TCPClientEventHandle;
 extern osEventFlagsId_t DNSEventHandle;
-extern osEventFlagsId_t MCSAsyEventHandle;
 extern osEventFlagsId_t I2C1EventHandle;
 extern osEventFlagsId_t I2C4EventHandle;
 extern osEventFlagsId_t MLMEventHandle;

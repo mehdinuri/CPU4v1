@@ -53,12 +53,8 @@
 #include "Adapters/STM32/UserSettingsAdapter.h"
 #include "Adapters/STM32/GpsConfigAdapter.h"
 #include "Adapters/STM32/GpsTimeSyncAdapter.h"
-#include "Adapters/STM32/UBloxModemAdapter.h"
-#include "Adapters/STM32/TelitModemAdapter.h"
 #include "Adapters/STM32/QuectelModemAdapter.h"
-#include "Adapters/STM32/QuectelNtcipModemAdapter.h"
-#include "Adapters/STM32/UsrModemAdapter.h"
-#include "Adapters/STM32/EthernetNtcipModemAdapter.h"
+#include "Adapters/STM32/EthernetModemAdapter.h"
 #include "Adapters/STM32/SystemResetAdapter.h"
 #include "MCS.h"
 #include "MSM.h"
@@ -131,13 +127,9 @@ static SerialAdapterCtx_t s_internalGpsCtx;
 static SerialAdapterCtx_t s_auxSerialCtx;
 static SerialAdapterCtx_t s_wifiCtx;
 
-/* Modem driver adapter contexts — one per type; only one is active at runtime. */
-static UBloxModemAdapterCtx_t s_ubloxModemCtx;
-static TelitModemAdapterCtx_t s_telitModemCtx;
+/* Modem driver adapter contexts — one per supported bearer. */
 static QuectelModemAdapterCtx_t s_quectelModemCtx;
-static QuectelNtcipModemAdapterCtx_t s_quectelNtcipModemCtx;
-static UsrModemAdapterCtx_t s_usrModemCtx;
-static EthernetNtcipModemAdapterCtx_t s_ethernetNtcipModemCtx;
+static EthernetModemAdapterCtx_t s_ethernetModemCtx;
 
 /* ------------------------------------------------------------------
  * Port instances — declared extern in HardwarePorts.h.
@@ -211,48 +203,24 @@ static void WireModemDriver(void)
 {
   switch (ModemAdapterLoadModuleType(&s_eepromStoragePort))
   {
-      case MCS_MODULE_TYPE_UBLOX:
-      {
-        UBloxModemAdapterInit(&s_ubloxModemCtx);
-        g_modemDriverPort = UBloxModemAdapterCreatePort(&s_ubloxModemCtx);
-        break;
-      }
-
-      case MCS_MODULE_TYPE_TELIT:
-      {
-        TelitModemAdapterInit(&s_telitModemCtx);
-        g_modemDriverPort = TelitModemAdapterCreatePort(&s_telitModemCtx);
-        break;
-      }
-
-      case MCS_MODULE_TYPE_QUECTEL:
+      case MCS_NETWORK_TYPE_QUECTEL:
       {
         QuectelModemAdapterInit(&s_quectelModemCtx);
         g_modemDriverPort = QuectelModemAdapterCreatePort(&s_quectelModemCtx);
         break;
       }
 
-      case MCS_MODULE_TYPE_QUECTEL_NTCIP:
+      case MCS_NETWORK_TYPE_ETHERNET:
       {
-        QuectelNtcipModemAdapterInit(&s_quectelNtcipModemCtx);
+        EthernetModemAdapterInit(&s_ethernetModemCtx);
         g_modemDriverPort =
-          QuectelNtcipModemAdapterCreatePort(&s_quectelNtcipModemCtx);
+          EthernetModemAdapterCreatePort(&s_ethernetModemCtx);
         break;
       }
 
-      case MCS_MODULE_TYPE_USR:
-      {
-        UsrModemAdapterInit(&s_usrModemCtx);
-        g_modemDriverPort = UsrModemAdapterCreatePort(&s_usrModemCtx);
-        break;
-      }
-
-      case MCS_MODULE_TYPE_ETH_NTCIP:
       default:
       {
-        EthernetNtcipModemAdapterInit(&s_ethernetNtcipModemCtx);
-        g_modemDriverPort =
-          EthernetNtcipModemAdapterCreatePort(&s_ethernetNtcipModemCtx);
+        (void) memset(&g_modemDriverPort, 0, sizeof(g_modemDriverPort));
         break;
       }
   } /* switch */

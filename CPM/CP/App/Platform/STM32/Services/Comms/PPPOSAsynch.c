@@ -7,13 +7,9 @@
 #include <string.h>
 
 #include "MCS.h"
-#include "MCSAsynch.h"
 #include "arch.h"
 #include "ppp.h"
 #include "pppos.h"
-#include "snmp_client.h"
-#include "tcp_client.h"
-#include "udp_probe.h"
 #include "lwip/dns.h"
 #include "stdio.h"
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
@@ -280,28 +276,12 @@ void PPPOSAsynchStop(void)
 {
   PPPOSAsynchSetConnected(FALSE);
 
-  if (MCSAsynchConnectedGet())
-  {
-    MCSAsynchStop(MCS_ASYNCH_DISC_TYPE_PPP_ERROR);
-  }
-
-  if (SNMPClientIsStarted())
-  {
-    SNMPClientStop();
-  }
-
-  if (UDPProbeIsStarted())
-  {
-    UDPProbeStop();
-  }
-
   PPPOSAsynchClose();
 
   PPPOSAsynchSetConnected(FALSE);
   PPPOSAsynchInit();
 
   PPPOSAsynchSetDailed(FALSE);
-  MCSRuntimeInit();
 }
 
 struct netif *PPPOSAsynchGetInfterface(void)

@@ -104,18 +104,18 @@ static uint8_t AdapterIsDisconnected(void       *ctx,
   return c->bDisconnected;
 }
 
-static uint8_t AdapterGetGreetingType(void *ctx)
+static uint8_t AdapterIsTransportReady(void *ctx)
 {
   MockModemAdapterCtx_t *c = (MockModemAdapterCtx_t *) ctx;
 
-  return c->bGreetingType;
+  return c->bTransportReady;
 }
 
-static uint8_t AdapterOnConnect(void *ctx)
+static uint8_t AdapterIsTransportHealthy(void *ctx)
 {
   MockModemAdapterCtx_t *c = (MockModemAdapterCtx_t *) ctx;
 
-  return c->bConnectResult;
+  return c->bTransportHealthy;
 }
 
 static void AdapterOnMaintain(void *ctx)
@@ -150,7 +150,8 @@ static uint8_t AdapterSend(void *ctx, const uint8_t *data, uint16_t len)
 void MockModemAdapterInit(MockModemAdapterCtx_t *ctx)
 {
   memset(ctx, 0, sizeof(*ctx));
-  ctx->bConnectResult = 1U;
+  ctx->bTransportReady = 1U;
+  ctx->bTransportHealthy = 1U;
 }
 
 IModemPort_t MockModemAdapterCreatePort(MockModemAdapterCtx_t *ctx)
@@ -165,13 +166,13 @@ IModemPort_t MockModemAdapterCreatePort(MockModemAdapterCtx_t *ctx)
   port.GetWaitParams = AdapterGetWaitParams;
   port.HandleResponse = AdapterHandleResponse;
   port.GetStateLabel = AdapterGetStateLabel;
-  port.IsDisconnected = AdapterIsDisconnected;
-  port.GetGreetingType = AdapterGetGreetingType;
-  port.OnConnect = AdapterOnConnect;
+  port.IsTransportReady = AdapterIsTransportReady;
+  port.IsTransportHealthy = AdapterIsTransportHealthy;
   port.OnMaintain = AdapterOnMaintain;
   port.OnRx = AdapterOnRx;
   port.OnDisconnect = AdapterOnDisconnect;
   port.Send = AdapterSend;
+  port.IsDisconnected = AdapterIsDisconnected;
 
   return port;
 }

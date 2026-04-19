@@ -422,16 +422,18 @@ typedef struct
 
 typedef struct
 {
-  uint8_t modemType;
-  uint8_t gprsState;
+  uint8_t networkType;
+  uint8_t bearerState;
   uint8_t signalQuality;
-  uint8_t connected;
+  uint8_t transportReady;
+  uint8_t snmpReady;
   uint8_t modemAlive;
   uint8_t simReady;
   char imei[16];
-  char usrMac[13];
   char ethernetMac[13];
   char operatorName[21];
+  char localIp[16];
+  char managerIp[16];
 } __attribute__((packed)) MmiRuntimeCommsSummaryV2_t;
 
 typedef struct

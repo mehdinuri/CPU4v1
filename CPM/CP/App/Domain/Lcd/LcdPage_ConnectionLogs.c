@@ -5,11 +5,10 @@
 #include "LcdLanguage.h"
 #include "LcdServiceRegistry.h"
 #include "LcdPageRegistry.h"
+#include "Ports/ICommsStatusPort.h"
+#include "Ports/UserInputTypes.h"
 #include <stdio.h>
 #include <string.h>
-
-/* Dependencies */
-#include "Ports/UserInputTypes.h"
 
 typedef struct
 {
@@ -38,32 +37,36 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
   DisplayClear(display);
   ReadCommsSnapshot(c->services, &comms);
 
-  /* Line 1: IMEI or MAC */
-  uint8_t modemType = comms.modemType;
-
-  /* Use magic numbers from MCS.h for now but ideally should be in a Port Type */
-  if ((modemType == 5) || (modemType == 4))   /* ETH_NTCIP=5, USR=4 */
+  /* Line 1: Identity */
+  if (comms.networkType == (uint8_t) UI_COMMS_NETWORK_TYPE_ETHERNET)
   {
-    sprintf(buf,
-            "MAC: %s",
-            (modemType == 4) ? &comms.usrMac[0] : &comms.ethernetMac[0]);
+    sprintf(buf, "MAC:%s", &comms.ethernetMac[0]);
+  }
+  else if (comms.networkType == (uint8_t) UI_COMMS_NETWORK_TYPE_QUECTEL)
+  {
+    sprintf(buf, "IMEI:%s", &comms.imei[0]);
   }
   else
   {
-    sprintf(buf, "IMEI:%s", &comms.imei[0]);
+    sprintf(buf, "NET: NONE");
   }
 
   DisplayWrite(display, 0, 0, buf, (uint8_t) strlen(buf));
 
   /* Line 2: Signal/Sim Status */
-  if (comms.modemAlive != 0U)
+  if (comms.networkType == (uint8_t) UI_COMMS_NETWORK_TYPE_QUECTEL)
   {
-    sprintf(buf, "SIM:OK ANT:%d",
-            (int) (comms.signalQuality / 8U));
+    sprintf(buf,
+            "SIM:%s SIG:%02u",
+            (comms.simReady != 0U) ? "OK" : "--",
+            (unsigned int) comms.signalQuality);
   }
   else
   {
-    sprintf(buf, "SIM:-  ANT:-");
+    sprintf(buf,
+            "NET:%s SN:%s",
+            (comms.transportReady != 0U) ? "UP" : "DN",
+            (comms.snmpReady != 0U) ? "UP" : "DN");
   }
 
   DisplayWrite(display, 1, 0, buf, (uint8_t) strlen(buf));

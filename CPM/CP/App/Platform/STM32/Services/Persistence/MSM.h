@@ -14,7 +14,7 @@
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  include files */
 #include "MCS.h"
-#include "MCSAsynch.h"
+#include "MLM.h"
 #include "flash.h"
 #include "Ports/IEepromStoragePort.h"
 #include "Ports/IFlashStoragePort.h"
@@ -78,24 +78,20 @@ typedef enum
         EEPROM_STORAGE_ADDR_SO_POWERS \
         + (sizeof(tSSOPowerRecord) * SIGNAL_OUTPUTS_MAX)
 
-/* Signal Plan Change */
-#define EEPROM_STORAGE_ADDR_SP_CHANGE                                          \
-        EEPROM_STORAGE_ADDR_USER_REQUEST + (sizeof(tSUserState))
-
 /* Heater & Lamp Dimming */
 /* H&D Commented */
 
 /*
  #define  EEPROM_STORAGE_ADDR_HEATER
- *  EEPROM_STORAGE_ADDR_SP_CHANGE
- + (sizeof(tSMCSAsynchSPChange)) #define  EEPROM_STORAGE_ADDR_LAMP_DIM
+ *  EEPROM_STORAGE_ADDR_USER_REQUEST
+ + (sizeof(tSUserState)) #define  EEPROM_STORAGE_ADDR_LAMP_DIM
  +  EEPROM_STORAGE_ADDR_HEATER
  + (sizeof(tSHeaterLampDim))
  */
 
 /* GPRS Modem Type */
 #define EEPROM_STORAGE_ADDR_MCS_CON_INFO                                       \
-        EEPROM_STORAGE_ADDR_SP_CHANGE + (sizeof(tSMCSAsynchSPChange))
+        EEPROM_STORAGE_ADDR_USER_REQUEST + (sizeof(tSUserState))
 
 /* GPS Port */
 #define EEPROM_STORAGE_ADDR_GPS_PORT                                           \
@@ -109,13 +105,9 @@ typedef enum
 #define EEPROM_STORAGE_ADDR_LANGUAGE                                           \
         EEPROM_STORAGE_ADDR_GPS_BAUD_RATE + (sizeof(uint8_t))
 
-/* MCS Log Index */
-#define EEPROM_STORAGE_ADDR_MCS_LOG_INDEX                                      \
-        EEPROM_STORAGE_ADDR_LANGUAGE + (sizeof(uint8_t))
-
 /* Users */
 #define EEPROM_STORAGE_ADDR_ADMIN_USERNAME                                     \
-        EEPROM_STORAGE_ADDR_MCS_LOG_INDEX + (sizeof(uint16_t))
+        EEPROM_STORAGE_ADDR_LANGUAGE + (sizeof(uint8_t))
 #define EEPROM_STORAGE_ADDR_ADMIN_PASSWORD                                     \
         EEPROM_STORAGE_ADDR_ADMIN_USERNAME + (sizeof(uint16_t))
 #define EEPROM_STORAGE_ADDR_ADMIN_VALIDITY                                     \
@@ -173,7 +165,7 @@ typedef enum
         EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL + 64U
 
 #define EEPROM_STORAGE_ADDR_AUTH_STATE \
-        EEPROM_STORAGE_ADDR_SNMPV3_STATE + (sizeof(uint32_t))
+        EEPROM_STORAGE_ADDR_SNMPV3_STATE + (sizeof(tSMCSSNMPv3State))
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  public methods */

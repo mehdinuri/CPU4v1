@@ -31,7 +31,6 @@
 
 #include "CanMsgParser.h"
 #include "IAP.h"
-#include "MCSAsynch.h"
 #include "MLM.h"
 #include "MSM.h"
 #include "PPPOSAsynch.h"
@@ -88,9 +87,6 @@ typedef enum
   APP_TASK_GPS_MSG_PARSER,
   APP_TASK_GPS,
   APP_TASK_MCS,
-  APP_TASK_MCS_ASYNCH_MSG_PARSER,
-  APP_TASK_MCS_ASYNCH_MSG_SENDER,
-  APP_TASK_MCS_ASYNCH,
   APP_TASK_UI_MSG_PARSER,
   APP_TASK_UI_MSG_SENDER,
   APP_TASK_LCD,
@@ -167,32 +163,6 @@ const osMemoryPoolAttr_t GPSTimeMemPool_attributes = {
   .cb_size = sizeof(GPSTimeMemPoolCtrlBlk),
   .mp_mem = &GPSTimeMemPoolBuf,
   .mp_size = sizeof(GPSTimeMemPoolBuf)
-};
-
-/* Definitions for MCSAsyRxReqsMemPool */
-osMemoryPoolId_t MCSAsyRxReqsMemPoolHandle;
-__attribute__((section(".dtcm_bss"), aligned(32)))
-uint8_t MCSAsyRxReqsMemPoolBuf[4 * sizeof(tSMCSAsynchRxTxMsg)];
-osStaticMemPoolDef_t MCSAsyRxReqsMemPoolCtrlBlk;
-const osMemoryPoolAttr_t MCSAsyRxReqsMemPool_attributes = {
-  .name = "MCSAsyRxReqsMemPool",
-  .cb_mem = &MCSAsyRxReqsMemPoolCtrlBlk,
-  .cb_size = sizeof(MCSAsyRxReqsMemPoolCtrlBlk),
-  .mp_mem = &MCSAsyRxReqsMemPoolBuf,
-  .mp_size = sizeof(MCSAsyRxReqsMemPoolBuf)
-};
-
-/* Definitions for MCSAsyTxReqsMemPool */
-osMemoryPoolId_t MCSAsyTxReqsMemPoolHandle;
-__attribute__((section(".ram_d2_dma_buffers"), aligned(32)))
-uint8_t MCSAsyTxReqsMemPoolBuf[4 * sizeof(tSMCSAsynchRxTxMsg)];
-osStaticMemPoolDef_t MCSAsyTxReqsMemPoolCtrlBlk;
-const osMemoryPoolAttr_t MCSAsyTxReqsMemPool_attributes = {
-  .name = "MCSAsyTxReqsMemPool",
-  .cb_mem = &MCSAsyTxReqsMemPoolCtrlBlk,
-  .cb_size = sizeof(MCSAsyTxReqsMemPoolCtrlBlk),
-  .mp_mem = &MCSAsyTxReqsMemPoolBuf,
-  .mp_size = sizeof(MCSAsyTxReqsMemPoolBuf)
 };
 
 /* Definitions for UIRxReqsMemPool */
@@ -407,42 +377,6 @@ const osThreadAttr_t MCSTask_attributes = {
   .stack_size = sizeof(MCSTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for MCSAsyMsgParserTask */
-osThreadId_t MCSAsyMsgParserTaskHandle;
-uint32_t MCSAsyMsgParserTaskBuf[ 512 ];
-osStaticThreadDef_t MCSAsyMsgParserTaskCtrlBlk;
-const osThreadAttr_t MCSAsyMsgParserTask_attributes = {
-  .name = "MCSAsyMsgParserTask",
-  .cb_mem = &MCSAsyMsgParserTaskCtrlBlk,
-  .cb_size = sizeof(MCSAsyMsgParserTaskCtrlBlk),
-  .stack_mem = &MCSAsyMsgParserTaskBuf[0],
-  .stack_size = sizeof(MCSAsyMsgParserTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for MCSAsyMsgSenderTask */
-osThreadId_t MCSAsyMsgSenderTaskHandle;
-uint32_t MCSAsyMsgSenderTaskBuf[ 256 ];
-osStaticThreadDef_t MCSAsyMsgSenderTaskCtrlBlk;
-const osThreadAttr_t MCSAsyMsgSenderTask_attributes = {
-  .name = "MCSAsyMsgSenderTask",
-  .cb_mem = &MCSAsyMsgSenderTaskCtrlBlk,
-  .cb_size = sizeof(MCSAsyMsgSenderTaskCtrlBlk),
-  .stack_mem = &MCSAsyMsgSenderTaskBuf[0],
-  .stack_size = sizeof(MCSAsyMsgSenderTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for MCSAsyTask */
-osThreadId_t MCSAsyTaskHandle;
-uint32_t MCSAsyTaskBuf[ 512 ];
-osStaticThreadDef_t MCSAsyTaskCtrlBlk;
-const osThreadAttr_t MCSAsyTask_attributes = {
-  .name = "MCSAsyTask",
-  .cb_mem = &MCSAsyTaskCtrlBlk,
-  .cb_size = sizeof(MCSAsyTaskCtrlBlk),
-  .stack_mem = &MCSAsyTaskBuf[0],
-  .stack_size = sizeof(MCSAsyTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for UIMsgParserTask */
 osThreadId_t UIMsgParserTaskHandle;
 uint32_t UIMsgParserTaskBuf[ 512 ];
@@ -607,28 +541,6 @@ const osMessageQueueAttr_t GPSTimeQue_attributes = {
   .mq_mem = &GPSTimeQueBuf,
   .mq_size = sizeof(GPSTimeQueBuf)
 };
-/* Definitions for MCSAsyRxReqsQue */
-osMessageQueueId_t MCSAsyRxReqsQueHandle;
-uint8_t MCSAsyRxReqsQueBuf[ 4 * sizeof( tpSMCSAsynchRxTxMsg ) ];
-osStaticMessageQDef_t MCSAsyRxReqsQueCtrlBlk;
-const osMessageQueueAttr_t MCSAsyRxReqsQue_attributes = {
-  .name = "MCSAsyRxReqsQue",
-  .cb_mem = &MCSAsyRxReqsQueCtrlBlk,
-  .cb_size = sizeof(MCSAsyRxReqsQueCtrlBlk),
-  .mq_mem = &MCSAsyRxReqsQueBuf,
-  .mq_size = sizeof(MCSAsyRxReqsQueBuf)
-};
-/* Definitions for MCSAsyTxReqsQue */
-osMessageQueueId_t MCSAsyTxReqsQueHandle;
-uint8_t MCSAsyTxReqsQueBuf[ 4 * sizeof( tpSMCSAsynchRxTxMsg ) ];
-osStaticMessageQDef_t MCSAsyTxReqsQueCtrlBlk;
-const osMessageQueueAttr_t MCSAsyTxReqsQue_attributes = {
-  .name = "MCSAsyTxReqsQue",
-  .cb_mem = &MCSAsyTxReqsQueCtrlBlk,
-  .cb_size = sizeof(MCSAsyTxReqsQueCtrlBlk),
-  .mq_mem = &MCSAsyTxReqsQueBuf,
-  .mq_size = sizeof(MCSAsyTxReqsQueBuf)
-};
 /* Definitions for UIRxReqsQue */
 osMessageQueueId_t UIRxReqsQueHandle;
 uint8_t UIRxReqsQueBuf[ 4 * sizeof( tpSUIRequest ) ];
@@ -754,14 +666,6 @@ const osEventFlagsAttr_t PPPAsyEvent_attributes = {
   .cb_mem = &PPPAsyEventCtrlBlk,
   .cb_size = sizeof(PPPAsyEventCtrlBlk),
 };
-/* Definitions for TCPClientEvent */
-osEventFlagsId_t TCPClientEventHandle;
-osStaticEventGroupDef_t TCPClientEventCtrlBlk;
-const osEventFlagsAttr_t TCPClientEvent_attributes = {
-  .name = "TCPClientEvent",
-  .cb_mem = &TCPClientEventCtrlBlk,
-  .cb_size = sizeof(TCPClientEventCtrlBlk),
-};
 /* Definitions for DNSEvent */
 osEventFlagsId_t DNSEventHandle;
 osStaticEventGroupDef_t DNSEventCtrlBlk;
@@ -769,14 +673,6 @@ const osEventFlagsAttr_t DNSEvent_attributes = {
   .name = "DNSEvent",
   .cb_mem = &DNSEventCtrlBlk,
   .cb_size = sizeof(DNSEventCtrlBlk),
-};
-/* Definitions for MCSAsyEvent */
-osEventFlagsId_t MCSAsyEventHandle;
-osStaticEventGroupDef_t MCSAsyEventCtrlBlk;
-const osEventFlagsAttr_t MCSAsyEvent_attributes = {
-  .name = "MCSAsyEvent",
-  .cb_mem = &MCSAsyEventCtrlBlk,
-  .cb_size = sizeof(MCSAsyEventCtrlBlk),
 };
 /* Definitions for MaintenanceEvent */
 osEventFlagsId_t MaintenanceEventHandle;
@@ -826,9 +722,6 @@ extern void CPMPComTaskFunc(void *argument);
 extern void GPSMsgParserTaskFunc(void *argument);
 extern void GPSTaskFunc(void *argument);
 extern void MCSTaskFunc(void *argument);
-extern void MCSAsyMsgParserTaskFunc(void *argument);
-extern void MCSAsyMsgSenderTaskFunc(void *argument);
-extern void MCSAsyTaskFunc(void *argument);
 extern void UIMsgParserTaskFunc(void *argument);
 extern void UIMsgSenderTaskFunc(void *argument);
 extern void LCDTaskFunc(void *argument);
@@ -896,18 +789,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
   else if (xTask == MCSTaskHandle)
   {
     eTask = APP_TASK_MCS;
-  }
-  else if (xTask == MCSAsyMsgParserTaskHandle)
-  {
-    eTask = APP_TASK_MCS_ASYNCH_MSG_PARSER;
-  }
-  else if (xTask == MCSAsyMsgSenderTaskHandle)
-  {
-    eTask = APP_TASK_MCS_ASYNCH_MSG_SENDER;
-  }
-  else if (xTask == MCSAsyTaskHandle)
-  {
-    eTask = APP_TASK_MCS_ASYNCH;
   }
   else if (xTask == UIMsgParserTaskHandle)
   {
@@ -1020,12 +901,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of GPSTimeQue */
   GPSTimeQueHandle = osMessageQueueNew (8, sizeof(tpSTime), &GPSTimeQue_attributes);
 
-  /* creation of MCSAsyRxReqsQue */
-  MCSAsyRxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSMCSAsynchRxTxMsg), &MCSAsyRxReqsQue_attributes);
-
-  /* creation of MCSAsyTxReqsQue */
-  MCSAsyTxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSMCSAsynchRxTxMsg), &MCSAsyTxReqsQue_attributes);
-
   /* creation of UIRxReqsQue */
   UIRxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSUIRequest), &UIRxReqsQue_attributes);
 
@@ -1064,16 +939,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (GPSTimeQueHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyRxReqsQueHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyTxReqsQueHandle == NULL)
   {
     Error_Handler();
   }
@@ -1134,16 +999,6 @@ void MX_FREERTOS_Init(void) {
                                          sizeof(tSTime),
                                          &GPSTimeMemPool_attributes);
 
-  /* creation of MCSAsyRxReqsMemPool */
-  MCSAsyRxReqsMemPoolHandle = osMemoryPoolNew(4,
-                                              sizeof(tSMCSAsynchRxTxMsg),
-                                              &MCSAsyRxReqsMemPool_attributes);
-
-  /* creation of MCSAsyTxReqsMemPool */
-  MCSAsyTxReqsMemPoolHandle = osMemoryPoolNew(4,
-                                              sizeof(tSMCSAsynchRxTxMsg),
-                                              &MCSAsyTxReqsMemPool_attributes);
-
   /* creation of UIRxReqsMemPool */
   UIRxReqsMemPoolHandle = osMemoryPoolNew(4,
                                           sizeof(tSUIRequest),
@@ -1195,16 +1050,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (GPSTimeMemPoolHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyRxReqsMemPoolHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyTxReqsMemPoolHandle == NULL)
   {
     Error_Handler();
   }
@@ -1285,15 +1130,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of MCSTask */
   MCSTaskHandle = osThreadNew(MCSTaskFunc, NULL, &MCSTask_attributes);
 
-  /* creation of MCSAsyMsgParserTask */
-  MCSAsyMsgParserTaskHandle = osThreadNew(MCSAsyMsgParserTaskFunc, NULL, &MCSAsyMsgParserTask_attributes);
-
-  /* creation of MCSAsyMsgSenderTask */
-  MCSAsyMsgSenderTaskHandle = osThreadNew(MCSAsyMsgSenderTaskFunc, NULL, &MCSAsyMsgSenderTask_attributes);
-
-  /* creation of MCSAsyTask */
-  MCSAsyTaskHandle = osThreadNew(MCSAsyTaskFunc, NULL, &MCSAsyTask_attributes);
-
   /* creation of UIMsgParserTask */
   UIMsgParserTaskHandle = osThreadNew(UIMsgParserTaskFunc, NULL, &UIMsgParserTask_attributes);
 
@@ -1360,21 +1196,6 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (MCSAsyMsgParserTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyMsgSenderTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
   if (UIMsgParserTaskHandle == NULL)
   {
     Error_Handler();
@@ -1434,14 +1255,8 @@ void MX_FREERTOS_Init(void) {
   /* creation of PPPAsyEvent */
   PPPAsyEventHandle = osEventFlagsNew(&PPPAsyEvent_attributes);
 
-  /* creation of TCPClientEvent */
-  TCPClientEventHandle = osEventFlagsNew(&TCPClientEvent_attributes);
-
   /* creation of DNSEvent */
   DNSEventHandle = osEventFlagsNew(&DNSEvent_attributes);
-
-  /* creation of MCSAsyEvent */
-  MCSAsyEventHandle = osEventFlagsNew(&MCSAsyEvent_attributes);
 
   /* creation of MaintenanceEvent */
   MaintenanceEventHandle = osEventFlagsNew(&MaintenanceEvent_attributes);
@@ -1466,17 +1281,7 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (TCPClientEventHandle == NULL)
-  {
-    Error_Handler();
-  }
-
   if (DNSEventHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (MCSAsyEventHandle == NULL)
   {
     Error_Handler();
   }

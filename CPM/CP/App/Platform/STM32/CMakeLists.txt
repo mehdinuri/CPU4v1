@@ -14,7 +14,6 @@ target_sources(Platform_STM32 PRIVATE
     Services/Time/gps.c
     Services/Time/time.c
     Services/Comms/MCS.c
-    Services/Comms/MCSAsynch.c
     Services/Comms/PPPOSAsynch.c
     Services/Comms/cpmpcomm.c
     Services/UI/lcd.c

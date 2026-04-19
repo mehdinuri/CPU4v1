@@ -16,20 +16,27 @@
 #define UI_COMMS_JOB_TEXT_MAX_LEN 20U
 #define UI_COMMS_JOB_COUNT 2U
 
+typedef enum
+{
+  UI_COMMS_NETWORK_TYPE_NONE = 0,
+  UI_COMMS_NETWORK_TYPE_QUECTEL = 1,
+  UI_COMMS_NETWORK_TYPE_ETHERNET = 2
+} UiCommsNetworkType_t;
+
 typedef struct
 {
-  uint8_t modemType;
-  uint8_t gprsState;
+  uint8_t networkType;
+  uint8_t bearerState;
   uint8_t signalQuality;
-  uint8_t connected;
+  uint8_t transportReady;
+  uint8_t snmpReady;
   uint8_t modemAlive;
   uint8_t simReady;
   char imei[UI_COMMS_IDENTITY_IMEI_MAX_LEN + 1U];
-  char usrMac[UI_COMMS_IDENTITY_MAC_MAX_LEN + 1U];
   char ethernetMac[UI_COMMS_IDENTITY_MAC_MAX_LEN + 1U];
   char operatorName[UI_COMMS_IDENTITY_OPERATOR_MAX_LEN + 1U];
   char localIp[UI_COMMS_IDENTITY_IPV4_MAX_LEN + 1U];
-  char remoteIp[UI_COMMS_IDENTITY_IPV4_MAX_LEN + 1U];
+  char managerIp[UI_COMMS_IDENTITY_IPV4_MAX_LEN + 1U];
   char jobCurrent[UI_COMMS_JOB_COUNT][UI_COMMS_JOB_TEXT_MAX_LEN + 1U];
 } CommsStatusSnapshot_t;
 

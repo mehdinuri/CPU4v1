@@ -38,6 +38,7 @@
 #include "lwip/apps/snmp_opts.h"
 #include "lwip/err.h"
 #include "lwip/apps/snmpv3.h"
+#include <stdint.h>
 
 #if LWIP_SNMP && LWIP_SNMP_V3
 
@@ -45,6 +46,22 @@ err_t snmpv3_set_user_auth_algo(const char *username, snmpv3_auth_algo_t algo);
 err_t snmpv3_set_user_priv_algo(const char *username, snmpv3_priv_algo_t algo);
 err_t snmpv3_set_user_auth_key(const char *username, const char *password);
 err_t snmpv3_set_user_priv_key(const char *username, const char *password);
+err_t snmpv3_set_user_auth_localized_key(const char *username,
+                                         const u8_t *key,
+                                         u8_t key_len);
+err_t snmpv3_set_user_priv_localized_key(const char *username,
+                                         const u8_t *key,
+                                         u8_t key_len);
+err_t SNMPv3LocalizeAuthKey(u8_t auth_algo,
+                            const char *engine_id,
+                            const char *password,
+                            uint8_t *key,
+                            uint8_t key_len);
+err_t SNMPv3LocalizePrivKey(u8_t auth_algo,
+                            const char *engine_id,
+                            const char *password,
+                            uint8_t *key,
+                            uint8_t key_len);
 
 void SNMPv3Init(void);
 

@@ -1,28 +1,21 @@
-/* App/Adapters/STM32/EthernetNtcipModemAdapter.c
+/* App/Adapters/STM32/EthernetModemAdapter.c
  *
- * IModemPort concrete implementation for Ethernet NTCIP (LwIP / DHCP).
+ * IModemPort concrete implementation for Ethernet (LwIP / DHCP).
  * No serial port is used; GetBaudRate() returns 0 and PrepareCommand()
  * always returns FALSE.
  *
  * INIT state polls EthProcessDHCP() / EthGetDHCPState() until an
- * address is assigned, then advances to CONNECT.
- * CONNECT state returns MODEM_STATE_CONNECTED, triggering the
- * coordinator to call MCSTryConnect() for SNMP/TCP client startup.
+  * address is assigned, then advances to CONNECT.
+ * CONNECT state returns MODEM_STATE_CONNECTED when the bearer is up.
  */
-#include "EthernetNtcipModemAdapter.h"
+#include "EthernetModemAdapter.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#include "eth.h"  /* EthProcessDHCP, EthGetDHCPState, EthGetDHCPIPv4,
-                   *  DHCP_* enum, tEEthDHCPStates               */
-#include "lwip.h" /* MX_LWIP_Init, LwIPIsNetifUp               */
-#include "MCS.h"  /* MCSIsEthernetStaticIP, MCSGetEthernetMACAddress */
-#include "MCSAsynch.h"
-#include "snmp_client.h"
-#include "udp_probe.h"
-#include "tcp_client.h"
-#include "program.h"
+#include "eth.h"
+#include "lwip.h"
+#include "MCS.h"
 
 /* ------------------------------------------------------------------
  * Private state enum — authoritative for Ethernet NTCIP adapter.
@@ -64,7 +57,7 @@ static void FormatMAC(tpSMCSMACAddress mac, char *out, uint8_t maxLen)
 
 static void AdapterOnInit(void *ctx, ISerialPort_t *serialPort)
 {
-  EthernetNtcipModemAdapterCtx_t *c = (EthernetNtcipModemAdapterCtx_t *) ctx;
+  EthernetModemAdapterCtx_t *c = (EthernetModemAdapterCtx_t *) ctx;
 
   c->serialPort = serialPort;
   MX_LWIP_Init();
@@ -259,59 +252,21 @@ static uint8_t AdapterIsDisconnected(void       *ctx,
   return 0U;
 }
 
-static uint8_t AdapterGetGreetingType(void *ctx)
+static uint8_t AdapterIsTransportReady(void *ctx)
 {
   (void) ctx;
-
-  return MODEM_GREETING_ETH_MAC;
+  return LwIPIsNetifUp();
 }
 
-static uint8_t AdapterOnConnect(void *ctx)
+static uint8_t AdapterIsTransportHealthy(void *ctx)
 {
   (void) ctx;
-  (void) MCSSNMPClientStart();
-  (void) MCSUDPProbeStart();
-  (void) MCSTCPClientConnect();
-
-  if (ServerSettingsMCSAvailableGet())
-  {
-    if (TCPClientIsConnected())
-    {
-      if (!MCSAsynchConnectedGet())
-      {
-        MCSSetRuntimeLocalIPv4(TCPClientGetLocalIPv4Str());
-        MCSSetRuntimeRemoteIPv4(TCPClientGetRemoteIPv4Str());
-        MCSJobAdd(MCSGetRuntimeRemoteIPv4());
-
-        if (!MCSAsynchStart(MODEM_GREETING_ETH_MAC))
-        {
-          MCSJobAdd("MCS CON. ERROR");
-
-          return 0U;
-        }
-
-        MCSJobAdd("MCS CON. SUC.");
-      }
-    }
-    else
-    {
-      MCSJobAdd("TCP NOT CON.");
-
-      return 0U;
-    }
-  }
-
-  return 1U;
+  return LwIPIsNetifUp();
 }
 
 static void AdapterOnMaintain(void *ctx)
 {
   (void) ctx;
-  MCSUDPConnectionMaintain();
-  if (MCSAsynchConnectedGet())
-  {
-    MCSAsynchCheckConnectionTimeout();
-  }
 }
 
 static void AdapterOnRx(void *ctx, const uint8_t *data, uint16_t len)
@@ -325,47 +280,27 @@ static void AdapterOnRx(void *ctx, const uint8_t *data, uint16_t len)
 static void AdapterOnDisconnect(void *ctx)
 {
   (void) ctx;
-  if (MCSAsynchConnectedGet())
-  {
-    MCSAsynchStop(MCS_ASYNCH_DISC_TYPE_CON_INFO_CHANGED);
-  }
-
-  if (SNMPClientIsStarted())
-  {
-    SNMPClientStop();
-  }
-
-  if (UDPProbeIsStarted())
-  {
-    UDPProbeStop();
-  }
-
-  if (TCPClientIsConnected())
-  {
-    TCPClientDisconnect();
-  }
+  LwIPSetNetifDown();
 }
 
 static uint8_t AdapterSend(void *ctx, const uint8_t *data, uint16_t len)
 {
   (void) ctx;
+  (void) data;
   (void) len;
-  TCPClientSendData((tpSMCSAsynchRxTxMsg) data);
-
-  return 1U;
+  return 0U;
 }
 
 /* ------------------------------------------------------------------
  * Public API
  * ------------------------------------------------------------------ */
 
-void EthernetNtcipModemAdapterInit(EthernetNtcipModemAdapterCtx_t *ctx)
+void EthernetModemAdapterInit(EthernetModemAdapterCtx_t *ctx)
 {
   memset(ctx, 0, sizeof(*ctx));
 }
 
-IModemPort_t EthernetNtcipModemAdapterCreatePort(
-  EthernetNtcipModemAdapterCtx_t *ctx)
+IModemPort_t EthernetModemAdapterCreatePort(EthernetModemAdapterCtx_t *ctx)
 {
   IModemPort_t port;
 
@@ -377,13 +312,13 @@ IModemPort_t EthernetNtcipModemAdapterCreatePort(
   port.GetWaitParams = AdapterGetWaitParams;
   port.HandleResponse = AdapterHandleResponse;
   port.GetStateLabel = AdapterGetStateLabel;
-  port.IsDisconnected = AdapterIsDisconnected;
-  port.GetGreetingType = AdapterGetGreetingType;
-  port.OnConnect = AdapterOnConnect;
+  port.IsTransportReady = AdapterIsTransportReady;
+  port.IsTransportHealthy = AdapterIsTransportHealthy;
   port.OnMaintain = AdapterOnMaintain;
   port.OnRx = AdapterOnRx;
   port.OnDisconnect = AdapterOnDisconnect;
   port.Send = AdapterSend;
+  port.IsDisconnected = AdapterIsDisconnected;
 
   return port;
 }

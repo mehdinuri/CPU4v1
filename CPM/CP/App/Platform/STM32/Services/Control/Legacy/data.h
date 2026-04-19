@@ -12,9 +12,15 @@
 #define MAESTRO_VERSION_ARG4 'T'
 
 /* language support */
+#ifndef LANGUAGES_MAX
 #define LANGUAGES_MAX 2 /* Turkish, English */
+#endif
+#ifndef LANGUAGE_TURKISH
 #define LANGUAGE_TURKISH 0
+#endif
+#ifndef LANGUAGE_ENGLISH
 #define LANGUAGE_ENGLISH 1
+#endif
 #define LANGUAGE_NONE 2
 
 /* LRLF Detect Time Settings */

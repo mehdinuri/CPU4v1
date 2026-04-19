@@ -1,9 +1,7 @@
 /* App/Ports/IModemPort.h
  *
- * Port interface for a modem-type driver.
- * One implementation per connection module type: uBlox LEON G100, Telit
- * GL865, Quectel M95, Quectel EG915U (PPP/NTCIP), USR TCP232-200,
- * Ethernet NTCIP.
+ * Port interface for a network-bearer driver.
+ * One implementation per supported bearer: Quectel PPPoS or Ethernet.
  *
  * The MCS coordinator calls the inline helpers; adapters implement the
  * function pointers.  No HAL, FreeRTOS, or modem-type enum appears here.
@@ -19,15 +17,6 @@
  * ------------------------------------------------------------------ */
 #define MODEM_STATE_CONNECTED  0xFEU
 #define MODEM_STATE_FAILED     0xFFU
-
-/* ------------------------------------------------------------------
- * Maestro greeting type constants for GetGreetingType() /
- * MCSAsynchStart().  Three logical categories cover all six module
- * types without exposing modem-type enum values to MCSAsynch.c.
- * ------------------------------------------------------------------ */
-#define MODEM_GREETING_IMEI    0U   /* GPRS: uBlox, Telit, Quectel, QuectelNTCIP */
-#define MODEM_GREETING_USR_MAC 1U   /* USR TCP232-200                             */
-#define MODEM_GREETING_ETH_MAC 2U   /* Ethernet NTCIP                             */
 
 /* ------------------------------------------------------------------
  * ModemInfo_t — data the driver extracts and writes during
@@ -61,13 +50,10 @@ typedef struct
 {
   void    *ctx;
 
-  /* One-time modem/stack setup called from MCSInit().
-   * GPRS adapters: no-op.
-   * EthernetNtcip: calls MX_LWIP_Init().
-   * QuectelNtcip: calls MX_LWIP_Init() + PPPOSAsynchCreate(serialPort). */
+  /* One-time bearer/stack setup called from MCSInit(). */
   void (*OnInit)(void *ctx, ISerialPort_t *serialPort);
 
-  /* Baud rate for SerialSetBaudRate(); 0 = no serial (Ethernet NTCIP). */
+  /* Baud rate for SerialSetBaudRate(); 0 = no serial (Ethernet). */
   uint32_t (*GetBaudRate)(void *ctx);
 
   /* Starting state value for the coordinator's bState variable. */
@@ -111,36 +97,29 @@ typedef struct
    * state enum.  Returns a pointer to a string literal; never NULL. */
   const char *(*GetStateLabel)(void *ctx, uint8_t state);
 
-  /* Returns TRUE (1) if 'data' contains a remote-disconnect keyword.
-   * Used by MCSAsynchIsRemoteEndClosed(). */
-  uint8_t (*IsDisconnected)(void *ctx, const char *data, uint16_t len);
+  /* Returns TRUE (1) when the bearer is ready for SNMP traffic. */
+  uint8_t (*IsTransportReady)(void *ctx);
 
-  /* Which Maestro greeting to send after connect (MODEM_GREETING_*). */
-  uint8_t (*GetGreetingType)(void *ctx);
+  /* Returns TRUE (1) while the current bearer remains healthy.
+   * Idle traffic alone must not drive this to FALSE. */
+  uint8_t (*IsTransportHealthy)(void *ctx);
 
-  /* Attempt to establish higher-level connection (e.g., MCS asynch,
-   * TCP/SNMP/UDP start). Called from MCSTryConnect().
-   * Returns TRUE (1) on success, FALSE (0) on error. */
-  uint8_t (*OnConnect)(void *ctx);
-
-  /* Periodic maintenance logic (e.g., maintain TCP/PPP/Asynch connection).
-   * Called from MCSTaskFunc() loop. */
+  /* Periodic transport maintenance logic. */
   void (*OnMaintain)(void *ctx);
 
   /* Process raw data received from the serial port.
    * If the adapter handles RX itself, it can route it to ring buffer
-   * or asynch/PPP as needed. */
+   * or PPP as needed. */
   void (*OnRx)(void *ctx, const uint8_t *data, uint16_t len);
 
-  /* Request immediate disconnection of all active sessions.
-   * Called when connection info changes or a hard reset is needed. */
+  /* Request immediate bearer disconnection/reset. */
   void (*OnDisconnect)(void *ctx);
 
-  /* Transmit asynch data message to the remote server.
-   * GPRS/USR: SerialSend(p->port, ...)
-   * NTCIP: TCPClientSendData(...)
-   * Returns TRUE (1) on success. */
+  /* Optional raw send hook for adapters that expose one. */
   uint8_t (*Send)(void *ctx, const uint8_t *data, uint16_t len);
+
+  /* Optional disconnect-state hook for adapters that expose one. */
+  uint8_t (*IsDisconnected)(void *ctx, const char *data, uint16_t len);
 } IModemPort_t;
 
 /* ------------------------------------------------------------------
@@ -196,21 +175,14 @@ static inline const char *ModemGetStateLabel(IModemPort_t *p, uint8_t state)
   return p->GetStateLabel(p->ctx, state);
 }
 
-static inline uint8_t ModemIsDisconnected(IModemPort_t *p,
-                                          const char   *data,
-                                          uint16_t len)
+static inline uint8_t ModemIsTransportReady(IModemPort_t *p)
 {
-  return p->IsDisconnected(p->ctx, data, len);
+  return p->IsTransportReady(p->ctx);
 }
 
-static inline uint8_t ModemGetGreetingType(IModemPort_t *p)
+static inline uint8_t ModemIsTransportHealthy(IModemPort_t *p)
 {
-  return p->GetGreetingType(p->ctx);
-}
-
-static inline uint8_t ModemOnConnect(IModemPort_t *p)
-{
-  return p->OnConnect(p->ctx);
+  return p->IsTransportHealthy(p->ctx);
 }
 
 static inline void ModemOnMaintain(IModemPort_t *p)
@@ -233,6 +205,13 @@ static inline uint8_t ModemSend(IModemPort_t *p,
                                 uint16_t len)
 {
   return p->Send(p->ctx, data, len);
+}
+
+static inline uint8_t ModemIsDisconnected(IModemPort_t *p,
+                                          const char   *data,
+                                          uint16_t len)
+{
+  return p->IsDisconnected(p->ctx, data, len);
 }
 
 #endif /* IMODEM_PORT_H */

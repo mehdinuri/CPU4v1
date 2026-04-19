@@ -158,8 +158,7 @@ lan8742_IOCtx_t  LAN8742_IOCtx = {ETH_PHY_IO_Init,
 /* USER CODE BEGIN 3 */
 void EthDeInit(void)
 {
-  if ((MCSGetModemType() == MCS_MODULE_TYPE_ETH_NTCIP)
-      || (MCSGetModemType() == MCS_MODULE_TYPE_QUECTEL_NTCIP) )
+  if (MCSGetModemType() == MCS_NETWORK_TYPE_ETHERNET)
   {
     LwIPSetNetifDown();
     HAL_ETH_Stop_IT(&heth);

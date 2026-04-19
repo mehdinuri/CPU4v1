@@ -1,87 +1,96 @@
 /* App/Adapters/STM32/QuectelModemAdapter.c
  *
- * IModemPort concrete implementation for the Quectel M95 GPRS module
- * (115200 baud, TCP socket via AT+QIOPEN command).
+ * IModemPort concrete implementation for the Quectel EG915U bearer
+ * (115200 baud, PPP dial-up, LwIP over PPPoS).
  *
- * All Quectel M95-specific knowledge lives here: AT command strings,
- * per-state response keywords and timeouts, state-transition logic.
+ * OnInit() starts LwIP and creates the PPPoS asynch task.
+ * The DIAL state calls PPPOSAsynchStart() and polls for connection.
+ * The CONNECT state returns MODEM_STATE_CONNECTED when the bearer is up.
  */
 #include "QuectelModemAdapter.h"
 
 #include <stdio.h>
 #include <string.h>
 
-#include "cmsis_os.h" /* osDelay — post-reset stabilisation wait */
+#include "cmsis_os.h"
+#include "lwip.h"
+#include "PPPOSAsynch.h"
 #include "MCS.h"
-#include "MCSAsynch.h"
 
 /* ------------------------------------------------------------------
- * Private state enum — authoritative for Quectel M95 adapter.
+ * Private state enum — authoritative for Quectel EG915U NTCIP adapter.
  * ------------------------------------------------------------------ */
 typedef enum
 {
-  QUECTEL_CMD_MODE         = 0,
-  QUECTEL_CLOSE_SOCKET     = 1,
-  QUECTEL_RESET_MODEM      = 2,
-  QUECTEL_AT_COMMAND       = 3,
-  QUECTEL_MANUFACTURER     = 4,
-  QUECTEL_GET_IMEI         = 5,
-  QUECTEL_CHECK_SIG_QUA    = 6,
-  QUECTEL_CHECK_SIM        = 7,
-  QUECTEL_CHECK_GSM_NET    = 8,
-  QUECTEL_CHECK_GPRS_NET   = 9,
-  QUECTEL_GET_OPERATOR     = 10,
-  QUECTEL_DEACTIVATE_CTX   = 11,
-  QUECTEL_SETUP_APN        = 12,
-  QUECTEL_ACTIVATE_CTX     = 13,
-  QUECTEL_OPEN_SOCKET      = 14,
-  QUECTEL_STATE_TOTAL      = 15
-} QuectelState_t;
+  QNTCIP_CMD_MODE         = 0,
+  QNTCIP_RESET_MODEM      = 1,
+  QNTCIP_FACTORY_RESET    = 2,
+  QNTCIP_AT_COMMAND       = 3,
+  QNTCIP_MANUFACTURER     = 4,
+  QNTCIP_GET_IMEI         = 5,
+  QNTCIP_CHECK_SIG_QUA    = 6,
+  QNTCIP_CHECK_SIM        = 7,
+  QNTCIP_CHECK_GSM_NET    = 8,
+  QNTCIP_CHECK_GPRS_NET   = 9,
+  QNTCIP_GET_OPERATOR     = 10,
+  QNTCIP_DEACTIVATE_CTX   = 11,
+  QNTCIP_CLEAR_CTX        = 12,
+  QNTCIP_DETACH_NET       = 13,
+  QNTCIP_SETUP_APN        = 14,
+  QNTCIP_ATTACH_NET       = 15,
+  QNTCIP_ACTIVATE_CTX     = 16,
+  QNTCIP_DIAL             = 17,
+  QNTCIP_CONNECT          = 18,
+  QNTCIP_STATE_TOTAL      = 19
+} QNtcipState_t;
 
 /* ------------------------------------------------------------------
  * Per-state wait timeout constants (milliseconds).
  * ------------------------------------------------------------------ */
-#define QUECTEL_TIMEOUT_1S   1000U
-#define QUECTEL_TIMEOUT_10S  10000U
-#define QUECTEL_TIMEOUT_15S  15000U
-#define QUECTEL_TIMEOUT_30S  30000U
+#define QNTCIP_TIMEOUT_1S   1000U
+#define QNTCIP_TIMEOUT_10S  10000U
+#define QNTCIP_TIMEOUT_15S  15000U
 
 /* ------------------------------------------------------------------
  * Retry limit constants.
  * ------------------------------------------------------------------ */
-#define QUECTEL_MAX_CMD_TRIES  2U
-#define QUECTEL_MAX_SIM_TRIES  5U
-#define QUECTEL_MAX_SIG_TRIES  5U
-#define QUECTEL_MAX_NET_TRIES  60U
+#define QNTCIP_MAX_CMD_TRIES  2U
+#define QNTCIP_MAX_SIM_TRIES  5U
+#define QNTCIP_MAX_SIG_TRIES  5U
+#define QNTCIP_MAX_NET_TRIES  60U
 
-#define QUECTEL_SIGNAL_ERR  99U
-#define QUECTEL_SIGNAL_MAX  31U
-#define QUECTEL_SIGNAL_MIN  0U
+#define QNTCIP_SIGNAL_ERR  99U
+#define QNTCIP_SIGNAL_MAX  31U
+#define QNTCIP_SIGNAL_MIN  0U
 
-#define QUECTEL_MANUFACTURER_ID1 "Quectel_Ltd"
-#define QUECTEL_MANUFACTURER_ID2 "Quectel"
+#define QNTCIP_MANUFACTURER_ID1 "Quectel_Ltd"
+#define QNTCIP_MANUFACTURER_ID2 "Quectel"
 
 /* ------------------------------------------------------------------
- * State label table — indexed by QuectelState_t.
- * Entries match MCS.c pStrQuectel[] exactly.
+ * State label table — indexed by QNtcipState_t.
+ * Entries match MCS.c pStrQuectelNTCIP[] exactly.
  * ------------------------------------------------------------------ */
-static const char *const s_labels[QUECTEL_STATE_TOTAL] =
+static const char *const s_labels[QNTCIP_STATE_TOTAL] =
 {
-  /* 0  QUECTEL_CMD_MODE       */ "COMMAND MODE",
-  /* 1  QUECTEL_CLOSE_SOCKET   */ "CLOSE SOCKET",
-  /* 2  QUECTEL_RESET_MODEM    */ "RESET MODEM",
-  /* 3  QUECTEL_AT_COMMAND     */ "AT COMMAND",
-  /* 4  QUECTEL_MANUFACTURER   */ "MANUFACTURER ID",
-  /* 5  QUECTEL_GET_IMEI       */ "GET IMEI",
-  /* 6  QUECTEL_CHECK_SIG_QUA  */ "CHECK SIGNAL Q.",
-  /* 7  QUECTEL_CHECK_SIM      */ "CHECK SIM",
-  /* 8  QUECTEL_CHECK_GSM_NET  */ "CHECK GSM N.",
-  /* 9  QUECTEL_CHECK_GPRS_NET */ "CHECK GPRS N.",
-  /* 10 QUECTEL_GET_OPERATOR   */ "GET OPERATOR",
-  /* 11 QUECTEL_DEACTIVATE_CTX */ "DEACT. CONTEXT",
-  /* 12 QUECTEL_SETUP_APN      */ "SETUP APN",
-  /* 13 QUECTEL_ACTIVATE_CTX   */ "ACT. CONTEXT",
-  /* 14 QUECTEL_OPEN_SOCKET    */ "OPEN SOCKET",
+  /* 0  QNTCIP_CMD_MODE       */ "COMMAND MODE",
+  /* 1  QNTCIP_RESET_MODEM    */ "RESET MODEM",
+  /* 2  QNTCIP_FACTORY_RESET  */ "FACTORY RESET",
+  /* 3  QNTCIP_AT_COMMAND     */ "AT COMMAND",
+  /* 4  QNTCIP_MANUFACTURER   */ "MANUFACTURER ID",
+  /* 5  QNTCIP_GET_IMEI       */ "GET IMEI",
+  /* 6  QNTCIP_CHECK_SIG_QUA  */ "CHECK SIGNAL Q.",
+  /* 7  QNTCIP_CHECK_SIM      */ "CHECK SIM",
+  /* 8  QNTCIP_CHECK_GSM_NET  */ "CHECK GSM N.",
+  /* 9  QNTCIP_CHECK_GPRS_NET */ "CHECK GPRS N.",
+  /* 10 QNTCIP_GET_OPERATOR   */ "GET OPERATOR",
+  /* 11 QNTCIP_DEACTIVATE_CTX */ "DEACT. CNTXT",
+  /* 12 QNTCIP_CLEAR_CTX      */ "CLEAR. CNTXT",
+  /* 13 QNTCIP_DETACH_NET     */ "DETACH NET.",
+  /* 14 QNTCIP_SETUP_APN      */ "SETUP APN",
+  /* 15 QNTCIP_ATTACH_NET     */ "ATTACH NET.",
+  /* 16 QNTCIP_ACTIVATE_CTX   */ "ACT. CNTXT",
+  /* 17 QNTCIP_DIAL           */ "DIALING...",
+  /* 18 QNTCIP_CONNECT        */ "CONNECTING...",
 };
 
 /* ------------------------------------------------------------------
@@ -137,13 +146,13 @@ static void ExtractOperator(const char *strIn,
 }
 
 static uint8_t HandleNetworkResponse(QuectelModemAdapterCtx_t *ctx,
-                                     QuectelState_t state,
-                                     const char               *response,
-                                     ModemInfo_t              *pInfo)
+                                     QNtcipState_t state,
+                                     const char                    *response,
+                                     ModemInfo_t                   *pInfo)
 {
-  QuectelState_t nextState = (state == QUECTEL_CHECK_GSM_NET)
-                             ? QUECTEL_CHECK_GPRS_NET
-                             : QUECTEL_GET_OPERATOR;
+  QNtcipState_t nextState = (state == QNTCIP_CHECK_GSM_NET)
+                            ? QNTCIP_CHECK_GPRS_NET
+                            : QNTCIP_GET_OPERATOR;
 
   if ((strcmp(response, "0,1") == 0) || (strcmp(response, "0,5") == 0))
   {
@@ -170,7 +179,7 @@ static uint8_t HandleNetworkResponse(QuectelModemAdapterCtx_t *ctx,
     pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
     ctx->bNetRetries = 0U;
 
-    return (uint8_t) QUECTEL_CMD_MODE;
+    return (uint8_t) QNTCIP_CMD_MODE;
   }
 
   ctx->bNetRetries++;
@@ -178,7 +187,7 @@ static uint8_t HandleNetworkResponse(QuectelModemAdapterCtx_t *ctx,
                   "NOT REG. SEARCH. %u",
                   (unsigned int) ctx->bNetRetries);
 
-  if (ctx->bNetRetries > QUECTEL_MAX_NET_TRIES)
+  if (ctx->bNetRetries > QNTCIP_MAX_NET_TRIES)
   {
     ctx->bNetRetries = 0U;
 
@@ -197,6 +206,8 @@ static void AdapterOnInit(void *ctx, ISerialPort_t *serialPort)
   QuectelModemAdapterCtx_t *c = (QuectelModemAdapterCtx_t *) ctx;
 
   c->serialPort = serialPort;
+  MX_LWIP_Init();
+  PPPOSAsynchCreate(serialPort);
 }
 
 static uint32_t AdapterGetBaudRate(void *ctx)
@@ -210,7 +221,7 @@ static uint8_t AdapterGetInitialState(void *ctx)
 {
   (void) ctx;
 
-  return (uint8_t) QUECTEL_CMD_MODE;
+  return (uint8_t) QNTCIP_CMD_MODE;
 }
 
 static uint8_t AdapterPrepareCommand(void       *ctx,
@@ -222,115 +233,144 @@ static uint8_t AdapterPrepareCommand(void       *ctx,
                                      uint16_t maxLen)
 {
   (void) ctx;
+  (void) host;
+  (void) serverPort;
 
-  switch ((QuectelState_t) state)
+  switch ((QNtcipState_t) state)
   {
-      case QUECTEL_CMD_MODE:
+      case QNTCIP_CMD_MODE:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "+++");
 
         return 1U;
       }
 
-      case QUECTEL_CLOSE_SOCKET:
-      {
-        (void) snprintf(outBuf, (size_t) maxLen, "at+qiclose=0\r");
-
-        return 1U;
-      }
-
-      case QUECTEL_RESET_MODEM:
+      case QNTCIP_RESET_MODEM:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cfun=1,1\r");
 
         return 1U;
       }
 
-      case QUECTEL_AT_COMMAND:
+      case QNTCIP_FACTORY_RESET:
+      {
+        (void) snprintf(outBuf, (size_t) maxLen, "at&f\r\n");
+
+        return 1U;
+      }
+
+      case QNTCIP_AT_COMMAND:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "ate0\r");
 
         return 1U;
       }
 
-      case QUECTEL_MANUFACTURER:
+      case QNTCIP_MANUFACTURER:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cgmi\r");
 
         return 1U;
       }
 
-      case QUECTEL_GET_IMEI:
+      case QNTCIP_GET_IMEI:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cgsn\r");
 
         return 1U;
       }
 
-      case QUECTEL_CHECK_SIG_QUA:
+      case QNTCIP_CHECK_SIG_QUA:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+csq\r");
 
         return 1U;
       }
 
-      case QUECTEL_CHECK_SIM:
+      case QNTCIP_CHECK_SIM:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cpin?\r");
 
         return 1U;
       }
 
-      case QUECTEL_CHECK_GSM_NET:
+      case QNTCIP_CHECK_GSM_NET:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+creg?\r");
 
         return 1U;
       }
 
-      case QUECTEL_CHECK_GPRS_NET:
+      case QNTCIP_CHECK_GPRS_NET:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cgreg?\r");
 
         return 1U;
       }
 
-      case QUECTEL_GET_OPERATOR:
+      case QNTCIP_GET_OPERATOR:
       {
         (void) snprintf(outBuf, (size_t) maxLen, "at+cops?\r");
 
         return 1U;
       }
 
-      case QUECTEL_DEACTIVATE_CTX:
+      case QNTCIP_DEACTIVATE_CTX:
       {
-        (void) snprintf(outBuf, (size_t) maxLen, "at+qideact=1\r");
+        (void) snprintf(outBuf, (size_t) maxLen, "at+cgact=0,1\r");
 
         return 1U;
       }
 
-      case QUECTEL_SETUP_APN:
+      case QNTCIP_CLEAR_CTX:
+      {
+        (void) snprintf(outBuf, (size_t) maxLen, "at+cgdcont=1\r");
+
+        return 1U;
+      }
+
+      case QNTCIP_DETACH_NET:
+      {
+        (void) snprintf(outBuf, (size_t) maxLen, "at+cgatt=0\r");
+
+        return 1U;
+      }
+
+      case QNTCIP_SETUP_APN:
       {
         (void) snprintf(outBuf, (size_t) maxLen,
-                        "at+qicsgp=1,1,\"%s\",\"\",\"\",0\r", apn);
+                        "at+cgdcont=1,\"PPP\",\"%s\"\r", apn);
 
         return 1U;
       }
 
-      case QUECTEL_ACTIVATE_CTX:
+      case QNTCIP_ATTACH_NET:
       {
-        (void) snprintf(outBuf, (size_t) maxLen, "at+qiact=1\r");
+        (void) snprintf(outBuf, (size_t) maxLen, "at+cgatt=1\r");
 
         return 1U;
       }
 
-      case QUECTEL_OPEN_SOCKET:
+      case QNTCIP_ACTIVATE_CTX:
       {
-        (void) snprintf(outBuf, (size_t) maxLen,
-                        "at+qiopen=1,0,\"TCP\",\"%s\",%u,0,2\r",
-                        host, (unsigned int) serverPort);
+        (void) snprintf(outBuf, (size_t) maxLen, "at+cgact=1,1\r");
 
         return 1U;
+      }
+
+      case QNTCIP_DIAL:
+      {
+        (void) snprintf(outBuf, (size_t) maxLen, "atd*99#\r");
+
+        return 1U;
+      }
+
+      case QNTCIP_CONNECT:
+      {
+        /* No AT command — just wait for coordinator to advance. */
+        outBuf[0] = '\0';
+
+        return 0U;
       }
 
       default:
@@ -352,89 +392,94 @@ static void AdapterGetWaitParams(void          *ctx,
   (void) ctx;
 
   *sc = '\0';
-  *mr = QUECTEL_MAX_CMD_TRIES;
+  *mr = QNTCIP_MAX_CMD_TRIES;
   *kw = "OK";
-  *tms = QUECTEL_TIMEOUT_1S;
+  *tms = QNTCIP_TIMEOUT_1S;
 
-  switch ((QuectelState_t) state)
+  switch ((QNtcipState_t) state)
   {
-      case QUECTEL_CMD_MODE:
+      case QNTCIP_CMD_MODE:
       {
         *mr = 1U;
         break;
       }
 
-      case QUECTEL_CLOSE_SOCKET:
-      case QUECTEL_RESET_MODEM:
+      case QNTCIP_RESET_MODEM:
       {
-        *tms = QUECTEL_TIMEOUT_10S;
+        *tms = QNTCIP_TIMEOUT_10S;
         break;
       }
 
-      case QUECTEL_AT_COMMAND:
-      case QUECTEL_SETUP_APN:
-      case QUECTEL_DEACTIVATE_CTX:
+      case QNTCIP_FACTORY_RESET:
+      case QNTCIP_AT_COMMAND:
+      case QNTCIP_DEACTIVATE_CTX:
+      case QNTCIP_CLEAR_CTX:
+      case QNTCIP_DETACH_NET:
+      case QNTCIP_SETUP_APN:
+      case QNTCIP_ATTACH_NET:
+      case QNTCIP_ACTIVATE_CTX:
       {
         break; /* default: "OK", 1 s, 2 retries */
       }
 
-      case QUECTEL_MANUFACTURER:
-      case QUECTEL_GET_IMEI:
+      case QNTCIP_MANUFACTURER:
+      case QNTCIP_GET_IMEI:
       {
         *kw = "\r\n";
         *sc = '\r';
         break;
       }
 
-      case QUECTEL_CHECK_SIG_QUA:
+      case QNTCIP_CHECK_SIG_QUA:
       {
         *kw = "+CSQ: ";
         *sc = ',';
-        *mr = QUECTEL_MAX_SIG_TRIES;
+        *mr = QNTCIP_MAX_SIG_TRIES;
         break;
       }
 
-      case QUECTEL_CHECK_SIM:
+      case QNTCIP_CHECK_SIM:
       {
         *kw = "+CPIN: ";
         *sc = '\r';
-        *mr = QUECTEL_MAX_SIM_TRIES;
+        *mr = QNTCIP_MAX_SIM_TRIES;
         break;
       }
 
-      case QUECTEL_CHECK_GSM_NET:
+      case QNTCIP_CHECK_GSM_NET:
       {
         *kw = "+CREG: ";
         *sc = '\r';
-        *mr = QUECTEL_MAX_NET_TRIES;
+        *mr = QNTCIP_MAX_NET_TRIES;
         break;
       }
 
-      case QUECTEL_CHECK_GPRS_NET:
+      case QNTCIP_CHECK_GPRS_NET:
       {
         *kw = "+CGREG: ";
         *sc = '\r';
-        *mr = QUECTEL_MAX_NET_TRIES;
+        *mr = QNTCIP_MAX_NET_TRIES;
         break;
       }
 
-      case QUECTEL_GET_OPERATOR:
+      case QNTCIP_GET_OPERATOR:
       {
         *kw = "+COPS: ";
         *sc = '\r';
         break;
       }
 
-      case QUECTEL_ACTIVATE_CTX:
+      case QNTCIP_DIAL:
       {
-        *tms = QUECTEL_TIMEOUT_30S;
+        *kw = "CONNECT";
+        *tms = QNTCIP_TIMEOUT_15S;
         break;
       }
 
-      case QUECTEL_OPEN_SOCKET:
+      case QNTCIP_CONNECT:
       {
-        *kw = "CONNECT";
-        *tms = QUECTEL_TIMEOUT_15S;
+        /* HandleResponse is called immediately (no key to wait for). */
+        *mr = 1U;
         break;
       }
 
@@ -453,13 +498,19 @@ static uint8_t AdapterHandleResponse(void        *ctx,
 {
   QuectelModemAdapterCtx_t *c = (QuectelModemAdapterCtx_t *) ctx;
 
-  /* CMD_MODE always advances, setting modem-alive to FALSE. */
-  if ((QuectelState_t) state == QUECTEL_CMD_MODE)
+  /* CMD_MODE always advances. */
+  if ((QNtcipState_t) state == QNTCIP_CMD_MODE)
   {
     pInfo->bModemAlive = 0U;
     pInfo->bModemAliveValid = 1U;
 
-    return (uint8_t) QUECTEL_CLOSE_SOCKET;
+    return (uint8_t) QNTCIP_RESET_MODEM;
+  }
+
+  /* CONNECT state always returns MODEM_STATE_CONNECTED. */
+  if ((QNtcipState_t) state == QNTCIP_CONNECT)
+  {
+    return MODEM_STATE_CONNECTED;
   }
 
   if (responseOk == 0U)
@@ -471,28 +522,31 @@ static uint8_t AdapterHandleResponse(void        *ctx,
     return MODEM_STATE_FAILED;
   }
 
-  switch ((QuectelState_t) state)
+  switch ((QNtcipState_t) state)
   {
-      case QUECTEL_CLOSE_SOCKET:
-      case QUECTEL_AT_COMMAND:
-      case QUECTEL_DEACTIVATE_CTX:
-      case QUECTEL_SETUP_APN:
-      case QUECTEL_ACTIVATE_CTX:
+      case QNTCIP_FACTORY_RESET:
+      case QNTCIP_AT_COMMAND:
+      case QNTCIP_DEACTIVATE_CTX:
+      case QNTCIP_CLEAR_CTX:
+      case QNTCIP_DETACH_NET:
+      case QNTCIP_SETUP_APN:
+      case QNTCIP_ATTACH_NET:
+      case QNTCIP_ACTIVATE_CTX:
       {
         return (uint8_t) ((uint8_t) state + 1U);
       }
 
-      case QUECTEL_RESET_MODEM:
+      case QNTCIP_RESET_MODEM:
       {
-        osDelay(QUECTEL_TIMEOUT_10S);
+        osDelay(QNTCIP_TIMEOUT_10S);
 
-        return (uint8_t) QUECTEL_AT_COMMAND;
+        return (uint8_t) QNTCIP_FACTORY_RESET;
       }
 
-      case QUECTEL_MANUFACTURER:
+      case QNTCIP_MANUFACTURER:
       {
-        uint8_t alive = ((strcmp(response, QUECTEL_MANUFACTURER_ID1) == 0)
-                         || (strcmp(response, QUECTEL_MANUFACTURER_ID2) == 0))
+        uint8_t alive = ((strcmp(response, QNTCIP_MANUFACTURER_ID1) == 0)
+                         || (strcmp(response, QNTCIP_MANUFACTURER_ID2) == 0))
                         ? 1U : 0U;
 
         pInfo->bModemAlive = alive;
@@ -504,19 +558,19 @@ static uint8_t AdapterHandleResponse(void        *ctx,
           pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
         }
 
-        return (uint8_t) QUECTEL_GET_IMEI;
+        return (uint8_t) QNTCIP_GET_IMEI;
       }
 
-      case QUECTEL_GET_IMEI:
+      case QNTCIP_GET_IMEI:
       {
         (void) strncpy(pInfo->strIMEI, response,
                        sizeof(pInfo->strIMEI) - 1U);
         pInfo->strIMEI[sizeof(pInfo->strIMEI) - 1U] = '\0';
 
-        return (uint8_t) QUECTEL_CHECK_SIG_QUA;
+        return (uint8_t) QNTCIP_CHECK_SIG_QUA;
       }
 
-      case QUECTEL_CHECK_SIG_QUA:
+      case QNTCIP_CHECK_SIG_QUA:
       {
         uint8_t quality = ParseSignalQuality(response);
 
@@ -524,34 +578,34 @@ static uint8_t AdapterHandleResponse(void        *ctx,
                        sizeof(pInfo->strJobLabel) - 1U);
         pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
 
-        if (quality != QUECTEL_SIGNAL_ERR)
+        if (quality != QNTCIP_SIGNAL_ERR)
         {
-          if (quality > QUECTEL_SIGNAL_MAX)
+          if (quality > QNTCIP_SIGNAL_MAX)
           {
-            quality = QUECTEL_SIGNAL_MAX;
+            quality = QNTCIP_SIGNAL_MAX;
           }
 
           pInfo->bSignalQuality = quality;
           pInfo->bSignalQualityValid = 1U;
           c->bSigQuaRetries = 0U;
 
-          return (uint8_t) QUECTEL_CHECK_SIM;
+          return (uint8_t) QNTCIP_CHECK_SIM;
         }
 
         c->bSigQuaRetries++;
-        if (c->bSigQuaRetries > QUECTEL_MAX_SIG_TRIES)
+        if (c->bSigQuaRetries > QNTCIP_MAX_SIG_TRIES)
         {
-          pInfo->bSignalQuality = QUECTEL_SIGNAL_MIN;
+          pInfo->bSignalQuality = QNTCIP_SIGNAL_MIN;
           pInfo->bSignalQualityValid = 1U;
           c->bSigQuaRetries = 0U;
 
-          return (uint8_t) QUECTEL_CHECK_SIM;
+          return (uint8_t) QNTCIP_CHECK_SIM;
         }
 
-        return (uint8_t) QUECTEL_CHECK_SIG_QUA;
+        return (uint8_t) QNTCIP_CHECK_SIG_QUA;
       }
 
-      case QUECTEL_CHECK_SIM:
+      case QNTCIP_CHECK_SIM:
       {
         uint8_t ready = (strcmp(response, "READY") == 0) ? 1U : 0U;
 
@@ -565,28 +619,28 @@ static uint8_t AdapterHandleResponse(void        *ctx,
           pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
           c->bSimRetries = 0U;
 
-          return (uint8_t) QUECTEL_CHECK_GSM_NET;
+          return (uint8_t) QNTCIP_CHECK_GSM_NET;
         }
 
         c->bSimRetries++;
-        if (c->bSimRetries > QUECTEL_MAX_SIM_TRIES)
+        if (c->bSimRetries > QNTCIP_MAX_SIM_TRIES)
         {
           c->bSimRetries = 0U;
 
-          return (uint8_t) QUECTEL_CHECK_GSM_NET;
+          return (uint8_t) QNTCIP_CHECK_GSM_NET;
         }
 
-        return (uint8_t) QUECTEL_CHECK_SIM;
+        return (uint8_t) QNTCIP_CHECK_SIM;
       }
 
-      case QUECTEL_CHECK_GSM_NET:
-      case QUECTEL_CHECK_GPRS_NET:
+      case QNTCIP_CHECK_GSM_NET:
+      case QNTCIP_CHECK_GPRS_NET:
       {
-        return HandleNetworkResponse(c, (QuectelState_t) state,
+        return HandleNetworkResponse(c, (QNtcipState_t) state,
                                      response, pInfo);
       }
 
-      case QUECTEL_GET_OPERATOR:
+      case QNTCIP_GET_OPERATOR:
       {
         ExtractOperator(response, pInfo->strOperator,
                         (uint8_t) sizeof(pInfo->strOperator));
@@ -594,59 +648,76 @@ static uint8_t AdapterHandleResponse(void        *ctx,
                        sizeof(pInfo->strJobLabel) - 1U);
         pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
 
-        return (uint8_t) QUECTEL_DEACTIVATE_CTX;
+        return (uint8_t) QNTCIP_DEACTIVATE_CTX;
       }
 
-      case QUECTEL_OPEN_SOCKET:
+      case QNTCIP_DIAL:
       {
-        return MODEM_STATE_CONNECTED;
+        /* "CONNECT" received — attempt PPP negotiation. */
+        uint32_t startTick = osKernelGetTickCount();
+        uint8_t connected = 0U;
+        const char *label = "PPP CON. ERR.";
+
+        if (PPPOSAsynchStart() == 0) /* err_t ERR_OK == 0 */
+        {
+          while (!PPPOSAsynchGetConnected()
+                 && ((osKernelGetTickCount() - startTick)
+                     < PPPOS_ASYNCH_TIMEOUT_CONNECTION))
+          {
+            osDelay(100U);
+          }
+
+          if (PPPOSAsynchGetConnected())
+          {
+            connected = 1U;
+            label = "PPP CON. SUC.";
+          }
+        }
+
+        (void) strncpy(pInfo->strJobLabel, label,
+                       sizeof(pInfo->strJobLabel) - 1U);
+        pInfo->strJobLabel[sizeof(pInfo->strJobLabel) - 1U] = '\0';
+
+        if (connected != 0U)
+        {
+          return (uint8_t) QNTCIP_CONNECT;
+        }
+
+        PPPOSAsynchStop();
+
+        return (uint8_t) QNTCIP_CMD_MODE;
       }
 
       default:
       {
-        return (uint8_t) QUECTEL_CMD_MODE;
+        return (uint8_t) QNTCIP_CMD_MODE;
       }
   } /* switch */
 } /* AdapterHandleResponse */
 
-static uint8_t AdapterOnConnect(void *ctx)
+static uint8_t AdapterIsTransportReady(void *ctx)
 {
   (void) ctx;
-  if (!MCSAsynchConnectedGet())
-  {
-    if (!MCSAsynchStart(MODEM_GREETING_IMEI))
-    {
-      MCSJobAdd("MCS CON. ERROR");
+  return PPPOSAsynchGetConnected();
+}
 
-      return 0U;
-    }
-
-    MCSJobAdd("MCS CON. SUC.");
-  }
-
-  return 1U;
+static uint8_t AdapterIsTransportHealthy(void *ctx)
+{
+  (void) ctx;
+  return PPPOSAsynchGetConnected();
 }
 
 static void AdapterOnMaintain(void *ctx)
 {
   (void) ctx;
-  if (MCSAsynchConnectedGet())
-  {
-    if (MCSAsynchIsRemoteEndClosed())
-    {
-      MCSAsynchStop(MCS_ASYNCH_DISC_TYPE_REMOTE_END_DISCON);
-    }
-
-    MCSAsynchCheckConnectionTimeout();
-  }
 }
 
 static void AdapterOnRx(void *ctx, const uint8_t *data, uint16_t len)
 {
   (void) ctx;
-  if (MCSAsynchConnectedGet())
+  if (PPPOSAsynchIsDailed())
   {
-    (void) MCSAsynchReqRxMsg((uint8_t *) data, len);
+    (void) PPPOSAsynchReqRxMsg((uint8_t *) data, len);
   }
   else
   {
@@ -657,21 +728,29 @@ static void AdapterOnRx(void *ctx, const uint8_t *data, uint16_t len)
 static void AdapterOnDisconnect(void *ctx)
 {
   (void) ctx;
-  if (MCSAsynchConnectedGet())
+  if (PPPOSAsynchGetConnected() || PPPOSAsynchIsDailed())
   {
-    MCSAsynchStop(MCS_ASYNCH_DISC_TYPE_CON_INFO_CHANGED);
+    PPPOSAsynchStop();
   }
+}
+
+static uint8_t AdapterSend(void *ctx, const uint8_t *data, uint16_t len)
+{
+  (void) ctx;
+  (void) data;
+  (void) len;
+  return 0U;
 }
 
 static const char *AdapterGetStateLabel(void *ctx, uint8_t state)
 {
   (void) ctx;
-  if (state < (uint8_t) QUECTEL_STATE_TOTAL)
+  if (state < (uint8_t) QNTCIP_STATE_TOTAL)
   {
     return s_labels[state];
   }
 
-  return "QUECTEL ?";
+  return "QNTCIP ?";
 }
 
 static uint8_t AdapterIsDisconnected(void       *ctx,
@@ -687,20 +766,6 @@ static uint8_t AdapterIsDisconnected(void       *ctx,
           || (strstr(data, "+PDP DEACT") != NULL)
           || (strstr(data, "DISCONNECT") != NULL))
          ? 1U : 0U;
-}
-
-static uint8_t AdapterGetGreetingType(void *ctx)
-{
-  (void) ctx;
-
-  return MODEM_GREETING_IMEI;
-}
-
-static uint8_t AdapterSend(void *ctx, const uint8_t *data, uint16_t len)
-{
-  QuectelModemAdapterCtx_t *c = (QuectelModemAdapterCtx_t *) ctx;
-
-  return SerialSend(c->serialPort, data, len, 1000);
 }
 
 /* ------------------------------------------------------------------
@@ -724,13 +789,13 @@ IModemPort_t QuectelModemAdapterCreatePort(QuectelModemAdapterCtx_t *ctx)
   port.GetWaitParams = AdapterGetWaitParams;
   port.HandleResponse = AdapterHandleResponse;
   port.GetStateLabel = AdapterGetStateLabel;
-  port.IsDisconnected = AdapterIsDisconnected;
-  port.GetGreetingType = AdapterGetGreetingType;
-  port.OnConnect = AdapterOnConnect;
+  port.IsTransportReady = AdapterIsTransportReady;
+  port.IsTransportHealthy = AdapterIsTransportHealthy;
   port.OnMaintain = AdapterOnMaintain;
   port.OnRx = AdapterOnRx;
   port.OnDisconnect = AdapterOnDisconnect;
   port.Send = AdapterSend;
+  port.IsDisconnected = AdapterIsDisconnected;
 
   return port;
 }

@@ -1,6 +1,6 @@
 /* App/Adapters/STM32/ModemAdapter.h
  *
- * Boot-time modem module-type loader shared by all modem adapter types.
+ * Boot-time network-type loader shared by the supported bearer adapters.
  * Runtime modem operations go through IModemPort_t, not this header.
  */
 #ifndef MODEM_ADAPTER_H
@@ -14,8 +14,8 @@
  * vTaskStartScheduler(); calling it after risks I2C bus contention
  * with StorageTask.
  *
- * Returns the stored bModuleType byte when the record is valid.
- * Returns MCS_MODULE_TYPE_NONE on NULL port, I2C failure, or an
+ * Returns the stored bNetworkType byte when the record is valid.
+ * Returns MCS_NETWORK_TYPE_NONE on NULL port, I2C failure, or an
  * uninitialised record.  The caller's switch must have a default clause.
  */
 uint8_t ModemAdapterLoadModuleType(IEepromStoragePort_t *eepromPort);

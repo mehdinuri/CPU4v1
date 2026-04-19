@@ -34,12 +34,8 @@
 #include "lwip/pbuf.h"
 #include "netif/ppp/pppos.h"
 #include "ppp.h"
-#include "snmp_client.h"
-#include "tcp_client.h"
 #include "usart.h"
 #include <string.h>
-#include "MCSAsynch.h"
-#include "udp_probe.h"
 
 /* USER CODE END 0 */
 /* Private function prototypes -----------------------------------------------*/
@@ -261,21 +257,6 @@ static void ethernet_link_status_updated(struct netif *netif)
     if (!MCSIsEthernetStaticIP())
     {
       EthSetDHCPState(DHCP_LINK_DOWN);
-    }
-
-    if (MCSAsynchConnectedGet())
-    {
-      MCSAsynchStop(MCS_ASYNCH_DISC_TYPE_ETH_LINK_DOWN);
-    }
-
-    if (SNMPClientIsStarted())
-    {
-      SNMPClientStop();
-    }
-
-    if (UDPProbeIsStarted())
-    {
-      UDPProbeStop();
     }
 
 /* USER CODE END 6 */

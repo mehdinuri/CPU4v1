@@ -15,7 +15,6 @@
 
 #include <string.h>
 
-#include "MCSAsynch.h"
 #include "defs.h"
 #include "main.h"
 #include "PersistencePorts.h"
@@ -138,11 +137,6 @@ uint8_t LogRequest(uint8_t bReqID,
 
 void DeleteLogs(void)
 {
-  /* other tasks may want to read logs, in this case, read indexes are provided */
-  /* per task separately, also init them */
-  MCSAsynchSetLogReadIndex(0);
-  MCSAsynchWriteLogReadIndex();
-
   LogRepositoryClear(&g_logRepositoryPort);
 }
 

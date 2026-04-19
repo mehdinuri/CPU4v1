@@ -26,7 +26,7 @@ static uint8_t SaveConfig(void *ctx)
 static uint8_t IsValidModemType(void *ctx, uint8_t modemType)
 {
   (void) ctx;
-  return (uint8_t) (modemType < (uint8_t) MCS_MODULE_TYPE_MAX);
+  return (uint8_t) (modemType < (uint8_t) MCS_NETWORK_TYPE_MAX);
 }
 
 void ModemConfigAdapterInit(ModemConfigAdapterCtx_t *ctx)

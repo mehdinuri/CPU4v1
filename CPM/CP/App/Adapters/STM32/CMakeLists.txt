@@ -47,12 +47,8 @@ target_sources(Adapters_STM32 PRIVATE
     ModemConfigAdapter.c
     SerialAdapter.c
     UserSettingsAdapter.c
-    UBloxModemAdapter.c
-    TelitModemAdapter.c
     QuectelModemAdapter.c
-    QuectelNtcipModemAdapter.c
-    UsrModemAdapter.c
-    EthernetNtcipModemAdapter.c
+    EthernetModemAdapter.c
 )
 
 target_include_directories(Adapters_STM32

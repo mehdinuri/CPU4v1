@@ -1,6 +1,6 @@
 /* App/Adapters/STM32/ModemAdapter.c
  *
- * Boot-time modem module-type loader.
+ * Boot-time network type loader.
  *
  * Metadata restore runs before the scheduler starts.  Read the EEPROM
  * through the device adapter directly instead of routing through MSM;
@@ -19,7 +19,7 @@ uint8_t ModemAdapterLoadModuleType(IEepromStoragePort_t *eepromPort)
 
   if (eepromPort == NULL)
   {
-    return (uint8_t) MCS_MODULE_TYPE_NONE;
+    return (uint8_t) MCS_NETWORK_TYPE_NONE;
   }
 
   memset(&info, 0, sizeof(info));
@@ -29,13 +29,18 @@ uint8_t ModemAdapterLoadModuleType(IEepromStoragePort_t *eepromPort)
                         &info,
                         sizeof(info)) == FALSE)
   {
-    return (uint8_t) MCS_MODULE_TYPE_NONE;
+    return (uint8_t) MCS_NETWORK_TYPE_NONE;
   }
 
   if (info.bInitialized != MCS_CON_INFO_INITIALIZED)
   {
-    return (uint8_t) MCS_MODULE_TYPE_NONE;
+    return (uint8_t) MCS_NETWORK_TYPE_NONE;
   }
 
-  return info.bModuleType;
+  if (info.bNetworkType >= (uint8_t) MCS_NETWORK_TYPE_MAX)
+  {
+    return (uint8_t) MCS_NETWORK_TYPE_NONE;
+  }
+
+  return info.bNetworkType;
 }

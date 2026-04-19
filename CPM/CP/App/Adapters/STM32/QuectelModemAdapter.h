@@ -1,7 +1,7 @@
 /* App/Adapters/STM32/QuectelModemAdapter.h
  *
- * IModemPort concrete adapter for the Quectel M95 GPRS module
- * (115200 baud, TCP socket via AT+QIOPEN command).
+ * IModemPort concrete adapter for the Quectel EG915U bearer
+ * (115200 baud, PPP/LwIP stack).
  */
 #ifndef QUECTEL_MODEM_ADAPTER_H
 #define QUECTEL_MODEM_ADAPTER_H

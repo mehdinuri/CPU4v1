@@ -567,24 +567,28 @@ static void RefreshComms(MmiSnapshotCache_t *cache)
     return;
   }
 
-  cache->commsSummary.modemType = snapshot.modemType;
-  cache->commsSummary.gprsState = snapshot.gprsState;
+  cache->commsSummary.networkType = snapshot.networkType;
+  cache->commsSummary.bearerState = snapshot.bearerState;
   cache->commsSummary.signalQuality = snapshot.signalQuality;
-  cache->commsSummary.connected = snapshot.connected;
+  cache->commsSummary.transportReady = snapshot.transportReady;
+  cache->commsSummary.snmpReady = snapshot.snmpReady;
   cache->commsSummary.modemAlive = snapshot.modemAlive;
   cache->commsSummary.simReady = snapshot.simReady;
   (void) memcpy(&cache->commsSummary.imei[0],
                 &snapshot.imei[0],
                 sizeof(cache->commsSummary.imei));
-  (void) memcpy(&cache->commsSummary.usrMac[0],
-                &snapshot.usrMac[0],
-                sizeof(cache->commsSummary.usrMac));
   (void) memcpy(&cache->commsSummary.ethernetMac[0],
                 &snapshot.ethernetMac[0],
                 sizeof(cache->commsSummary.ethernetMac));
   (void) memcpy(&cache->commsSummary.operatorName[0],
                 &snapshot.operatorName[0],
                 sizeof(cache->commsSummary.operatorName));
+  (void) memcpy(&cache->commsSummary.localIp[0],
+                &snapshot.localIp[0],
+                sizeof(cache->commsSummary.localIp));
+  (void) memcpy(&cache->commsSummary.managerIp[0],
+                &snapshot.managerIp[0],
+                sizeof(cache->commsSummary.managerIp));
 }
 
 static void RefreshRelay(MmiSnapshotCache_t *cache)

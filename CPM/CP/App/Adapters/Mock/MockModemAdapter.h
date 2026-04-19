@@ -26,11 +26,9 @@ typedef struct
   /* IsDisconnected control */
   uint8_t bDisconnected; /* value returned by IsDisconnected() */
 
-  /* GetGreetingType control */
-  uint8_t bGreetingType;
-
-  /* OnConnect control */
-  uint8_t bConnectResult;
+  /* Transport status control */
+  uint8_t bTransportReady;
+  uint8_t bTransportHealthy;
 } MockModemAdapterCtx_t;
 
 void MockModemAdapterInit(MockModemAdapterCtx_t *ctx);

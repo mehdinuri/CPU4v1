@@ -46,10 +46,10 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
   sprintf(buf, "%-20s", &comms.localIp[0]);
   DisplayWrite(display, 1, 0, buf, 20);
 
-  /* Line 3: Server IP Label */
+  /* Line 3: Manager IP Label */
   DisplayWrite(display, 2, 0, Lcd_GetServerIpStr(lang), 20);
-  /* Line 4: Server IP Value */
-  sprintf(buf, "%-20s", &comms.remoteIp[0]);
+  /* Line 4: Manager IP Value */
+  sprintf(buf, "%-20s", &comms.managerIp[0]);
   DisplayWrite(display, 3, 0, buf, 20);
 }
 

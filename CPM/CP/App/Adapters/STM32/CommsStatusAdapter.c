@@ -44,18 +44,16 @@ static uint8_t ReadSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
   }
 
   (void) memset(snapshot, 0, sizeof(*snapshot));
-  snapshot->modemType = MCSGetModemType();
-  snapshot->gprsState = MCSGetGPRSState();
+  snapshot->networkType = MCSGetModemType();
+  snapshot->bearerState = MCSGetGPRSState();
   snapshot->signalQuality = MCSGetGprsSignalQuality();
-  snapshot->connected = MCSGetConnected();
+  snapshot->transportReady = MCSGetConnected();
+  snapshot->snmpReady = MCSGetSnmpReady();
   snapshot->modemAlive = MCSGetModemAlive();
   snapshot->simReady = MCSSimStatusGet();
   CopyAscii(&snapshot->imei[0],
             (uint16_t) sizeof(snapshot->imei),
             MCSGetGprsModemIMEI());
-  CopyAscii(&snapshot->usrMac[0],
-            (uint16_t) sizeof(snapshot->usrMac),
-            MCSGetUSRModuleMAC());
   CopyAscii(&snapshot->ethernetMac[0],
             (uint16_t) sizeof(snapshot->ethernetMac),
             MCSGetRuntimeEthernetMAC());
@@ -65,9 +63,9 @@ static uint8_t ReadSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
   CopyAscii(&snapshot->localIp[0],
             (uint16_t) sizeof(snapshot->localIp),
             MCSGetRuntimeLocalIPv4());
-  CopyAscii(&snapshot->remoteIp[0],
-            (uint16_t) sizeof(snapshot->remoteIp),
-            MCSGetRuntimeRemoteIPv4());
+  CopyAscii(&snapshot->managerIp[0],
+            (uint16_t) sizeof(snapshot->managerIp),
+            MCSGetRuntimeManagerIPv4());
 
   for (jobIndex = 0U; jobIndex < UI_COMMS_JOB_COUNT; jobIndex++)
   {

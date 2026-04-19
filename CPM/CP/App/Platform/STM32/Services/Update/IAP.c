@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "MCSAsynch.h"
 #include "MSM.h"
 #include "fdcan.h"
 #include "main.h"
@@ -16,6 +15,9 @@
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  members */
+#define IAP_TRANSFER_ACK 0x06U
+#define IAP_TRANSFER_NAK 0x15U
+
 __IO uint32_t ulFlashDestination;
 
 __attribute__((section(".dtcm_bss"), aligned(32)))
@@ -104,14 +106,6 @@ void IAPSendMessage(uint8_t bSrc, uint8_t bDataLen)
 {
   switch (bSrc)
   {
-      case IAP_REQUEST_SOURCE_MCS:
-      {
-        MCSAsynchReqTxMsg(MCS_ASYNCH_HEADER_START_IAP,
-                          bDataLen + IAP_PACKET_OVERHEAD_SIZE,
-                          &SIAPTransmit);
-        break;
-      }
-
       case IAP_REQUEST_SOURCE_UI_SERIAL:
       case IAP_REQUEST_SOURCE_UI_USB:
       {
@@ -123,6 +117,11 @@ void IAPSendMessage(uint8_t bSrc, uint8_t bDataLen)
         UITxRequest(bReqId,
                     (const uint8_t *) &SIAPTransmit,
                     sPacketLen);
+        break;
+      }
+
+      default:
+      {
         break;
       }
   }
@@ -317,7 +316,7 @@ void IAPMsgParserTaskFunc(void *argument)
                         }
                         else
                         {
-                          uint8_t bData = MCS_ASYNCH_MSG_ACK;
+                          uint8_t bData = IAP_TRANSFER_ACK;
 
                           IAPPrepareMessage(IAP_TYPE_DOWNLOAD,
                                             IAP_COMMAND_TYPE_DATA,
@@ -334,7 +333,7 @@ void IAPMsgParserTaskFunc(void *argument)
 
                       case IAP_START_TYPE_RESUME:
                       {
-                        uint8_t bData = MCS_ASYNCH_MSG_NAK;
+                        uint8_t bData = IAP_TRANSFER_NAK;
 
                         IAPPrepareMessage(IAP_TYPE_DOWNLOAD,
                                           IAP_COMMAND_TYPE_DATA,
@@ -481,7 +480,7 @@ void IAPMsgParserTaskFunc(void *argument)
                   if (sDownloadPacketsReceived
                       != pSIAPReq->UData.SData.sPacketNumber)
                   {
-                    uint8_t bData = MCS_ASYNCH_MSG_NAK;
+                    uint8_t bData = IAP_TRANSFER_NAK;
 
                     IAPPrepareMessage(IAP_TYPE_DOWNLOAD,
                                       IAP_COMMAND_TYPE_DATA,
@@ -516,7 +515,7 @@ void IAPMsgParserTaskFunc(void *argument)
 
                   if (ulWriteablePacketLen == 0)
                   {
-                    uint8_t bData = MCS_ASYNCH_MSG_ACK;
+                    uint8_t bData = IAP_TRANSFER_ACK;
 
                     IAPPrepareMessage(IAP_TYPE_DOWNLOAD,
                                       IAP_COMMAND_TYPE_DATA,
@@ -548,7 +547,7 @@ void IAPMsgParserTaskFunc(void *argument)
                                ulDownloadPacketDataIndex); /* Copy surplus data to head */
                       }
 
-                      uint8_t bData = MCS_ASYNCH_MSG_ACK;
+                      uint8_t bData = IAP_TRANSFER_ACK;
 
                       IAPPrepareMessage(IAP_TYPE_DOWNLOAD,
                                         IAP_COMMAND_TYPE_DATA,

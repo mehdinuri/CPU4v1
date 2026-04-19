@@ -50,7 +50,7 @@
 
 struct user_table_entry
 {
-  char username[SNMPV3_USERNAME_MAX_SIZE];
+  char username[SNMPV3_USERNAME_MAX_SIZE + 1U];
   snmpv3_auth_algo_t auth_algo;
   u8_t auth_key[SNMPV3_PASSWORD_MAX_SIZE];
   snmpv3_priv_algo_t priv_algo;
@@ -59,7 +59,7 @@ struct user_table_entry
 
 static struct user_table_entry user_table[LWIP_SNMP_V3_MAX_USERS];
 
-static char snmpv3_engineid[SNMPV3_ENGINE_ID_MAX_SIZE];
+static char snmpv3_engineid[SNMPV3_ENGINE_ID_MAX_SIZE + 1U];
 static u8_t snmpv3_engineid_len;
 
 static u32_t enginetime = 0;
@@ -67,57 +67,45 @@ static u32_t enginetime = 0;
 static u32_t engineboots = 0;
 static uint8_t s_engineBootsInitialized = 0U;
 
-static snmpv3_auth_algo_t PreferredAuthAlgo(void)
-{
-#if LWIP_SNMP_V3_CRYPTO
-  return SNMP_V3_AUTH_ALGO_SHA;
-#else
-  return SNMP_V3_AUTH_ALGO_INVAL;
-#endif
-}
-
-static snmpv3_priv_algo_t PreferredPrivAlgo(snmpv3_auth_algo_t authAlgo)
-{
-#if LWIP_SNMP_V3_CRYPTO
-  if (authAlgo != SNMP_V3_AUTH_ALGO_INVAL)
-  {
-    return SNMP_V3_PRIV_ALGO_AES;
-  }
-#else
-  LWIP_UNUSED_ARG(authAlgo);
-#endif
-
-  return SNMP_V3_PRIV_ALGO_INVAL;
-}
-
 static u32_t LoadPersistedEngineBoots(void)
 {
-  u32_t boots = 0U;
+  tSMCSSNMPv3State state;
 
+  memset(&state, 0, sizeof(state));
   if (PersistenceRead(&g_persistencePort,
                       PERSIST_OBJECT_SNMPV3_STATE,
                       0U,
-                      &boots,
-                      sizeof(boots)) == FALSE)
+                      &state,
+                      sizeof(state)) == FALSE)
   {
     return 0U;
   }
 
-  if (boots == SNMPV3_PERSIST_ERASED_WORD)
+  if ((state.lEngineBoots == SNMPV3_PERSIST_ERASED_WORD)
+      || (state.strEngineId[0] == '\0'))
   {
     return 0U;
   }
 
-  return boots;
+  return state.lEngineBoots;
 }
 
 static void StorePersistedEngineBoots(u32_t boots)
 {
+  tSMCSSNMPv3State state;
+
+  memset(&state, 0, sizeof(state));
+  (void) PersistenceRead(&g_persistencePort,
+                         PERSIST_OBJECT_SNMPV3_STATE,
+                         0U,
+                         &state,
+                         sizeof(state));
+  state.lEngineBoots = boots;
   (void) PersistenceWrite(&g_persistencePort,
                           PERSIST_OBJECT_SNMPV3_STATE,
                           0U,
-                          &boots,
-                          sizeof(boots));
+                          &state,
+                          sizeof(state));
 }
 
 static void InitializeEngineBootsOnce(void)
@@ -139,10 +127,20 @@ static void InitializeEngineBootsOnce(void)
 
 static void snmpv3_init_user_table(void)
 {
+  const char *username = MCSGetSNMPv3Username();
+
   memset(user_table, 0, sizeof(user_table));
 
+  if ((username == NULL) || (username[0] == '\0'))
+  {
+    username = "lwip-agent";
+  }
+
   /* Add configurable user */
-  strcpy(user_table[0].username, MCSGetSNMPv3Username());
+  strncpy(user_table[0].username,
+          username,
+          sizeof(user_table[0].username) - 1U);
+  user_table[0].username[sizeof(user_table[0].username) - 1U] = '\0';
   user_table[0].auth_algo = SNMP_V3_AUTH_ALGO_INVAL;
   user_table[0].priv_algo = SNMP_V3_PRIV_ALGO_INVAL;
 }
@@ -352,6 +350,23 @@ err_t snmpv3_set_user_auth_key(const char *username, const char *password)
   return ERR_VAL;
 } /* snmpv3_set_user_auth_key */
 
+err_t snmpv3_set_user_auth_localized_key(const char *username,
+                                         const u8_t *key,
+                                         u8_t key_len)
+{
+  struct user_table_entry *p = snmpv3_get_user_by_username(username);
+
+  if ((p == NULL) || (key == NULL)
+      || (key_len > (u8_t) sizeof(p->auth_key)))
+  {
+    return ERR_VAL;
+  }
+
+  memset(p->auth_key, 0, sizeof(p->auth_key));
+  MEMCPY(p->auth_key, key, key_len);
+  return ERR_OK;
+}
+
 err_t snmpv3_set_user_priv_key(const char *username, const char *password)
 {
   struct user_table_entry *p = snmpv3_get_user_by_username(username);
@@ -405,6 +420,82 @@ err_t snmpv3_set_user_priv_key(const char *username, const char *password)
 
   return ERR_VAL;
 } /* snmpv3_set_user_priv_key */
+
+err_t snmpv3_set_user_priv_localized_key(const char *username,
+                                         const u8_t *key,
+                                         u8_t key_len)
+{
+  struct user_table_entry *p = snmpv3_get_user_by_username(username);
+
+  if ((p == NULL) || (key == NULL)
+      || (key_len > (u8_t) sizeof(p->priv_key)))
+  {
+    return ERR_VAL;
+  }
+
+  memset(p->priv_key, 0, sizeof(p->priv_key));
+  MEMCPY(p->priv_key, key, key_len);
+  return ERR_OK;
+}
+
+err_t SNMPv3LocalizeAuthKey(u8_t auth_algo,
+                            const char *engine_id,
+                            const char *password,
+                            uint8_t *key,
+                            uint8_t key_len)
+{
+  if ((engine_id == NULL) || (password == NULL) || (key == NULL)
+      || (strlen(password) < SNMPV3_PASSWORD_MIN_SIZE)
+      || (key_len < SNMPV3_PASSWORD_MAX_SIZE))
+  {
+    return ERR_VAL;
+  }
+
+  memset(key, 0, key_len);
+
+  switch ((snmpv3_auth_algo_t) auth_algo)
+  {
+#if LWIP_SNMP_V3_CRYPTO
+      case SNMP_V3_AUTH_ALGO_MD5:
+      {
+        snmpv3_password_to_key_md5((const u8_t *) password,
+                                   strlen(password),
+                                   (const u8_t *) engine_id,
+                                   strlen(engine_id),
+                                   key);
+        return ERR_OK;
+      }
+
+      case SNMP_V3_AUTH_ALGO_SHA:
+      {
+        snmpv3_password_to_key_sha((const u8_t *) password,
+                                   strlen(password),
+                                   (const u8_t *) engine_id,
+                                   strlen(engine_id),
+                                   key);
+        return ERR_OK;
+      }
+#endif
+
+      default:
+      {
+        return ERR_VAL;
+      }
+  }
+}
+
+err_t SNMPv3LocalizePrivKey(u8_t auth_algo,
+                            const char *engine_id,
+                            const char *password,
+                            uint8_t *key,
+                            uint8_t key_len)
+{
+  return SNMPv3LocalizeAuthKey(auth_algo,
+                               engine_id,
+                               password,
+                               key,
+                               key_len);
+}
 
 /**
  * @brief   Get the storage type of the given username.
@@ -501,7 +592,13 @@ void snmpv3_get_engine_id(const char **id, u8_t *len)
  */
 err_t snmpv3_set_engine_id(const char *id, u8_t len)
 {
+  if ((id == NULL) || (len >= (u8_t) sizeof(snmpv3_engineid)))
+  {
+    return ERR_VAL;
+  }
+
   MEMCPY(snmpv3_engineid, id, len);
+  snmpv3_engineid[len] = '\0';
   snmpv3_engineid_len = len;
 
   return ERR_OK;
@@ -548,18 +645,36 @@ void snmpv3_reset_engine_time(void)
 void SNMPv3Init(void)
 {
   const char *username = MCSGetSNMPv3Username();
-  const snmpv3_auth_algo_t authAlgo = PreferredAuthAlgo();
-  const snmpv3_priv_algo_t privAlgo = PreferredPrivAlgo(authAlgo);
+  const tSMCSSNMPv3State *state = MCSGetSNMPv3State();
 
   InitializeEngineBootsOnce();
   snmpv3_set_engine_id(MCSGetSNMPv3EngineID(), strlen(MCSGetSNMPv3EngineID()));
 
   snmpv3_init_user_table();
 
-  snmpv3_set_user_auth_algo(username, authAlgo);
-  snmpv3_set_user_auth_key(username, MCSGetSNMPv3AuthPassword());
-  snmpv3_set_user_priv_algo(username, privAlgo);
-  snmpv3_set_user_priv_key(username, MCSGetSNMPv3PrivPassword());
+  if ((state != NULL) && (username != NULL) && (username[0] != '\0'))
+  {
+    (void) snmpv3_set_user_auth_algo(username,
+                                     (snmpv3_auth_algo_t) state->bAuthAlgo);
+    (void) snmpv3_set_user_priv_algo(username,
+                                     (snmpv3_priv_algo_t) state->bPrivAlgo);
+
+    if (state->bAuthConfigured != 0U)
+    {
+      (void) snmpv3_set_user_auth_localized_key(
+        username,
+        &state->baAuthKey[0],
+        (u8_t) sizeof(state->baAuthKey));
+    }
+
+    if (state->bPrivConfigured != 0U)
+    {
+      (void) snmpv3_set_user_priv_localized_key(
+        username,
+        &state->baPrivKey[0],
+        (u8_t) sizeof(state->baPrivKey));
+    }
+  }
 
   /* Start the engine time timer */
   snmpv3_reset_engine_time();

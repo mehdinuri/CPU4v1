@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "CanMsgParser.h"
+#include "MLM.h"
 #include "MSM.h"
 #include "defs.h"
 #include "ethernetif.h"
@@ -18,6 +19,7 @@
 #include "i2c.h"
 #include "crc.h"
 #include "gpio.h"
+#include "program.h"
 #include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "PersistencePorts.h"
@@ -32,7 +34,8 @@
 #endif
 
 #define STANDBY_CNTR_MIN 50
-#define STANDBY_MCS_MSG_SEND_MAX_COUNT 3
+#define TRAFFIC_COUNTS_PERIOD_SECONDS 0x5A
+#define TRAFFIC_COUNTS_PERIOD_DEFAULT 0x0F
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Members */
@@ -844,7 +847,7 @@ void UserSettingsInit(void)
   SLUserSettings.fLogFlag = TRUE;
   SLUserSettings.fTrafficCountsFlag = FALSE;
   SLUserSettings.bTrafficCountsPeriod =
-    MCS_ASYNCH_PERIOD_TRAFFIC_COUNTS_DEFAULT; /* 15 minutes */
+    TRAFFIC_COUNTS_PERIOD_DEFAULT; /* 15 minutes */
   SLUserSettings.fStandbyInfoFlag = FALSE;
 
   UserSettingsSet(&SLUserSettings);
@@ -1287,31 +1290,9 @@ void ExecStandbyInfoOps(void)
 {
   LogStandbyState();
 
-  if ((MCSGetModemType() == MCS_MODULE_TYPE_ETH_NTCIP)
-      || (MCSGetModemType() == MCS_MODULE_TYPE_QUECTEL_NTCIP) )
+  if (MCSGetModemType() != MCS_NETWORK_TYPE_NONE)
   {
     SNMPSendPowerDownTrap();
-  }
-
-  if (MCSAsynchConnectedGet())
-  {
-    uint8_t bCntr;
-
-    for (bCntr = 0; bCntr < STANDBY_MCS_MSG_SEND_MAX_COUNT; bCntr++)
-    {
-      if (!MCSAsynchStandbyMsgSet())
-      {
-        break;
-      }
-
-      if (osEventFlagsWait(StandbyEventHandle,
-                           EVENT_FLAGS_STANDBY_INFO_MSG_SENT, osFlagsWaitAll,
-                           1000)
-          == EVENT_FLAGS_STANDBY_INFO_MSG_SENT)
-      {
-        break;
-      }
-    }
   }
 
   osDelay(100);
@@ -3622,7 +3603,7 @@ void IOPerValsInit(void)
   IncTrafficCountsTimer(); /* Inc timer every second */
 
   /* Init IO Period Values */
-  if ((GetTrafficCountsTimer() % MCS_ASYNCH_PERIOD_TRAFFIC_COUNTS) == 0) /* 90 secs */
+  if ((GetTrafficCountsTimer() % TRAFFIC_COUNTS_PERIOD_SECONDS) == 0) /* 90 secs */
   {
     /* digital inputs */
     for (bIndex = 0; bIndex < INPUTS_DIGITAL_MAX; bIndex++)
@@ -5038,67 +5019,9 @@ void WorkScheduleUpdate(void)
   uint8_t bWorkScheduleEntry = 0, bWorkPlan = 0, bSigProgPlan = 0,
           bWorkPlanEntry = 0, bSPPlanEntry = 0;
 
-  if (SignalPlanCurrentSet(MCSAsynchSPNoGet())) /* if there a request for signal */
-  /* plan running go to it */
+  /* if there is no schedule in Maestro, default work plan will run */
+  if (WorkScheduleTotalGet())
   {
-    /* signal plans has precedence over work schedules */
-    /* so if there is an active signal plan, get signal program and workplan */
-    /* from it */
-    uint8_t bSigProg = SCP.SaSignalPlans[SignalPlanCurrentGet() - 1].bSigProg;
-
-    bWorkPlan = SCP.SaSignalPlans[SignalPlanCurrentGet() - 1].bWorkPlan;
-
-    /* requested bWorkPlan must be loaded to ram */
-    if (bWorkPlan != WorkPlanCurNoGet())
-    {
-      /* update current plan ids */
-      WorkPlanCurNoSet(bWorkPlan);
-      if (StateCurrentGet() != STATES_SEQ)
-      {
-        LogRequest(LOG_REQ_APPEND_ASYNCH,
-                   NULL,
-                   EVENT_WORK_PLAN_CHANGE,
-                   WorkPlanCurNoGet(),
-                   0,
-                   0,
-                   0);
-      }
-    }
-
-    bWorkPlanEntry = WorkPlanEntryCurNoGet();
-
-    if (bSigProg != SigProgCurNoGet())
-    {
-      SigProgCurNoSet(bSigProg);
-      /* execute statements */
-      StatementExecuteRange(SCP.SaSignalPrograms[SigProgCurNoGet()
-                                                 - 1].SSigProg.bStaStart,
-                            SCP.SaSignalPrograms[SigProgCurNoGet()
-                                                 - 1].SSigProg.bStaEnd);
-      /* successful operations, update current plan ids */
-      /* init signal program runtime values */
-      SigProgCurTimeInPerClr();
-      LogRequest(LOG_REQ_APPEND_ASYNCH,
-                 NULL,
-                 EVENT_SIGNAL_PROGRAM_CHANGE,
-                 SigProgCurNoGet(),
-                 TimeSourceGet(),
-                 0,
-                 0);
-      ProgramSigProgChangeSet(TRUE);
-    }
-
-    SAscCoord.SaPatterns[SigProgCurNoGet() - 1].bSplitNumber = bWorkPlanEntry
-                                                               - 1;
-    STRPatternsAndCoords.SaaPatterns[TRPatternsAndCoordsGetCurJunctionNo()][
-      SigProgCurNoGet() - 1].bSplitNo =
-      bWorkPlanEntry;
-  }
-  else
-  {
-    /* if there is no schedule in Maestro, default work plan will run */
-    if (WorkScheduleTotalGet())
-    {
       /* get work plan number */
       for (bWorkScheduleEntry = 0;
            bWorkScheduleEntry < WorkScheduleTotalGet();
@@ -5206,7 +5129,6 @@ void WorkScheduleUpdate(void)
       STRPatternsAndCoords.SaaPatterns[TRPatternsAndCoordsGetCurJunctionNo()][
         SigProgCurNoGet() - 1].bSplitNo =
         bWorkPlanEntry;
-    }
   }
 } /* WorkScheduleUpdate */
 

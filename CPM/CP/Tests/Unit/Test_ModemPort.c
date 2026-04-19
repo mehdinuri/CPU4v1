@@ -116,23 +116,21 @@ void test_is_disconnected_returns_configured_value(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* GetGreetingType                                                      */
+/* Transport readiness / health                                         */
 /* ------------------------------------------------------------------ */
 
-void test_get_greeting_type_defaults_to_imei(void)
+void test_transport_ready_defaults_true(void)
 {
-  TEST_ASSERT_EQUAL_UINT8(0U, ModemGetGreetingType(&s_port));
+  TEST_ASSERT_EQUAL_UINT8(1U, ModemIsTransportReady(&s_port));
 }
 
-void test_get_greeting_type_returns_configured_value(void)
+void test_transport_health_returns_configured_value(void)
 {
-  s_ctx.bGreetingType = MODEM_GREETING_USR_MAC;
-  TEST_ASSERT_EQUAL_UINT8(MODEM_GREETING_USR_MAC,
-                          ModemGetGreetingType(&s_port));
+  s_ctx.bTransportHealthy = 0U;
+  TEST_ASSERT_EQUAL_UINT8(0U, ModemIsTransportHealthy(&s_port));
 
-  s_ctx.bGreetingType = MODEM_GREETING_ETH_MAC;
-  TEST_ASSERT_EQUAL_UINT8(MODEM_GREETING_ETH_MAC,
-                          ModemGetGreetingType(&s_port));
+  s_ctx.bTransportHealthy = 1U;
+  TEST_ASSERT_EQUAL_UINT8(1U, ModemIsTransportHealthy(&s_port));
 }
 
 /* ------------------------------------------------------------------ */
@@ -198,8 +196,8 @@ int main(void)
   RUN_TEST(test_prepare_command_returns_configured_result);
   RUN_TEST(test_is_disconnected_returns_false_by_default);
   RUN_TEST(test_is_disconnected_returns_configured_value);
-  RUN_TEST(test_get_greeting_type_defaults_to_imei);
-  RUN_TEST(test_get_greeting_type_returns_configured_value);
+  RUN_TEST(test_transport_ready_defaults_true);
+  RUN_TEST(test_transport_health_returns_configured_value);
   RUN_TEST(test_get_initial_state_returns_zero);
   RUN_TEST(test_get_baud_rate_returns_zero_for_mock);
   RUN_TEST(test_get_state_label_returns_non_null);
