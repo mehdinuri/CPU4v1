@@ -54,7 +54,6 @@ set(MX_Include_Dirs
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Tasks
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Control/Legacy
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Persistence
-    ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Update
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Time
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Comms
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/UI
@@ -66,12 +65,9 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../MBEDTLS/App/net_sockets.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../MBEDTLS/Target/hardware_rng.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/lwip.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/1201v0307.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/1202v0328.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/eth.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/snmp_client.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/snmpv3_client.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/App/tc_kgm_v0.7.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../LWIP/Target/ethernetif.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_DEVICE/Target/usbd_conf.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../USB_DEVICE/App/usb_device.c

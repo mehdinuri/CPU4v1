@@ -14,8 +14,80 @@
 
 #define FNV1A_OFFSET_BASIS 2166136261UL
 #define FNV1A_PRIME 16777619UL
+#define LWIP_SNMP_INDEX_VALUE_LIMIT 255U
 
 static LWIPSNMPAdapterCtx_t *spAdapterCtx;
+
+void snmp_external_bind_node_instance(const u32_t *oid,
+                                      u8_t oid_len,
+                                      struct snmp_node_instance *node_instance);
+
+typedef struct
+{
+  const uint32_t *oid;
+  uint8_t oidLength;
+  uint8_t asn1Type;
+} LWIPSNMPTypeOverride_t;
+
+static const uint32_t kGlobalTimeCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 3U, 1U, 0U
+};
+static const uint32_t kTimeBaseScheduleDateCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 3U, 3U, 2U, 1U, 4U, 1U
+};
+static const uint32_t kControllerLocalTimeCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 3U, 6U, 0U
+};
+static const uint32_t kDstBeginSecondsCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 3U, 7U, 2U, 1U, 6U, 1U
+};
+static const uint32_t kDstEndSecondsCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 3U, 7U, 2U, 1U, 11U, 1U
+};
+static const uint32_t kDetectorSampleTimeCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 2U, 5U, 6U, 0U
+};
+static const uint32_t kPedestrianDetectorSampleTimeCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 2U, 10U, 5U, 0U
+};
+static const uint32_t kUnitTimeNonSequentialChangeCounterOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 3U, 22U, 7U, 0U
+};
+
+static const LWIPSNMPTypeOverride_t kTypeOverrides[] =
+{
+  { kGlobalTimeCounterOid, (uint8_t) LWIP_ARRAYSIZE(kGlobalTimeCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kTimeBaseScheduleDateCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kTimeBaseScheduleDateCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kControllerLocalTimeCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kControllerLocalTimeCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kDstBeginSecondsCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kDstBeginSecondsCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kDstEndSecondsCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kDstEndSecondsCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kDetectorSampleTimeCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kDetectorSampleTimeCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kPedestrianDetectorSampleTimeCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kPedestrianDetectorSampleTimeCounterOid),
+    SNMP_ASN1_TYPE_COUNTER },
+  { kUnitTimeNonSequentialChangeCounterOid,
+    (uint8_t) LWIP_ARRAYSIZE(kUnitTimeNonSequentialChangeCounterOid),
+    SNMP_ASN1_TYPE_COUNTER }
+};
 
 static uint32_t HashBytes(uint32_t hash, const uint8_t *bytes, uint16_t length)
 {
@@ -59,6 +131,194 @@ static uint32_t BuildSessionKey(void)
   }
 
   return hash;
+}
+
+static uint8_t DefaultAsn1TypeForDescriptor(
+  const NtcipObjectDescriptor_t *descriptor,
+  const uint32_t *oid,
+  uint8_t oidLength)
+{
+  uint8_t index;
+
+  if ((descriptor == NULL) || (oid == NULL))
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < LWIP_ARRAYSIZE(kTypeOverrides); index++)
+  {
+    if (oidLength == kTypeOverrides[index].oidLength)
+    {
+      if (snmp_oid_equal(kTypeOverrides[index].oid,
+                         kTypeOverrides[index].oidLength,
+                         oid,
+                         oidLength) != 0U)
+      {
+        return kTypeOverrides[index].asn1Type;
+      }
+    }
+  }
+
+  switch (descriptor->valueType)
+  {
+    case NTCIP_VALUE_TYPE_UNSIGNED32:
+    case NTCIP_VALUE_TYPE_SIGNED32:
+      return SNMP_ASN1_TYPE_INTEGER;
+
+    case NTCIP_VALUE_TYPE_OBJECT_ID:
+      return SNMP_ASN1_TYPE_OBJECT_ID;
+
+    case NTCIP_VALUE_TYPE_OCTET_STRING:
+      return SNMP_ASN1_TYPE_OCTET_STRING;
+
+    default:
+      return 0U;
+  }
+}
+
+static uint8_t OidStartsWith(const uint32_t *oid,
+                             uint8_t oidLength,
+                             const uint32_t *prefix,
+                             uint8_t prefixLength)
+{
+  if ((oid == NULL) || (prefix == NULL) || (oidLength < prefixLength))
+  {
+    return 0U;
+  }
+
+  return (uint8_t) (snmp_oid_compare(oid, prefixLength, prefix, prefixLength)
+                    == 0);
+}
+
+static uint8_t DescriptorInSubtree(const NtcipObjectDescriptor_t *descriptor,
+                                   const uint32_t *subtreeOid,
+                                   uint8_t subtreeOidLen)
+{
+  if ((descriptor == NULL) || (descriptor->oid == NULL))
+  {
+    return 0U;
+  }
+
+  return OidStartsWith(descriptor->oid,
+                       descriptor->oidLength,
+                       subtreeOid,
+                       subtreeOidLen);
+}
+
+static void BuildExactOidForDescriptor(const NtcipObjectDescriptor_t *descriptor,
+                                       const uint32_t *indexes,
+                                       struct snmp_obj_id *oid)
+{
+  uint8_t index;
+
+  if ((descriptor == NULL) || (oid == NULL))
+  {
+    return;
+  }
+
+  snmp_oid_assign(oid, descriptor->oid, descriptor->oidLength);
+
+  if (descriptor->kind == NTCIP_OBJECT_KIND_SCALAR)
+  {
+    oid->id[oid->len] = 0U;
+    oid->len++;
+    return;
+  }
+
+  for (index = 0U; index < descriptor->indexCount; index++)
+  {
+    oid->id[oid->len] = indexes[index];
+    oid->len++;
+  }
+}
+
+static uint8_t DescriptorInstanceExists(const NtcipObjectGroup_t *group,
+                                        const NtcipObjectDescriptor_t *descriptor,
+                                        const uint32_t *indexes)
+{
+  NtcipValue_t value;
+
+  if ((group == NULL) || (descriptor == NULL) || (descriptor->get == NULL))
+  {
+    return 0U;
+  }
+
+  return (uint8_t) (descriptor->get(group->context,
+                                    descriptor,
+                                    indexes,
+                                    descriptor->indexCount,
+                                    NULL,
+                                    &value) == NTCIP_ERROR_OK);
+}
+
+static void SearchDescriptorIndexesRecursive(
+  const NtcipObjectGroup_t *group,
+  const NtcipObjectDescriptor_t *descriptor,
+  uint8_t depth,
+  uint32_t *indexes,
+  struct snmp_next_oid_state *state)
+{
+  struct snmp_obj_id candidate;
+  uint32_t value;
+
+  if ((group == NULL) || (descriptor == NULL) || (indexes == NULL)
+      || (state == NULL))
+  {
+    return;
+  }
+
+  for (value = 1U; value <= LWIP_SNMP_INDEX_VALUE_LIMIT; value++)
+  {
+    indexes[depth] = value;
+    BuildExactOidForDescriptor(descriptor, indexes, &candidate);
+
+    if (snmp_next_oid_precheck(state,
+                               candidate.id,
+                               (u8_t) (descriptor->oidLength + depth + 1U))
+        == 0U)
+    {
+      continue;
+    }
+
+    if ((depth + 1U) < descriptor->indexCount)
+    {
+      SearchDescriptorIndexesRecursive(group,
+                                       descriptor,
+                                       (uint8_t) (depth + 1U),
+                                       indexes,
+                                       state);
+    }
+    else if (DescriptorInstanceExists(group, descriptor, indexes) != 0U)
+    {
+      (void) snmp_next_oid_check(state,
+                                 candidate.id,
+                                 candidate.len,
+                                 NULL);
+    }
+  }
+}
+
+static void FindNextForDescriptor(const NtcipObjectGroup_t *group,
+                                  const NtcipObjectDescriptor_t *descriptor,
+                                  struct snmp_next_oid_state *state)
+{
+  struct snmp_obj_id candidate;
+  uint32_t indexes[NTCIP_OBJECT_DIRECTORY_INDEX_MAX] = { 0U };
+
+  if ((group == NULL) || (descriptor == NULL) || (state == NULL)
+      || (descriptor->get == NULL))
+  {
+    return;
+  }
+
+  if (descriptor->kind == NTCIP_OBJECT_KIND_SCALAR)
+  {
+    BuildExactOidForDescriptor(descriptor, NULL, &candidate);
+    (void) snmp_next_oid_check(state, candidate.id, candidate.len, NULL);
+    return;
+  }
+
+  SearchDescriptorIndexesRecursive(group, descriptor, 0U, indexes, state);
 }
 
 static snmp_err_t MapSetError(NtcipError_t error)
@@ -406,7 +666,7 @@ void LWIPSNMPBridgeBindAdapter(LWIPSNMPAdapterCtx_t *ctx)
   spAdapterCtx = ctx;
 }
 
-u8_t snmp_external_get_oid_state(const u32_t *oid, u8_t oid_len)
+u8_t LWIPSNMPBridgeGetManagedState(const u32_t *oid, u8_t oidLen)
 {
   if (spAdapterCtx == NULL)
   {
@@ -415,8 +675,74 @@ u8_t snmp_external_get_oid_state(const u32_t *oid, u8_t oid_len)
 
   return (u8_t) LWIPSNMPAdapterGetManagedState(spAdapterCtx,
                                                oid,
-                                               oid_len,
+                                               oidLen,
                                                NULL);
+}
+
+u8_t LWIPSNMPBridgeFindNextManagedOid(const u32_t *startOid,
+                                      u8_t startOidLen,
+                                      const u32_t *subtreeOid,
+                                      u8_t subtreeOidLen,
+                                      struct snmp_obj_id *nextOid)
+{
+  struct snmp_next_oid_state state;
+  uint32_t nextBuffer[SNMP_MAX_OBJ_ID_LEN];
+  uint8_t groupIndex;
+
+  if ((spAdapterCtx == NULL) || (startOid == NULL) || (subtreeOid == NULL)
+      || (nextOid == NULL))
+  {
+    return 0U;
+  }
+
+  snmp_next_oid_init(&state,
+                     startOid,
+                     startOidLen,
+                     nextBuffer,
+                     (u8_t) LWIP_ARRAYSIZE(nextBuffer));
+
+  for (groupIndex = 0U;
+       groupIndex < spAdapterCtx->objectDirectory.groupCount;
+       groupIndex++)
+  {
+    const NtcipObjectGroup_t *group =
+      &spAdapterCtx->objectDirectory.groups[groupIndex];
+    uint16_t descriptorIndex;
+
+    for (descriptorIndex = 0U; descriptorIndex < group->descriptorCount;
+         descriptorIndex++)
+    {
+      const NtcipObjectDescriptor_t *descriptor =
+        &group->descriptors[descriptorIndex];
+
+      if (DescriptorInSubtree(descriptor, subtreeOid, subtreeOidLen) == 0U)
+      {
+        continue;
+      }
+
+      FindNextForDescriptor(group, descriptor, &state);
+    }
+  }
+
+  if (state.status != SNMP_NEXT_OID_STATUS_SUCCESS)
+  {
+    return 0U;
+  }
+
+  snmp_oid_assign(nextOid, state.next_oid, state.next_oid_len);
+  return 1U;
+}
+
+void LWIPSNMPBridgeBindNodeInstance(const u32_t *oid,
+                                    u8_t oidLen,
+                                    struct snmp_node_instance *nodeInstance)
+{
+  snmp_external_bind_node_instance(oid, oidLen, nodeInstance);
+}
+
+u8_t snmp_external_get_oid_state(const u32_t *oid, u8_t oid_len)
+{
+  return LWIPSNMPBridgeGetManagedState(oid, oid_len);
 }
 
 void snmp_external_bind_node_instance(const u32_t *oid,
@@ -438,6 +764,9 @@ void snmp_external_bind_node_instance(const u32_t *oid,
     return;
   }
 
+  node_instance->asn1_type = DefaultAsn1TypeForDescriptor(descriptor,
+                                                          oid,
+                                                          oid_len);
   node_instance->access = (descriptor->access == NTCIP_ACCESS_READ_WRITE)
                           ? SNMP_NODE_INSTANCE_READ_WRITE
                           : SNMP_NODE_INSTANCE_READ_ONLY;

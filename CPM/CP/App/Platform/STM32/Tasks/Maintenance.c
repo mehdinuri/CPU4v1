@@ -148,7 +148,6 @@ void CheckMessageQueueUsage(void)
 
     { "MSMReqsQue", MSMReqsQueHandle },
     { "LogReqsQue", LogReqsQueHandle },
-    { "IAPRxReqsQue", IAPRxReqsQueHandle },
   };
 
   printf("\n--- Start of Message Queue Usage ---\n\n");

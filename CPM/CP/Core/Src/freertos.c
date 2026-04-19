@@ -30,7 +30,6 @@
 #include <freertos_mpool.h>
 
 #include "CanMsgParser.h"
-#include "IAP.h"
 #include "MLM.h"
 #include "MSM.h"
 #include "PPPOSAsynch.h"
@@ -92,7 +91,6 @@ typedef enum
   APP_TASK_LCD,
   APP_TASK_PROGRAM,
   APP_TASK_MLM,
-  APP_TASK_IAP,
   APP_TASK_MSM,
   APP_TASK_PPP_ASYNCH_MSG_PARSER,
   APP_TASK_PPP_ASYNCH_MSG_SENDER,
@@ -215,19 +213,6 @@ const osMemoryPoolAttr_t LogReqsMemPool_attributes = {
   .cb_size = sizeof(LogReqsMemPoolCtrlBlk),
   .mp_mem = &LogReqsMemPoolBuf,
   .mp_size = sizeof(LogReqsMemPoolBuf)
-};
-
-/* Definitions for IAPRxReqsMemPool */
-osMemoryPoolId_t IAPRxReqsMemPoolHandle;
-__attribute__((section(".dtcm_bss"), aligned(32)))
-uint8_t IAPRxReqsMemPoolBuf[2 * sizeof(tSIAPRequest)];
-osStaticMemPoolDef_t IAPRxReqsMemPoolCtrlBlk;
-const osMemoryPoolAttr_t IAPRxReqsMemPool_attributes = {
-  .name = "IAPRxReqsMemPool",
-  .cb_mem = &IAPRxReqsMemPoolCtrlBlk,
-  .cb_size = sizeof(IAPRxReqsMemPoolCtrlBlk),
-  .mp_mem = &IAPRxReqsMemPoolBuf,
-  .mp_size = sizeof(IAPRxReqsMemPoolBuf)
 };
 
 /* Definitions for PPPOSAsyRxReqsMemPool */
@@ -449,18 +434,6 @@ const osThreadAttr_t MSMTask_attributes = {
   .stack_size = sizeof(MSMTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for IAPMsgParserTask */
-osThreadId_t IAPMsgParserTaskHandle;
-uint32_t IAPMsgParserTaskBuf[ 512 ];
-osStaticThreadDef_t IAPMsgParserTaskCtrlBlk;
-const osThreadAttr_t IAPMsgParserTask_attributes = {
-  .name = "IAPMsgParserTask",
-  .cb_mem = &IAPMsgParserTaskCtrlBlk,
-  .cb_size = sizeof(IAPMsgParserTaskCtrlBlk),
-  .stack_mem = &IAPMsgParserTaskBuf[0],
-  .stack_size = sizeof(IAPMsgParserTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for PPPOSAsyMsgParserTask */
 osThreadId_t PPPOSAsyMsgParserTaskHandle;
 uint32_t PPPOSAsyMsgParserTaskBuf[ 512 ];
@@ -584,17 +557,6 @@ const osMessageQueueAttr_t LogReqsQue_attributes = {
   .cb_size = sizeof(LogReqsQueCtrlBlk),
   .mq_mem = &LogReqsQueBuf,
   .mq_size = sizeof(LogReqsQueBuf)
-};
-/* Definitions for IAPRxReqsQue */
-osMessageQueueId_t IAPRxReqsQueHandle;
-uint8_t IAPRxReqsQueBuf[ 2 * sizeof( tpSIAPRequest ) ];
-osStaticMessageQDef_t IAPRxReqsQueCtrlBlk;
-const osMessageQueueAttr_t IAPRxReqsQue_attributes = {
-  .name = "IAPRxReqsQue",
-  .cb_mem = &IAPRxReqsQueCtrlBlk,
-  .cb_size = sizeof(IAPRxReqsQueCtrlBlk),
-  .mq_mem = &IAPRxReqsQueBuf,
-  .mq_size = sizeof(IAPRxReqsQueBuf)
 };
 /* Definitions for PPPOSAsyRxReqsQue */
 osMessageQueueId_t PPPOSAsyRxReqsQueHandle;
@@ -728,7 +690,6 @@ extern void LCDTaskFunc(void *argument);
 extern void ProgramTaskFunc(void *argument);
 extern void MLMTaskFunc(void *argument);
 extern void MSMTaskFunc(void *argument);
-extern void IAPMsgParserTaskFunc(void *argument);
 extern void PPPOSAsyMsgParserTaskFunc(void *argument);
 extern void PPPOSAsyMsgSenderTaskFunc(void *argument);
 extern void MaintenanceTaskFunc(void *argument);
@@ -809,10 +770,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
   else if (xTask == MLMTaskHandle)
   {
     eTask = APP_TASK_MLM;
-  }
-  else if (xTask == IAPMsgParserTaskHandle)
-  {
-    eTask = APP_TASK_IAP;
   }
   else if (xTask == MSMTaskHandle)
   {
@@ -913,9 +870,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of LogReqsQue */
   LogReqsQueHandle = osMessageQueueNew (16, sizeof(tpSLogReq), &LogReqsQue_attributes);
 
-  /* creation of IAPRxReqsQue */
-  IAPRxReqsQueHandle = osMessageQueueNew (2, sizeof(tpSIAPRequest), &IAPRxReqsQue_attributes);
-
   /* creation of PPPOSAsyRxReqsQue */
   PPPOSAsyRxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSPPPOSAsynchRxTxMsg), &PPPOSAsyRxReqsQue_attributes);
 
@@ -963,11 +917,6 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (IAPRxReqsQueHandle == NULL)
-  {
-    Error_Handler();
-  }
-	
 	if (PPPOSAsyRxReqsQueHandle == NULL)
   {
     Error_Handler();
@@ -1019,11 +968,6 @@ void MX_FREERTOS_Init(void) {
                                          sizeof(tSLogReq),
                                          &LogReqsMemPool_attributes);
 
-  /* creation of IAPRxReqsMemPool */
-  IAPRxReqsMemPoolHandle = osMemoryPoolNew(2,
-                                           sizeof(tSIAPRequest),
-                                           &IAPRxReqsMemPool_attributes);
-																					 
 	/* creation of PPPOSAsyRxReqsMemPool */
   PPPOSAsyRxReqsMemPoolHandle = osMemoryPoolNew(4,
                                               sizeof(tSPPPOSAsynchRxTxMsg),
@@ -1074,11 +1018,6 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (IAPRxReqsMemPoolHandle == NULL)
-  {
-    Error_Handler();
-  }
-	
 	if (PPPOSAsyRxReqsMemPoolHandle == NULL)
   {
     Error_Handler();
@@ -1147,9 +1086,6 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of MSMTask */
   MSMTaskHandle = osThreadNew(MSMTaskFunc, NULL, &MSMTask_attributes);
-
-  /* creation of IAPMsgParserTask */
-  IAPMsgParserTaskHandle = osThreadNew(IAPMsgParserTaskFunc, NULL, &IAPMsgParserTask_attributes);
 
   /* creation of PPPOSAsyMsgParserTask */
   PPPOSAsyMsgParserTaskHandle = osThreadNew(PPPOSAsyMsgParserTaskFunc, NULL, &PPPOSAsyMsgParserTask_attributes);
@@ -1226,11 +1162,6 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (IAPMsgParserTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-	
 	if (PPPOSAsyMsgParserTaskHandle == NULL)
   {
     Error_Handler();

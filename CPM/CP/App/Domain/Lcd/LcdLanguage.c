@@ -20,27 +20,6 @@ static const char *const pStrClockAdvanceMode[LANGUAGES_MAX][4] = {
   { "N  ", "RTC", "GPS", "C  " }
 };
 
-static const char *const pStrProgramLoadingStatus[LANGUAGES_MAX][19] = {
-  { "-", "PROG.YuK.BAsLADI", "ANA->YEDEK BEL.", "PROGRAM YuKLENDi.",
-    "ANA->YEDEK BEL.HA",
-    "YEDEK->ANA BEL.", "PROGRAM YuKLENDi.", "PROG.YEDEK->ANA H",
-    "PROGRAM YuKLENiYOR..",
-    "PROGRAM YuKLENDi.", "PROGRAM YuKLENEMEDi.", "PROG.->ANA BEL.",
-    "PROG.->YEDEK BEL.",
-    "PROG.GoNDERME.BAsLADI", "PROG.->PC", "PROG.->PC BAsARiLi",
-    "PROG.->PC BAsARISIZ",
-    "FLAs OKUMA HATASI", "EEPROM OKUMA HATASI" },
-  { "-", "PROG.LOAD.START", "PROG. MAIN->BACKUP", "PROG. MAIN->BACKUP S",
-    "PROG. MAIN->BACKUP E",
-    "PROG. BACKUP->MAIN", "PROG. BACKUP->MAIN S", "PROG. BACKUP->MAIN E",
-    "PROG. LOADING...",
-    "PROG. LOADED.", "PROG. NOT LOADED.", "PROG.->MAIN MEM.",
-    "PROG.->BACKUP MEM.",
-    "PROG.->PC STARTED", "PROG.->PC IN PROGRESS", "PROG.->PC SUCCEEDED",
-    "PROG.->PC FAILED",
-    "FLASH READ ERROR", "EEPROM READ ERROR" }
-};
-
 static const char *const pStrValsSignalSourceParameters[LANGUAGES_MAX][9] = {
   { "MODuL NO:", "Sc NO:", "SG NO:", "SG NO:", "cAKiSAN GRUP:", "cAKiSAN GRUP:",
     "cAKiSAN GRUP:", "SG NO:", "SG NO:" },
@@ -76,16 +55,6 @@ const char *Lcd_GetAdvanceModeStr(uint8_t mode, uint8_t lang)
   }
 
   return pStrClockAdvanceMode[lang][mode - 1];
-}
-
-const char *Lcd_GetProgramLoadingStatusStr(uint8_t status, uint8_t lang)
-{
-  if ((lang >= LANGUAGES_MAX) || (status >= 19))
-  {
-    return "-";
-  }
-
-  return pStrProgramLoadingStatus[lang][status];
 }
 
 const char *Lcd_GetSignalSourceParamStr(uint8_t source, uint8_t lang)

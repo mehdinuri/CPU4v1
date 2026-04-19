@@ -24,6 +24,7 @@ target_sources(Adapters_STM32 PRIVATE
     UnitClockAdapter.c
     LWIPSNMPAdapter.c
     LWIPSNMPBridge.c
+    LWIPSNMPRootMibs.c
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Core/flash.c
     FlashStorageAdapter.c
     EepromStorageAdapter.c
@@ -61,7 +62,6 @@ target_include_directories(Adapters_STM32
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Tasks
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Control/Legacy
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Persistence
-            ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Update
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Time
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Comms
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/UI

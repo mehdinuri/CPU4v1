@@ -817,7 +817,6 @@ typedef struct _SLogRecord
 #define EVENT_CPMP_COMM_CP_TIMEOUT 31 /* cpmp comm timeouts */
 #define EVENT_CPMP_COMM_MP_TIMEOUT 32
 #define EVENT_MCT_CONFIGURATION_ERROR 33 /* program loading */
-#define EVENT_PROGRAM_LOADING_ERROR 34
 #define EVENT_INVALID_PROGRAM 35
 #define EVENT_VOLTAGE_VALUE_LOWER_BOUND 36 /* voltage bounds */
 #define EVENT_VOLTAGE_VALUE_UPPER_BOUND 37
@@ -904,9 +903,7 @@ typedef struct _SLogRecord
 #define EVENT_MCS_USER_REQ_WORK_MODE_TO_DARK 117
 #define EVENT_MCS_USER_REQ_WORK_MODE_TO_FLASH 118
 #define EVENT_MCS_USER_REQ_WORK_MODE_TO_WORK_PLAN 119
-#define EVENT_MCS_USER_REQ_START_IAP 120
 #define EVENT_MCS_RESUMED 121
-#define EVENT_USER_REQ_START_IAP 122
 #define EVENT_USER_REQ_RESET 123
 #define EVENT_DIGITAL_INPUT_BROKEN 124 /* digital states */
 #define EVENT_DIGITAL_INPUT_SAFE 125
@@ -3691,12 +3688,6 @@ extern tpSModulesVersion GetModulesVersion(void);
 /*  Police Button */
 extern uint8_t GetPoliceButtonState(void);
 extern void SetPoliceButtonState(uint8_t fState);
-
-/*  Program Loading Flag */
-extern uint8_t WriteProgramLoadingFlag(uint8_t bNewValue);
-extern uint8_t SetProgramLoadingFlag(uint8_t bNewValue);
-extern uint8_t ReadProgramLoadingFlag(uint8_t *pNewValue);
-extern uint8_t GetProgramLoadingFlag(uint8_t *pNewValue);
 
 /*  Daylight Saving Time */
 extern uint8_t WriteDaylightSavingTimeFlag(void);

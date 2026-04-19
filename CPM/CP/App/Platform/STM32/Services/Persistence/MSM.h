@@ -19,8 +19,6 @@
 #include "Ports/IEepromStoragePort.h"
 #include "Ports/IFlashStoragePort.h"
 
-#define PROGRAM_LOADING_FLAG_RW_TRY 5
-
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  definitions */
 typedef struct _tSMSMRequest
@@ -48,11 +46,7 @@ typedef enum
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  FLASH addresses */
 /*  Base address of the Flash sectors */
-#define FLASH_STORAGE_ADDR_CP_IAP ADDR_FLASH_SECTOR_0_BANK1
-#define FLASH_STORAGE_ADDR_IAP_BINARY_INFO ADDR_FLASH_SECTOR_1_BANK1
-
 #define FLASH_STORAGE_ADDR_CP_MAIN ADDR_FLASH_SECTOR_2_BANK1
-#define FLASH_STORAGE_ADDR_CP_BACKUP ADDR_FLASH_SECTOR_0_BANK2
 
 #define FLASH_STORAGE_ADDR_CONFIG_SLOT_A ADDR_FLASH_SECTOR_6_BANK2
 #define FLASH_STORAGE_ADDR_CONFIG_SLOT_B ADDR_FLASH_SECTOR_7_BANK2
@@ -63,15 +57,11 @@ typedef enum
 /*  EEPROM addresses */
 #define EEPROM_STORAGE_ADDR_BASE 0x0000
 
-/* Program Loading Flag */
 #define EEPROM_STORAGE_ADDR_DEVICE_UID EEPROM_STORAGE_ADDR_BASE
-
-#define EEPROM_STORAGE_ADDR_PROGRAM_LOADING                                    \
-        EEPROM_STORAGE_ADDR_DEVICE_UID + sizeof(tSSDeviceUID)
 
 /* SO Powers */
 #define EEPROM_STORAGE_ADDR_SO_POWERS                                          \
-        EEPROM_STORAGE_ADDR_PROGRAM_LOADING + sizeof(uint8_t)
+        EEPROM_STORAGE_ADDR_DEVICE_UID + sizeof(tSSDeviceUID)
 
 /* User Requested Operation Modes */
 #define EEPROM_STORAGE_ADDR_USER_REQUEST                                       \

@@ -58,16 +58,6 @@ uint8_t ProgramTargetNoGet(void)
   return STaskProgramRuntime.STransitionSel.bValue2 & TRANSITION_VALUE_NO_GET;
 }
 
-void SetProgramLoadingStatus(uint8_t bNewStatus)
-{
-  STaskProgramRuntime.bProgramLoadingStatus = bNewStatus;
-}
-
-uint8_t ProgramLoadingStatusGet(void)
-{
-  return STaskProgramRuntime.bProgramLoadingStatus;
-}
-
 void LoadProgramStarts(void)
 {
   ProgramStateSet(PROGRAM_STATE_LOADING);
@@ -83,63 +73,17 @@ void LoadProgramEnds(void)
 
 uint8_t ProgramReadData(void)
 {
-  uint8_t fProgramLoadingFlag;
-
-  SetProgramLoadingStatus(PROGRAM_LOADING_JUST_STARTED);
-
   if (!ProgramDataStartMagicRead())
   {
-    SetProgramLoadingStatus(PROGRAM_READ_ERR_FLASH);
-
     return FALSE;
   }
 
-  if (ProgramDataStartMagicGet(0) == SCP_START_MAGIC)
+  if (ProgramDataStartMagicGet(0) != SCP_START_MAGIC)
   {
-    SetProgramLoadingStatus(PROGRAM_LOADING_IN_PROGRESS);
-
-    if (GetProgramLoadingFlag(&fProgramLoadingFlag) == FALSE)
-    {
-      SetProgramLoadingStatus(PROGRAM_READ_ERR_EEPROM);
-
-      return FALSE;
-    }
-
-    if (fProgramLoadingFlag == TRUE)
-    {
-      SetProgramLoadingStatus(PROGRAM_LOADING_ERROR); /* program loaded before */
-      LogRequest(LOG_REQ_APPEND, NULL, EVENT_MCT_CONFIGURATION_ERROR, 2, 0, 0,
-                 0);
-      SetProgramLoadingFlag(FALSE);
-
-      SRuntimes.SaSignalStateRuntimes[SignalStateRuntimeCurNoGet()].
-      bExecutionMode =
-        SIGNAL_STATE_EXEC_MODE_PROGRAM_ERROR;
-    }
-    else
-    {
-      if (ProgramDataGet()) /* read flash data to ram */
-      {
-        ProgramRelativeDataInit();
-        SetProgramLoadingStatus(PROGRAM_LOADING_SUCCESS);
-
-        return TRUE;
-      }
-      else
-      {
-        SetProgramLoadingStatus(PROGRAM_LOADING_ERROR);
-        SetProgramLoadingFlag(FALSE);
-      }
-    }
-  }
-  else
-  {
-    SetProgramLoadingStatus(
-      PROGRAM_READ_ERR_FLASH);   /* flash control value error meaning flash is */
-    /* empty or wrong or corrupted */
+    return FALSE;
   }
 
-  return FALSE;
+  return ProgramDataGet(); /* read flash data to ram */
 } /* ProgramReadData */
 
 uint8_t StateCurrentGet(void)

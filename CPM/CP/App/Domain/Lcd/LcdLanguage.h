@@ -20,7 +20,6 @@
 const char *Lcd_GetStateStr(uint8_t state, uint8_t lang);
 const char *Lcd_GetDayStr(uint8_t day, uint8_t lang);
 const char *Lcd_GetAdvanceModeStr(uint8_t mode, uint8_t lang);
-const char *Lcd_GetProgramLoadingStatusStr(uint8_t status, uint8_t lang);
 const char *Lcd_GetSignalSourceParamStr(uint8_t source, uint8_t lang);
 const char *Lcd_GetNoEmergencyStr(uint8_t lang);
 const char *Lcd_GetHelpStr(uint8_t lang);

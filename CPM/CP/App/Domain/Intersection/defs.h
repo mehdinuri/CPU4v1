@@ -185,7 +185,6 @@ extern osThreadId_t TimeTaskHandle;
 extern osThreadId_t EthIfInputTaskHandle;
 extern osThreadId_t EthLinkStateTaskHandle;
 extern osThreadId_t UIMsgSenderTaskHandle;
-extern osThreadId_t IAPMsgParserTaskHandle;
 extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t PPPOSAsyMsgParserTaskHandle;
 extern osThreadId_t PPPOSAsyMsgSenderTaskHandle;
@@ -198,7 +197,6 @@ extern osMemoryPoolId_t UIRxReqsMemPoolHandle;
 extern osMemoryPoolId_t UITxReqsMemPoolHandle;
 extern osMemoryPoolId_t MSMReqsMemPoolHandle;
 extern osMemoryPoolId_t LogReqsMemPoolHandle;
-extern osMemoryPoolId_t IAPRxReqsMemPoolHandle;
 extern osMemoryPoolId_t PPPOSAsyRxReqsMemPoolHandle;
 extern osMemoryPoolId_t PPPOSAsyTxReqsMemPoolHandle;
 
@@ -210,7 +208,6 @@ extern osMessageQueueId_t UIRxReqsQueHandle;
 extern osMessageQueueId_t UITxReqsQueHandle;
 extern osMessageQueueId_t MSMReqsQueHandle;
 extern osMessageQueueId_t LogReqsQueHandle;
-extern osMessageQueueId_t IAPRxReqsQueHandle;
 extern osMessageQueueId_t PPPOSAsyRxReqsQueHandle;
 extern osMessageQueueId_t PPPOSAsyTxReqsQueHandle;
 

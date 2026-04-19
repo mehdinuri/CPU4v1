@@ -40,7 +40,7 @@ extern "C" {
 void MX_GPIO_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-/* Full GPIO reset — used during fault/IAP transitions. */
+/* Full GPIO reset — used during fault transitions. */
 extern void GPIODeInit(void);
 
 /* Platform-internal helpers without a domain port yet.

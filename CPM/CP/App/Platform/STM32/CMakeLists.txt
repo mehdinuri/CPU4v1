@@ -9,7 +9,6 @@ target_sources(Platform_STM32 PRIVATE
     Services/Control/Legacy/program.c
     Services/Persistence/MLM.c
     Services/Persistence/MSM.c
-    Services/Update/IAP.c
     ../../Adapters/STM32/LCDAdapter.c
     Services/Time/gps.c
     Services/Time/time.c
@@ -37,7 +36,6 @@ target_include_directories(Platform_STM32
             ${CMAKE_CURRENT_SOURCE_DIR}/Tasks
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Control/Legacy
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Persistence
-            ${CMAKE_CURRENT_SOURCE_DIR}/Services/Update
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Time
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Comms
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/UI

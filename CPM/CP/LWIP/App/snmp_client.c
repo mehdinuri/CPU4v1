@@ -40,9 +40,6 @@
 #include "snmp_msg.h"
 
 #include "string.h"
-#include "1201v0307.h"
-#include "1202v0328.h"
-#include "tc_kgm_v0.7.h"
 
 #include "main.h"
 #include "MCS.h"
@@ -51,19 +48,25 @@
 #include "HardwarePorts.h"
 #include "Adapters/STM32/LWIPSNMPAdapter.h"
 #include "Adapters/STM32/LWIPSNMPBridge.h"
+#include "Adapters/STM32/LWIPSNMPRootMibs.h"
 #include "lwip/sys.h"
 #include <string.h>
 
-#define SNMP_TEKNOTEL_ENTERPRISE_OID 59748
-#define SNMP_KGM_ENTERPRISE_OID 59873
-#define KMG_POWER_DOWN_SPECIFIC_TRAP 1
-#define KMG_DRIVER_MODULE_MISSING_SPECIFIC_TRAP 2
-#define KMG_DOOR_OPEN_SPECIFIC_TRAP 3
+#define SNMP_TEKNOTEL_ENTERPRISE_OID 59748U
+#define TEKNOTEL_POWER_DOWN_SPECIFIC_TRAP 1U
+#define TEKNOTEL_DRIVER_MODULE_MISSING_SPECIFIC_TRAP 2U
+#define TEKNOTEL_DOOR_OPEN_SPECIFIC_TRAP 3U
 
-#define KGM_DEVICE_ENTERPRISE_OID { 1, 3, 6, 1, 4, 1, SNMP_KGM_ENTERPRISE_OID }
-#define KGM_DEVICE_ENTERPRISE_OID_LEN 7
+#define TEKNOTEL_DEVICE_ENTERPRISE_OID                                         \
+  { 1U, 3U, 6U, 1U, 4U, 1U, SNMP_TEKNOTEL_ENTERPRISE_OID }
+#define TEKNOTEL_DEVICE_ENTERPRISE_OID_LEN 7U
 static struct snmp_obj_id SDeviceEnterpriseOID =
-{ KGM_DEVICE_ENTERPRISE_OID_LEN, KGM_DEVICE_ENTERPRISE_OID };
+{ TEKNOTEL_DEVICE_ENTERPRISE_OID_LEN, TEKNOTEL_DEVICE_ENTERPRISE_OID };
+
+static const u32_t kDriverModuleStatusTrapOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, SNMP_TEKNOTEL_ENTERPRISE_OID, 1U, 11U, 1U
+};
 
 static tESNMPClientState eClientState = SNMP_CLIENT_NONE;
 static LWIPSNMPAdapterCtx_t s_lwipSnmpAdapterCtx;
@@ -90,10 +93,8 @@ static void BindDomainSnmpAdapter(void)
   LWIPSNMPBridgeBindAdapter(&s_lwipSnmpAdapterCtx);
 }
 
-static const struct snmp_mib *SaMibs[] = { &mib2, &kgm, &asc,
-                                           &globalconfiguration,
-                                           &globaldbmanagement,
-                                           &globaltimemanagement,
+static const struct snmp_mib *SaMibs[] = { &mib2, &ntcip1201mib, &ntcip1202mib,
+                                           &teknotelmib,
                                            #if LWIP_SNMP_V3
                                            &snmpframeworkmib,
                                            &snmpusmmib
@@ -166,7 +167,7 @@ uint8_t SNMPSendPowerDownTrap(void)
 {
   if (SNMPClientIsStarted())
   {
-    return snmp_send_trap_specific(KMG_POWER_DOWN_SPECIFIC_TRAP,
+    return snmp_send_trap_specific(TEKNOTEL_POWER_DOWN_SPECIFIC_TRAP,
                                    NULL) == ERR_OK;
   }
 
@@ -177,19 +178,20 @@ void SNMPSendSSMStatusTrap(uint16_t sSSMStatus)
 {
   if (SNMPClientIsStarted())
   {
-    struct snmp_obj_id SStausOID = { 12,
-                                     { 1, 3, 6, 1, 4, 1, 59873, 4, 2, 1, 1,
-                                       2 } };                                          /* kgmDriverModuleGroupStatus */
+    struct snmp_obj_id SStausOID = { 10, { 0 } };
     struct snmp_varbind SStatusVarBind;
     s32_t lStatus = (s32_t) sSSMStatus;
 
+    MEMCPY(SStausOID.id,
+           kDriverModuleStatusTrapOid,
+           sizeof(kDriverModuleStatusTrapOid));
     SStatusVarBind.next = NULL;
     SStatusVarBind.oid = SStausOID;
     SStatusVarBind.type = SNMP_ASN1_TYPE_INTEGER;
     SStatusVarBind.value_len = sizeof(s32_t);
     SStatusVarBind.value = &lStatus;
 
-    snmp_send_trap_specific(KMG_DRIVER_MODULE_MISSING_SPECIFIC_TRAP,
+    snmp_send_trap_specific(TEKNOTEL_DRIVER_MODULE_MISSING_SPECIFIC_TRAP,
                             &SStatusVarBind);
   }
 }
@@ -198,6 +200,6 @@ void SNMPSendDoorOpenTrap(void)
 {
   if (SNMPClientIsStarted())
   {
-    snmp_send_trap_specific(KMG_DOOR_OPEN_SPECIFIC_TRAP, NULL);
+    snmp_send_trap_specific(TEKNOTEL_DOOR_OPEN_SPECIFIC_TRAP, NULL);
   }
 }
