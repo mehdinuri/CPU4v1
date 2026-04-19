@@ -5,6 +5,7 @@
 #ifndef NTCIP_CONTEXT_H
 #define NTCIP_CONTEXT_H
 
+#include "Domain/Intersection/CpMpLinkService.h"
 #include "Domain/Intersection/ConfigurationService.h"
 #include "Domain/Intersection/DetectorReportService.h"
 #include "Domain/Intersection/GlobalTimeManagementService.h"
@@ -30,6 +31,7 @@ typedef struct
   IPowerMonitorPort_t *powerMonitorPort;
   IUnitAlarmPort_t *unitAlarmPort;
   IUnitClockPort_t *unitClockPort;
+  CpMpLinkService_t *cpMpLinkService;
 } NtcipContext_t;
 
 static inline void NtcipContextInit(NtcipContext_t *context,
@@ -51,6 +53,7 @@ static inline void NtcipContextInit(NtcipContext_t *context,
   context->powerMonitorPort = NULL;
   context->unitAlarmPort = NULL;
   context->unitClockPort = NULL;
+  context->cpMpLinkService = NULL;
 }
 
 static inline void NtcipContextBindDetectorReportService(
@@ -117,6 +120,16 @@ static inline void NtcipContextBindUnitAlarmPort(NtcipContext_t *context,
   if (context != NULL)
   {
     context->unitAlarmPort = unitAlarmPort;
+  }
+}
+
+static inline void NtcipContextBindCpMpLinkService(
+  NtcipContext_t *context,
+  CpMpLinkService_t *cpMpLinkService)
+{
+  if (context != NULL)
+  {
+    context->cpMpLinkService = cpMpLinkService;
   }
 }
 

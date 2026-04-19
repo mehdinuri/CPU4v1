@@ -4,18 +4,9 @@
 
 #include <string.h>
 
-#include "CanMsgParser.h"
-#include "MCSAsynch.h"
-#include "MSM.h"
-#include "cpmpcomm.h"
-#include "data.h"
-#include "gps.h"
-#include "lcd.h"
-#include "main.h"
-#include "MCS.h"
+#include "DomainServices.h"
+#include "LegacyCanTx.h"
 #include "MLM.h"
-#include "program.h"
-#include "time.h"
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  members */
 
@@ -26,518 +17,639 @@ tSMMIRuntime SMMIRuntime;
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Method declaration */
+enum
+{
+  MMI_LEGACY_ACK = 0x06U,
+  MMI_LEGACY_NAK = 0x15U,
+  MMI_LEGACY_IMEI_LEN = 15U,
+  MMI_LEGACY_MAC_LEN = 12U,
+  MMI_LEGACY_VERSION_ARG0 = 4U,
+  MMI_LEGACY_VERSION_ARG1 = 4U,
+  MMI_LEGACY_VERSION_ARG2 = 0U,
+  MMI_LEGACY_VERSION_ARG3 = 2U,
+  MMI_LEGACY_VERSION_ARG4 = (uint8_t) 'T',
+  MMI_LEGACY_EVENT_DOOR_OPEN = 64U,
+  MMI_LEGACY_EVENT_DOOR_CLOSED = 65U,
+  MMI_LEGACY_USER_SETTINGS_CHANGED = 240U,
+  MMI_LEGACY_BROKEN_INPUT_SET = 240U
+};
+
+static void TransmitLegacyFrame(uint8_t dataLength,
+                                uint16_t standardId,
+                                const void *data)
+{
+  uint8_t txBuffer[8];
+
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if ((data != NULL) && (dataLength > 0U))
+  {
+    (void) memcpy(&txBuffer[0], data, dataLength);
+  }
+
+  CANTxRequest(dataLength,
+               LEGACY_CAN_ID_TYPE_STD,
+               standardId,
+               &txBuffer[0]);
+}
+
+static void TransmitLegacyAck(uint16_t standardId, uint8_t accepted)
+{
+  const uint8_t response = (accepted != FALSE) ? MMI_LEGACY_ACK
+                           : MMI_LEGACY_NAK;
+
+  TransmitLegacyFrame(sizeof(response), standardId, &response);
+}
+
+static uint8_t ReadLocalFlags(MmiLocalUserFlagsV2_t *settings)
+{
+  uint8_t payload[sizeof(MmiLocalUserFlagsV2_t)];
+  uint16_t payloadLength = 0U;
+
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  if (MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                  MMI_PROTOCOL_V2_LOCAL_RESOURCE_USER_FLAGS,
+                                  &payload[0],
+                                  &payloadLength) != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return FALSE;
+  }
+
+  if (payloadLength != sizeof(*settings))
+  {
+    return FALSE;
+  }
+
+  memcpy(settings, &payload[0], sizeof(*settings));
+  return TRUE;
+}
+
+static uint8_t WriteLocalFlags(const MmiLocalUserFlagsV2_t *settings)
+{
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (MmiLocalSettingsServiceWrite(
+                      &g_mmiLocalSettingsService,
+                      MMI_PROTOCOL_V2_LOCAL_RESOURCE_USER_FLAGS,
+                      (const uint8_t *) settings,
+                      sizeof(*settings)) == MMI_PROTOCOL_V2_STATUS_OK);
+}
+
+static uint8_t ReadLocalBrokenInputSettings(
+  MmiLocalBrokenInputSettingsV2_t *settings)
+{
+  uint8_t payload[sizeof(MmiLocalBrokenInputSettingsV2_t)];
+  uint16_t payloadLength = 0U;
+
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  if (MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                  MMI_PROTOCOL_V2_LOCAL_RESOURCE_BROKEN_INPUT,
+                                  &payload[0],
+                                  &payloadLength) != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return FALSE;
+  }
+
+  if (payloadLength != sizeof(*settings))
+  {
+    return FALSE;
+  }
+
+  memcpy(settings, &payload[0], sizeof(*settings));
+  return TRUE;
+}
+
+static uint8_t WriteLocalBrokenInputSettings(
+  const MmiLocalBrokenInputSettingsV2_t *settings)
+{
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (MmiLocalSettingsServiceWrite(
+                      &g_mmiLocalSettingsService,
+                      MMI_PROTOCOL_V2_LOCAL_RESOURCE_BROKEN_INPUT,
+                      (const uint8_t *) settings,
+                      sizeof(*settings)) == MMI_PROTOCOL_V2_STATUS_OK);
+}
+
+static uint8_t ReadLocalGpsSettings(MmiLocalGpsSettingsV2_t *settings)
+{
+  uint8_t payload[sizeof(MmiLocalGpsSettingsV2_t)];
+  uint16_t payloadLength = 0U;
+
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  if (MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                  MMI_PROTOCOL_V2_LOCAL_RESOURCE_GPS,
+                                  &payload[0],
+                                  &payloadLength) != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return FALSE;
+  }
+
+  if (payloadLength != sizeof(*settings))
+  {
+    return FALSE;
+  }
+
+  memcpy(settings, &payload[0], sizeof(*settings));
+  return TRUE;
+}
+
+static uint8_t WriteLocalGpsSettings(const MmiLocalGpsSettingsV2_t *settings)
+{
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (MmiLocalSettingsServiceWrite(
+                      &g_mmiLocalSettingsService,
+                      MMI_PROTOCOL_V2_LOCAL_RESOURCE_GPS,
+                      (const uint8_t *) settings,
+                      sizeof(*settings)) == MMI_PROTOCOL_V2_STATUS_OK);
+}
+
+static uint8_t ReadLocalModemSettings(MmiLocalModemSettingsV2_t *settings)
+{
+  uint8_t payload[sizeof(MmiLocalModemSettingsV2_t)];
+  uint16_t payloadLength = 0U;
+
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  if (MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                  MMI_PROTOCOL_V2_LOCAL_RESOURCE_MODEM,
+                                  &payload[0],
+                                  &payloadLength) != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return FALSE;
+  }
+
+  if (payloadLength != sizeof(*settings))
+  {
+    return FALSE;
+  }
+
+  memcpy(settings, &payload[0], sizeof(*settings));
+  return TRUE;
+}
+
+static uint8_t WriteLocalModemSettings(const MmiLocalModemSettingsV2_t *settings)
+{
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (MmiLocalSettingsServiceWrite(
+                      &g_mmiLocalSettingsService,
+                      MMI_PROTOCOL_V2_LOCAL_RESOURCE_MODEM,
+                      (const uint8_t *) settings,
+                      sizeof(*settings)) == MMI_PROTOCOL_V2_STATUS_OK);
+}
+
+static uint8_t ReadLocalClockSettings(MmiLocalClockSettingsV2_t *settings)
+{
+  uint8_t payload[sizeof(MmiLocalClockSettingsV2_t)];
+  uint16_t payloadLength = 0U;
+
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  if (MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                  MMI_PROTOCOL_V2_LOCAL_RESOURCE_CLOCK_SETTINGS,
+                                  &payload[0],
+                                  &payloadLength) != MMI_PROTOCOL_V2_STATUS_OK)
+  {
+    return FALSE;
+  }
+
+  if (payloadLength != sizeof(*settings))
+  {
+    return FALSE;
+  }
+
+  memcpy(settings, &payload[0], sizeof(*settings));
+  return TRUE;
+}
+
+static uint8_t WriteLocalClockSettings(
+  const MmiLocalClockSettingsV2_t *settings)
+{
+  if (settings == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (MmiLocalSettingsServiceWrite(
+                      &g_mmiLocalSettingsService,
+                      MMI_PROTOCOL_V2_LOCAL_RESOURCE_CLOCK_SETTINGS,
+                      (const uint8_t *) settings,
+                      sizeof(*settings)) == MMI_PROTOCOL_V2_STATUS_OK);
+}
+
+static uint8_t ReadLatestEventLogIndex(uint16_t *logIndex)
+{
+  if (logIndex == NULL)
+  {
+    return FALSE;
+  }
+
+  return MmiEventLogServiceGetLatestIndex(&g_mmiEventLogService, logIndex);
+}
+
+static uint8_t ReadEventLogRecord(uint16_t logIndex,
+                                  MmiEventRecordV2_t *record)
+{
+  if (record == NULL)
+  {
+    return FALSE;
+  }
+
+  return MmiEventLogServiceReadRecord(&g_mmiEventLogService,
+                                      logIndex,
+                                      record);
+}
+
+static uint8_t ReadLatestDoorLogIndex(uint8_t closedState, uint16_t *logIndex)
+{
+  if (logIndex == NULL)
+  {
+    return FALSE;
+  }
+
+  return MmiEventLogServiceFindLatestByEventCode(
+    &g_mmiEventLogService,
+    (closedState != FALSE) ? MMI_LEGACY_EVENT_DOOR_CLOSED
+    : MMI_LEGACY_EVENT_DOOR_OPEN,
+    logIndex);
+}
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  methods */
 void OpenMMI(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
-
-  canMMIAnswer.TxHeader.DataLength = 0;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_OPEN_MMI;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(0U, CAN_MMI_STD_ID_OPEN_MMI, NULL);
 }
 
 void CloseMMI(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
-
-  canMMIAnswer.TxHeader.DataLength = 0;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_CLOSE_MMI;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(0U, CAN_MMI_STD_ID_CLOSE_MMI, NULL);
 }
 
 void StreamPSMMeasurements(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIMeasurement SMMIMeasurement;
+  MmiLegacyMeasurement_t measurement;
 
-  SMMIMeasurement.psm1Voltage = (GetPowerSupplyNet(0) * 0.73029);
-  SMMIMeasurement.psm2Voltage = (GetPowerSupplyNet(1) * 0.73029);
-  SMMIMeasurement.psm1Frequency = GetPowerSupplyFreq(0);
-  SMMIMeasurement.psm2Frequency = GetPowerSupplyFreq(1);
+  (void) memset(&SMMIMeasurement, 0, sizeof(SMMIMeasurement));
+  (void) memset(&measurement, 0, sizeof(measurement));
+  if (MmiLegacyStatusReadMeasurement(&g_mmiLegacyStatusPort, &measurement)
+      != FALSE)
+  {
+    SMMIMeasurement.psm1Voltage = measurement.psmVoltageTenths[0];
+    SMMIMeasurement.psm2Voltage = measurement.psmVoltageTenths[1];
+    SMMIMeasurement.psm1Frequency = measurement.psmFrequency[0];
+    SMMIMeasurement.psm2Frequency = measurement.psmFrequency[1];
+  }
 
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIMeasurement);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_RUNTIME_MEASUREMENT_ANSWER_STD_ID;
-  memcpy(canMMIAnswer.Data, &SMMIMeasurement, sizeof(tSMMIMeasurement));
-
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMIMeasurement),
+                      CAN_MMI_RUNTIME_MEASUREMENT_ANSWER_STD_ID,
+                      &SMMIMeasurement);
 }
 
 void StreamDateTime(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMITime SMMITime;
-  tSTime STimeNow;
+  MmiLegacyTime_t timeValue;
 
-  TimeGet(&STimeNow);
+  (void) memset(&SMMITime, 0, sizeof(SMMITime));
+  (void) memset(&timeValue, 0, sizeof(timeValue));
+  if (MmiLegacyStatusReadTime(&g_mmiLegacyStatusPort, &timeValue) != FALSE)
+  {
+    SMMITime.bTimeSource = timeValue.timeSource;
+    SMMITime.bSeconds = timeValue.second;
+    SMMITime.bMinutes = timeValue.minute;
+    SMMITime.bHours = timeValue.hour;
+    SMMITime.bDay = timeValue.day;
+    SMMITime.bMonth = timeValue.month;
+    SMMITime.bYear = timeValue.year;
+  }
 
-  SMMITime.bTimeSource = TimeSourceGet();
-  SMMITime.bSeconds = STimeNow.SCurrentTime.Seconds;
-  SMMITime.bMinutes = STimeNow.SCurrentTime.Minutes;
-  SMMITime.bHours = STimeNow.SCurrentTime.Hours;
-  SMMITime.bDay = STimeNow.SCurrentDate.Date;
-  SMMITime.bMonth = STimeNow.SCurrentDate.Month;
-  SMMITime.bYear = STimeNow.SCurrentDate.Year;
-
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMITime);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_RUNTIME_TIME_ANSWER_STD_ID;
-
-  memcpy(canMMIAnswer.Data, &SMMITime, sizeof(tSMMITime));
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMITime),
+                      CAN_MMI_RUNTIME_TIME_ANSWER_STD_ID,
+                      &SMMITime);
 }
 
 void StreamGPRSImei(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
+  const char *imei = MmiLegacyStatusGetGprsImei(&g_mmiLegacyStatusPort);
   uint8_t bDataLen = FDCAN_DATA_MAX_LEN;
+  uint8_t txBuffer[8];
 
-  memcpy(canMMIAnswer.Data, MCSGetGprsModemIMEI(), bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_GPRS_MODEM_IMEI_PART1;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (imei != NULL)
+  {
+    (void) memcpy(&txBuffer[0], imei, bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_GPRS_MODEM_IMEI_PART1, &txBuffer[0]);
 
-  bDataLen = MCS_MAX_IMEI_LEN % FDCAN_DATA_MAX_LEN;
-  memcpy(canMMIAnswer.Data, &MCSGetGprsModemIMEI()[FDCAN_DATA_MAX_LEN],
-         bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_GPRS_MODEM_IMEI_PART2;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  bDataLen = MMI_LEGACY_IMEI_LEN % FDCAN_DATA_MAX_LEN;
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (imei != NULL)
+  {
+    (void) memcpy(&txBuffer[0], &imei[FDCAN_DATA_MAX_LEN], bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_GPRS_MODEM_IMEI_PART2, &txBuffer[0]);
 }
 
 void StreamUSRMAC(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
+  const char *mac = MmiLegacyStatusGetUsrMac(&g_mmiLegacyStatusPort);
   uint8_t bDataLen = FDCAN_DATA_MAX_LEN;
+  uint8_t txBuffer[8];
 
-  memcpy(canMMIAnswer.Data, MCSGetUSRModuleMAC(), bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_USR_MAC_PART1;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (mac != NULL)
+  {
+    (void) memcpy(&txBuffer[0], mac, bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_USR_MAC_PART1, &txBuffer[0]);
 
-  bDataLen = MCS_MAX_MAC_LEN % FDCAN_DATA_MAX_LEN;
-  memcpy(canMMIAnswer.Data, &MCSGetUSRModuleMAC()[FDCAN_DATA_MAX_LEN],
-         bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_USR_MAC_PART2;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  bDataLen = MMI_LEGACY_MAC_LEN % FDCAN_DATA_MAX_LEN;
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (mac != NULL)
+  {
+    (void) memcpy(&txBuffer[0], &mac[FDCAN_DATA_MAX_LEN], bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_USR_MAC_PART2, &txBuffer[0]);
 }
 
 void StreamEthernetMAC(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
+  const char *mac = MmiLegacyStatusGetEthernetMac(&g_mmiLegacyStatusPort);
   uint8_t bDataLen = FDCAN_DATA_MAX_LEN;
+  uint8_t txBuffer[8];
 
-  memcpy(canMMIAnswer.Data, MCSGetRuntimeEthernetMAC(), bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_USR_MAC_PART1;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (mac != NULL)
+  {
+    (void) memcpy(&txBuffer[0], mac, bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_USR_MAC_PART1, &txBuffer[0]);
 
-  bDataLen = MCS_MAX_MAC_LEN % FDCAN_DATA_MAX_LEN;
-  memcpy(canMMIAnswer.Data,
-         &MCSGetRuntimeEthernetMAC()[FDCAN_DATA_MAX_LEN],
-         bDataLen);
-  canMMIAnswer.TxHeader.DataLength = bDataLen;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_USR_MAC_PART2;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  bDataLen = MMI_LEGACY_MAC_LEN % FDCAN_DATA_MAX_LEN;
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (mac != NULL)
+  {
+    (void) memcpy(&txBuffer[0], &mac[FDCAN_DATA_MAX_LEN], bDataLen);
+  }
+  TransmitLegacyFrame(bDataLen, CAN_MMI_STD_ID_USR_MAC_PART2, &txBuffer[0]);
 }
 
 void StreamGsmOperator(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
+  const char *operatorName = MmiLegacyStatusGetGsmOperator(&g_mmiLegacyStatusPort);
+  uint8_t txBuffer[8];
 
-  memcpy(canMMIAnswer.Data, MCSGetGprsGsmOperator(), FDCAN_DATA_MAX_LEN);
-  canMMIAnswer.TxHeader.DataLength = FDCAN_DATA_MAX_LEN;
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_GPRS_GSM_OPERATOR;
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  (void) memset(&txBuffer[0], 0, sizeof(txBuffer));
+  if (operatorName != NULL)
+  {
+    (void) memcpy(&txBuffer[0], operatorName, FDCAN_DATA_MAX_LEN);
+  }
+  TransmitLegacyFrame(FDCAN_DATA_MAX_LEN,
+                      CAN_MMI_STD_ID_GPRS_GSM_OPERATOR,
+                      &txBuffer[0]);
 }
 
 void StreamGPRSState(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIGprsLog SMMIGprsLog;
+  MmiLegacyGprsLog_t gprsLog;
 
   memset(&SMMIGprsLog, 0, sizeof(SMMIGprsLog));
+  (void) memset(&gprsLog, 0, sizeof(gprsLog));
+  if (MmiLegacyStatusReadGprsLog(&g_mmiLegacyStatusPort, &gprsLog) != FALSE)
+  {
+    SMMIGprsLog.bModem = gprsLog.modemType;
+    SMMIGprsLog.bState = gprsLog.state;
+    SMMIGprsLog.bSubState = gprsLog.subState;
+    SMMIGprsLog.bSignalQuality = gprsLog.signalQuality;
+  }
 
-  SMMIGprsLog.bModem = MCSGetModemType();
-  SMMIGprsLog.bState = MCSGetGPRSState();
-  SMMIGprsLog.bSignalQuality = MCSGetGprsSignalQuality() / 6;
-
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIGprsLog);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_GPRS_MODEM_LOG_ANSWER_STD_ID;
-
-  memcpy(canMMIAnswer.Data, &SMMIGprsLog, sizeof(tSMMIGprsLog));
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMIGprsLog),
+                      CAN_MMI_GET_GPRS_MODEM_LOG_ANSWER_STD_ID,
+                      &SMMIGprsLog);
 }
 
 void StreamOperationRuntime(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIWorkmode SMMIWorkmode;
+  MmiLegacyWorkmode_t workmode;
 
-  if (CPMPStateGet() == PACKET_TYPE_CP_DEFAULT)
+  (void) memset(&SMMIWorkmode, 0, sizeof(SMMIWorkmode));
+  (void) memset(&workmode, 0, sizeof(workmode));
+  if (MmiLegacyStatusReadWorkmode(&g_mmiLegacyStatusPort, &workmode) != FALSE)
   {
-    SMMIWorkmode.bState = StateCurrentGet();
-  }
-  else
-  {
-    SMMIWorkmode.bState = STATES_PROGRAM_LOAD;
-  }
-
-  switch (SMMIWorkmode.bState)
-  {
-      case STATES_SEQ:
-      {
-        SMMIWorkmode.bArg1 = SeqCurrentGet();
-        SMMIWorkmode.bArg2 = SeqTotalGet();
-        SMMIWorkmode.bArg3 = SeqCurrentStepGet() + 1;
-        SMMIWorkmode.bArg4 = SeqCurStepNumTotalGet();
-        SMMIWorkmode.bArg5 = SeqCurrentStepCurrentDurationGet();
-        SMMIWorkmode.bArg6 = SeqCurrentStepDurationGet();
-        SMMIWorkmode.bArg7 = SeqDurCurGet();
-        SMMIWorkmode.bArg8 = SeqDurGet(SeqCurrentGet() - 1)
-                             + SeqTotalExtDurGet();
-        break;
-      }
-
-      case STATES_PHASE:
-      {
-        SMMIWorkmode.bArg1 = ProgramCurrentNoGet();
-        SMMIWorkmode.bArg2 = PhaseTotalGet();
-        SMMIWorkmode.bArg3 = PhaseMinDurationGet(ProgramCurrentNoGet() - 1);
-        SMMIWorkmode.bArg4 = WorkPlanPhaseDurGet(ProgramCurrentNoGet() - 1);
-        SMMIWorkmode.bArg5 = PhaseElapsedDurGet(ProgramCurrentNoGet() - 1);
-        break;
-      }
-
-      case STATES_PHASE_TRANSITION:
-      {
-        SMMIWorkmode.bArg1 = ProgramCurrentNoGet();
-        SMMIWorkmode.bArg2 = ProgramTargetNoGet();
-        break;
-      }
-
-      case STATES_PROGRAM_LOAD:
-      {
-        SMMIWorkmode.bArg1 = ProgramLoadingStatusGet();
-        break;
-      }
+    SMMIWorkmode.bState = workmode.state;
+    SMMIWorkmode.bArg1 = workmode.arg1;
+    SMMIWorkmode.bArg2 = workmode.arg2;
+    SMMIWorkmode.bArg3 = workmode.arg3;
+    SMMIWorkmode.bArg4 = workmode.arg4;
+    SMMIWorkmode.bArg5 = workmode.arg5;
+    SMMIWorkmode.bArg6 = workmode.arg6;
+    SMMIWorkmode.bArg7 = workmode.arg7;
+    SMMIWorkmode.bArg8 = workmode.arg8;
   }
 
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIWorkmode);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_RUNTIME_WORKMODE_ANSWER_STD_ID;
-  memcpy(canMMIAnswer.Data, &SMMIWorkmode, sizeof(tSMMIWorkmode));
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMIWorkmode),
+                      CAN_MMI_RUNTIME_WORKMODE_ANSWER_STD_ID,
+                      &SMMIWorkmode);
 } /* StreamOperationRuntime */
 
 void StreamModuleRuntime(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIModule SMMIModule;
+  MmiLegacyModuleStatus_t moduleStatus;
 
-  SMMIModule.fGPSModemConnected = GpsModemAliveGet();
-  SMMIModule.fGPSAntennaConnected = GpsAntStatusGet();
-  SMMIModule.fGPRSModemConnected = MCSAsynchConnectedGet();
-  SMMIModule.fGPRSCenterConnected = MCSAsynchConnectedGet();
-  SMMIModule.fIsRelayClosed = !GetPowerRelay();
-  SMMIModule.bLastDigitalInputDemand = GetLastInputDemandIssued();
-  SMMIModule.bLastLoopDedectorDemand = GetLastDetectorDemandIssued();
-  SMMIModule.bGPSModeType = GpsPortGet();
+  (void) memset(&SMMIModule, 0, sizeof(SMMIModule));
+  (void) memset(&moduleStatus, 0, sizeof(moduleStatus));
+  if (MmiLegacyStatusReadModuleStatus(&g_mmiLegacyStatusPort,
+                                      &moduleStatus) != FALSE)
+  {
+    SMMIModule.fGPSModemConnected = moduleStatus.gpsModemConnected;
+    SMMIModule.fGPSAntennaConnected = moduleStatus.gpsAntennaConnected;
+    SMMIModule.fGPRSModemConnected = moduleStatus.gprsModemConnected;
+    SMMIModule.fGPRSCenterConnected = moduleStatus.gprsCenterConnected;
+    SMMIModule.fIsRelayClosed = moduleStatus.relayClosed;
+    SMMIModule.bLastDigitalInputDemand = moduleStatus.lastDigitalInputDemand;
+    SMMIModule.bLastLoopDedectorDemand = moduleStatus.lastLoopDetectorDemand;
+    SMMIModule.bGPSModeType = moduleStatus.gpsModeType;
+  }
 
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIModule);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_MODULE_STATUS_ANSWER_STD_ID;
-  memcpy(canMMIAnswer.Data, &SMMIModule, sizeof(tSMMIModule));
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMIModule),
+                      CAN_MMI_MODULE_STATUS_ANSWER_STD_ID,
+                      &SMMIModule);
 }
 
 void StreamGateStateChanged(uint8_t fState, tpSLogRecord pSLog)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMICabinetDoorStateChange SMMICabinetDoorStateChange;
 
   SMMICabinetDoorStateChange.fState = fState;
 
   /*  Cabinet Door Closed */
   SMMICabinetDoorStateChange.bEvent =
-    (fState) ? EVENT_DOOR_CLOSED : EVENT_DOOR_OPEN;
+    (fState != FALSE) ? MMI_LEGACY_EVENT_DOOR_CLOSED : MMI_LEGACY_EVENT_DOOR_OPEN;
   SMMICabinetDoorStateChange.bSeconds = pSLog->bSeconds;
   SMMICabinetDoorStateChange.bMinutes = pSLog->bMinutes;
   SMMICabinetDoorStateChange.bHours = pSLog->bHours;
   SMMICabinetDoorStateChange.bDay = pSLog->bMonthDay;
   SMMICabinetDoorStateChange.bMonth = pSLog->bMonth;
-  SMMICabinetDoorStateChange.bYear = pSLog->sYear - (TimeCenturyGet() * 100);
+  SMMICabinetDoorStateChange.bYear = (uint8_t) (pSLog->sYear % 100U);
 
-  canMMIAnswer.TxHeader.DataLength = sizeof(tSMMICabinetDoorStateChange);
-  canMMIAnswer.TxHeader.Identifier = CAN_MMI_STD_ID_CABINET_DOOR_STATE_CHANGE;
-
-  memcpy(canMMIAnswer.Data, &SMMICabinetDoorStateChange,
-         sizeof(tSMMICabinetDoorStateChange));
-  CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-               CAN_ID_TYPE_STD,
-               canMMIAnswer.TxHeader.Identifier,
-               (uint8_t *) canMMIAnswer.Data);
+  TransmitLegacyFrame(sizeof(tSMMICabinetDoorStateChange),
+                      CAN_MMI_STD_ID_CABINET_DOOR_STATE_CHANGE,
+                      &SMMICabinetDoorStateChange);
 }
 
 void StreamErrorRuntime(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIError SMMIError;
-
   uint8_t bSetNo = 0;
-  uint8_t bSetTotal = SetTotalGet();
+  uint8_t bSetTotal = MmiLegacyStatusGetSetTotal(&g_mmiLegacyStatusPort);
 
   memset(&SMMIError, 0, sizeof(tSMMIError));
 
   for (bSetNo = 0; bSetNo < bSetTotal; bSetNo++)
   {
-    tSSetRuntime SSetRuntime;
+    MmiLegacyErrorRecord_t errorRecord;
 
-    SetRuntimeGet(bSetNo, &SSetRuntime);
+    (void) memset(&errorRecord, 0, sizeof(errorRecord));
+    if (MmiLegacyStatusReadErrorRecord(&g_mmiLegacyStatusPort,
+                                       bSetNo,
+                                       &errorRecord) == FALSE)
+    {
+      continue;
+    }
 
-    SMMIError.bSetNo = (bSetNo + 1);
-    SMMIError.bSignalingMode = SSetRuntime.bSignalingMode;
-    SMMIError.bSigModeSource = SSetRuntime.bSigModeSource;
-    SMMIError.bParam1 = SSetRuntime.bParam1;
-    SMMIError.bParam2 = SSetRuntime.bParam2;
+    SMMIError.bSetNo = errorRecord.setNumber;
+    SMMIError.bSignalingMode = errorRecord.signalingMode;
+    SMMIError.bSigModeSource = errorRecord.signalingModeSource;
+    SMMIError.bParam1 = errorRecord.param1;
+    SMMIError.bParam2 = errorRecord.param2;
 
-    canMMIAnswer.TxHeader.DataLength = sizeof(SMMIError);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_ERROR_ANSWER_STD_ID;
-
-    memcpy(canMMIAnswer.Data, &SMMIError, sizeof(SMMIError));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
+    TransmitLegacyFrame(sizeof(SMMIError),
+                        CAN_MMI_ERROR_ANSWER_STD_ID,
+                        &SMMIError);
   }
 }
 
 void StreamSignals(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
-  uint8_t bSGNo = 0, bSONo = 0, bSignal = 0, bVoltages = 0, bCurrentSG = 0,
-          bCurrentSO = 0, bSOType = 0;
-  uint16_t sPeriod = 0, sSSMNo = 0;
   tSMMISGSignals SMMISGSignals;
+  uint8_t blockIndex;
+  uint16_t signalWords[CAN_MMI_MAX_SSM_PER_MSG];
 
   if (SMMIRuntime.SFlags.fSignalStream)
   {
-    memset(&SMMISGSignals, 0, sizeof(SMMISGSignals));
-    for (sSSMNo = 0; sSSMNo < MODULES_SSM_MAX / 2; sSSMNo++)
+    for (blockIndex = 0U; blockIndex < 2U; ++blockIndex)
     {
-      SMMISGSignals.SMMISSMSignals[sSSMNo % CAN_MMI_MAX_SSM_PER_MSG] = (sSSMNo
-                                                                        + 1) <<
-                                                                       12;
-      for (bSGNo = 0; bSGNo < 4; bSGNo++)
+      (void) memset(&SMMISGSignals, 0, sizeof(SMMISGSignals));
+      (void) memset(&signalWords[0], 0, sizeof(signalWords));
+      if (MmiLegacyStatusReadSignalsBlock(&g_mmiLegacyStatusPort,
+                                          blockIndex,
+                                          &signalWords[0])
+          == FALSE)
       {
-        bCurrentSG = (sSSMNo * 4) + bSGNo;
-        for (bSONo = 0; bSONo < 3; bSONo++)
-        {
-          bCurrentSO = (bCurrentSG * 3) + bSONo;
-          bSOType = GetSOType(bCurrentSO);
-          bSignal = SGSignalGet(bCurrentSG);
-          if (bSOType)
-          {
-            bVoltages = SignalVoltagesGet(bSignal);
-            sPeriod = SubSignalHasFlash(bSignal, bSOType);
-
-            if ((sPeriod == 0) || ((sPeriod > 0) && FlashOnGet(sPeriod)))
-            {
-              if (bVoltages & bSOType)
-              {
-                SMMISGSignals.SMMISSMSignals[sSSMNo
-                                             % CAN_MMI_MAX_SSM_PER_MSG] |=
-                  laValue2Bit[11
-                              -
-                              (
-                                bCurrentSO % 12)];
-              }
-            }
-          }
-        }
+        continue;
       }
+      (void) memcpy(&SMMISGSignals.SMMISSMSignals[0],
+                    &signalWords[0],
+                    sizeof(signalWords));
+
+      TransmitLegacyFrame(sizeof(tSMMISGSignals),
+                          CAN_MMI_GET_SIGNALS_ANSWER_STD_ID,
+                          &SMMISGSignals);
     }
-
-    canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISGSignals);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_SIGNALS_ANSWER_STD_ID;
-    memcpy(canMMIAnswer.Data, &SMMISGSignals, sizeof(tSMMISGSignals));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
-
-    memset(&SMMISGSignals, 0, sizeof(SMMISGSignals));
-    for (sSSMNo = 4; sSSMNo < MODULES_SSM_MAX; sSSMNo++)
-    {
-      SMMISGSignals.SMMISSMSignals[sSSMNo % CAN_MMI_MAX_SSM_PER_MSG] = (sSSMNo
-                                                                        + 1) <<
-                                                                       12;
-      for (bSGNo = 0; bSGNo < 4; bSGNo++)
-      {
-        bCurrentSG = (sSSMNo * 4) + bSGNo;
-        for (bSONo = 0; bSONo < 3; bSONo++)
-        {
-          bCurrentSO = (bCurrentSG * 3) + bSONo;
-          bSOType = GetSOType(bCurrentSO);
-          bSignal = SGSignalGet(bCurrentSG);
-          if (bSOType)
-          {
-            bVoltages = SignalVoltagesGet(bSignal);
-            sPeriod = SubSignalHasFlash(bSignal,
-                                        bSOType);
-
-            if ((sPeriod == 0) || ((sPeriod > 0) && FlashOnGet(sPeriod)))
-            {
-              if (bVoltages & bSOType)
-              {
-                SMMISGSignals.SMMISSMSignals[sSSMNo
-                                             % CAN_MMI_MAX_SSM_PER_MSG] |=
-                  laValue2Bit[11
-                              -
-                              (
-                                bCurrentSO % 12)];
-              }
-            }
-          }
-        }
-      }
-    }
-
-    canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISGSignals);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_SIGNALS_ANSWER_STD_ID;
-    memcpy(canMMIAnswer.Data, &SMMISGSignals, sizeof(tSMMISGSignals));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
   }
 } /* StreamSignals */
 
 void StreamInputs(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMIInputs SMMIInputs;
-  uint8_t bModuleIndex = 0;
-  uint8_t bitIndex = 0;
+  uint32_t loopDemands = 0U;
+  uint32_t digitalDemands = 0U;
 
   if (SMMIRuntime.SFlags.fInputStream)
   {
     memset(&SMMIInputs, 0, sizeof(SMMIInputs));
-    /* input levels */
-    for (bModuleIndex = 0; bModuleIndex < MODULES_IO_MAX; bModuleIndex++)
-    {
-      for (bitIndex = 0; bitIndex < 16; bitIndex++)
-      {
-        if (!GetBitValue(SaCanDetectorIOInputs[bModuleIndex].sLoopEmptyStates,
-                         bitIndex))
-        {
-          SetBitValue(SMMIInputs.lLoopDemands,
-                      ((!bModuleIndex) ? bitIndex : (bitIndex + 16)));
-        }
+    (void) MmiLegacyStatusReadInputs(&g_mmiLegacyStatusPort,
+                                     &loopDemands,
+                                     &digitalDemands);
+    SMMIInputs.lLoopDemands = loopDemands;
+    SMMIInputs.lDigitalInputDemands = digitalDemands;
 
-        if (!GetBitValue(SaCanDigitalIOInputs[bModuleIndex].sInputStates,
-                         bitIndex))
-        {
-          SetBitValue(SMMIInputs.lDigitalInputDemands,
-                      ((!bModuleIndex) ? bitIndex : (bitIndex + 16)));
-        }
-      }
-    }
-
-    canMMIAnswer.TxHeader.DataLength = sizeof(SMMIInputs);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_INPUTS_ANSWER_STD_ID;
-    memcpy(canMMIAnswer.Data, &SMMIInputs, sizeof(SMMIInputs));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
+    TransmitLegacyFrame(sizeof(SMMIInputs),
+                        CAN_MMI_GET_INPUTS_ANSWER_STD_ID,
+                        &SMMIInputs);
   }
 }
 
 void StreamSOTest(void)
 {
-  tSFDCANTxMsg canMMIAnswer;
   tSMMISOStream1 SMMISOStream1;
   tSMMISOStream2 SMMISOStream2;
+  MmiMaintenanceOutputTestStatus_t status;
 
   if (SMMIRuntime.SFlags.fSOTestStream)
   {
-    SMMISOStream1.bSONo = SMMIRuntime.bSOTestSONo + 1;
-    SMMISOStream1.sPowerNet = GetSOPowerRecordNet(SMMIRuntime.bSOTestSONo);
-    SMMISOStream1.sPower = GetSOPower(SMMIRuntime.bSOTestSONo);
-    SMMISOStream1.bState = 0;
-    SMMISOStream1.sNet = 0;
+    (void) memset(&SMMISOStream1, 0, sizeof(SMMISOStream1));
+    (void) memset(&SMMISOStream2, 0, sizeof(SMMISOStream2));
+    (void) memset(&status, 0, sizeof(status));
+    if (MmiMaintenanceServiceReadOutputTestStatus(&g_mmiMaintenanceService,
+                                                  &status) == FALSE)
+    {
+      return;
+    }
 
-    SMMISOStream2.bSONo = SMMIRuntime.bSOTestSONo + 1;
-    SMMISOStream2.sNow = GetCurrentMeasurement((SMMIRuntime.bSOTestSONo
-                                                /
-                                                SIGNAL_OUTPUTS_PER_CURRENT_GROUP),
-                                               CURRENT_NOW);
-    SMMISOStream2.sMax = GetCurrentMeasurement((SMMIRuntime.bSOTestSONo
-                                                /
-                                                SIGNAL_OUTPUTS_PER_CURRENT_GROUP),
-                                               CURRENT_MAX);
-    SMMISOStream2.sMin = GetCurrentMeasurement((SMMIRuntime.bSOTestSONo
-                                                /
-                                                SIGNAL_OUTPUTS_PER_CURRENT_GROUP),
-                                               CURRENT_MIN);
+    SMMISOStream1.bSONo = status.outputNumber;
+    SMMISOStream1.sPowerNet = status.powerNet;
+    SMMISOStream1.sPower = status.power;
+    SMMISOStream1.bState = status.state;
+    SMMISOStream1.sNet = status.net;
 
-    canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISOStream1);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_SO_TEST_STREAM_1_STD_ID;
-    memcpy(canMMIAnswer.Data, &SMMISOStream1, sizeof(tSMMISOStream1));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
+    SMMISOStream2.bSONo = status.outputNumber;
+    SMMISOStream2.sNow = status.currentNow;
+    SMMISOStream2.sMax = status.currentMax;
+    SMMISOStream2.sMin = status.currentMin;
 
-    canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISOStream2);
-    canMMIAnswer.TxHeader.Identifier = CAN_MMI_SO_TEST_STREAM_2_STD_ID;
-    memcpy(canMMIAnswer.Data, &SMMISOStream2, sizeof(tSMMISOStream2));
-    CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                 CAN_ID_TYPE_STD,
-                 canMMIAnswer.TxHeader.Identifier,
-                 (uint8_t *) canMMIAnswer.Data);
+    TransmitLegacyFrame(sizeof(tSMMISOStream1),
+                        CAN_MMI_SO_TEST_STREAM_1_STD_ID,
+                        &SMMISOStream1);
+    TransmitLegacyFrame(sizeof(tSMMISOStream2),
+                        CAN_MMI_SO_TEST_STREAM_2_STD_ID,
+                        &SMMISOStream2);
   }
 } /* StreamSOTest */
 
@@ -552,41 +664,35 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_REQUEST:
       case CAN_MMI_STD_ID_LAST_MMI_OPEN_LOG_REQUEST:
       {
-        uint16_t sLogIndex = (pcanMMIRequest->RxHeader.Identifier
-                              == CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_REQUEST)
-                             ? GetGateClosedLogRecordIndex()
-                             : GetGateOpenLogRecordIndex();
-        tSLogRecord sLog;
+        uint16_t sLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
+        MmiEventRecordV2_t logRecord;
         tSMMICabinetDoorStateChange SMMIGateState;
 
-        memset(&sLog, 0, sizeof(tSLogRecord));
-        if (LogRequest(LOG_REQ_READ_FROM, &sLog, 0, 0, 0, 0, sLogIndex))
+        memset(&logRecord, 0, sizeof(logRecord));
+        if (ReadLatestDoorLogIndex(
+              (uint8_t) (pcanMMIRequest->RxHeader.Identifier
+                         == CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_REQUEST),
+              &sLogIndex)
+            && (sLogIndex != MMI_PROTOCOL_V2_EVENT_CURSOR_NONE)
+            && ReadEventLogRecord(sLogIndex, &logRecord))
         {
-          SMMIGateState.fState = (sLog.SEvent.bEvent
-                                  == EVENT_DOOR_CLOSED) ? TRUE : FALSE;
-          SMMIGateState.bEvent = sLog.SEvent.bEvent;
-          SMMIGateState.bSeconds = sLog.bSeconds;
-          SMMIGateState.bMinutes = sLog.bMinutes;
-          SMMIGateState.bHours = sLog.bHours;
-          SMMIGateState.bDay = sLog.bMonthDay;
-          SMMIGateState.bMonth = sLog.bMonth;
-          SMMIGateState.bYear = sLog.sYear - (TimeCenturyGet() * 100);
+          SMMIGateState.fState = (logRecord.eventCode
+                                  == MMI_LEGACY_EVENT_DOOR_CLOSED) ? TRUE
+                                 : FALSE;
+          SMMIGateState.bEvent = logRecord.eventCode;
+          SMMIGateState.bSeconds = logRecord.second;
+          SMMIGateState.bMinutes = logRecord.minute;
+          SMMIGateState.bHours = logRecord.hour;
+          SMMIGateState.bDay = logRecord.day;
+          SMMIGateState.bMonth = logRecord.month;
+          SMMIGateState.bYear = (uint8_t) (logRecord.year % 100U);
 
-          canMMIAnswer.TxHeader.DataLength =
-            sizeof(tSMMICabinetDoorStateChange);
-          canMMIAnswer.TxHeader.Identifier =
-            (pcanMMIRequest->RxHeader.Identifier
-             ==
-             CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_REQUEST)
-            ? CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_ANSWER
-            :
-            CAN_MMI_STD_ID_LAST_MMI_OPEN_LOG_ANSWER;
-          memcpy(canMMIAnswer.Data, &SMMIGateState,
-                 sizeof(tSMMICabinetDoorStateChange));
-          CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                       CAN_ID_TYPE_STD,
-                       canMMIAnswer.TxHeader.Identifier,
-                       (uint8_t *) canMMIAnswer.Data);
+          TransmitLegacyFrame(sizeof(tSMMICabinetDoorStateChange),
+                              (pcanMMIRequest->RxHeader.Identifier
+                               == CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_REQUEST)
+                              ? CAN_MMI_STD_ID_LAST_MMI_CLOSE_LOG_ANSWER
+                              : CAN_MMI_STD_ID_LAST_MMI_OPEN_LOG_ANSWER,
+                              &SMMIGateState);
         }
 
         break;
@@ -596,19 +702,15 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       {
         tSMMIVersion SMMIVersion;
 
-        SMMIVersion.bArg0 = MAESTRO_VERSION_ARG0;
-        SMMIVersion.bArg1 = MAESTRO_VERSION_ARG1;
-        SMMIVersion.bArg2 = MAESTRO_VERSION_ARG2;
-        SMMIVersion.bArg3 = MAESTRO_VERSION_ARG3;
-        SMMIVersion.bArg4 = MAESTRO_VERSION_ARG4;
+        SMMIVersion.bArg0 = MMI_LEGACY_VERSION_ARG0;
+        SMMIVersion.bArg1 = MMI_LEGACY_VERSION_ARG1;
+        SMMIVersion.bArg2 = MMI_LEGACY_VERSION_ARG2;
+        SMMIVersion.bArg3 = MMI_LEGACY_VERSION_ARG3;
+        SMMIVersion.bArg4 = MMI_LEGACY_VERSION_ARG4;
 
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIVersion);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_VERSTON_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIVersion, sizeof(tSMMIVersion));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSMMIVersion),
+                            CAN_MMI_VERSTON_ANSWER_STD_ID,
+                            &SMMIVersion);
         break;
       }
 
@@ -633,23 +735,28 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_MODULE_STATUS_REQUEST_STD_ID:
       {
         tSMMIModule SMMIModule;
+        MmiLegacyModuleStatus_t moduleStatus;
 
-        SMMIModule.fGPSModemConnected = GpsModemAliveGet();
-        SMMIModule.fGPSAntennaConnected = GpsAntStatusGet();
-        SMMIModule.fGPRSModemConnected = MCSAsynchConnectedGet();
-        SMMIModule.fGPRSCenterConnected = MCSAsynchConnectedGet();
-        SMMIModule.fIsRelayClosed = GetPowerRelay();
-        SMMIModule.bLastDigitalInputDemand = GetLastInputDemandIssued();
-        SMMIModule.bLastLoopDedectorDemand = GetLastDetectorDemandIssued();
-        SMMIModule.bGPSModeType = GpsPortGet();
+        memset(&SMMIModule, 0, sizeof(SMMIModule));
+        memset(&moduleStatus, 0, sizeof(moduleStatus));
+        if (MmiLegacyStatusReadModuleStatus(&g_mmiLegacyStatusPort,
+                                            &moduleStatus) != FALSE)
+        {
+          SMMIModule.fGPSModemConnected = moduleStatus.gpsModemConnected;
+          SMMIModule.fGPSAntennaConnected = moduleStatus.gpsAntennaConnected;
+          SMMIModule.fGPRSModemConnected = moduleStatus.gprsModemConnected;
+          SMMIModule.fGPRSCenterConnected = moduleStatus.gprsCenterConnected;
+          SMMIModule.fIsRelayClosed = moduleStatus.relayClosed;
+          SMMIModule.bLastDigitalInputDemand =
+            moduleStatus.lastDigitalInputDemand;
+          SMMIModule.bLastLoopDedectorDemand =
+            moduleStatus.lastLoopDetectorDemand;
+          SMMIModule.bGPSModeType = moduleStatus.gpsModeType;
+        }
 
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIModule);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_MODULE_STATUS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIModule, sizeof(tSMMIModule));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSMMIModule),
+                            CAN_MMI_MODULE_STATUS_ANSWER_STD_ID,
+                            &SMMIModule);
         break;
       }
 
@@ -658,31 +765,28 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
         tSMMIError SMMIError;
 
         uint8_t bSetNo = 0;
-        uint8_t bSetTotal = SetTotalGet();
+        uint8_t bSetTotal = MmiLegacyStatusGetSetTotal(&g_mmiLegacyStatusPort);
 
         memset(&SMMIError, 0, sizeof(tSMMIError));
 
         for (bSetNo = 0; bSetNo < bSetTotal; bSetNo++)
         {
-          if (SetSigModeIsEmergent(bSetNo))
+          MmiLegacyErrorRecord_t errorRecord;
+
+          memset(&errorRecord, 0, sizeof(errorRecord));
+          if (MmiLegacyStatusReadErrorRecord(&g_mmiLegacyStatusPort,
+                                             bSetNo,
+                                             &errorRecord))
           {
-            tSSetRuntime SSetRuntime;
+            SMMIError.bSetNo = errorRecord.setNumber;
+            SMMIError.bSignalingMode = errorRecord.signalingMode;
+            SMMIError.bSigModeSource = errorRecord.signalingModeSource;
+            SMMIError.bParam1 = errorRecord.param1;
+            SMMIError.bParam2 = errorRecord.param2;
 
-            SetRuntimeGet(bSetNo, &SSetRuntime);
-
-            SMMIError.bSetNo = (bSetNo + 1);
-            SMMIError.bSignalingMode = SSetRuntime.bSignalingMode;
-            SMMIError.bSigModeSource = SSetRuntime.bSigModeSource;
-            SMMIError.bParam1 = SSetRuntime.bParam1;
-            SMMIError.bParam2 = SSetRuntime.bParam2;
-
-            canMMIAnswer.TxHeader.DataLength = sizeof(SMMIError);
-            canMMIAnswer.TxHeader.Identifier = CAN_MMI_ERROR_ANSWER_STD_ID;
-            memcpy(canMMIAnswer.Data, &SMMIError, sizeof(SMMIError));
-            CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                         CAN_ID_TYPE_STD,
-                         canMMIAnswer.TxHeader.Identifier,
-                         (uint8_t *) canMMIAnswer.Data);
+            TransmitLegacyFrame(sizeof(SMMIError),
+                                CAN_MMI_ERROR_ANSWER_STD_ID,
+                                &SMMIError);
             break;
           }
         }
@@ -697,32 +801,9 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
         memcpy(&SMMIChangeMode,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
-        switch (SMMIChangeMode.bRequestedMode)
-        {
-            case LCD_USER_REQUEST_ALL_RED:
-            {
-              UserStateReqSet(STATES_CLOSED);
-              break;
-            }
-
-            case LCD_USER_REQUEST_DARK:
-            {
-              UserStateReqSet(STATES_NO_CONTROL);
-              break;
-            }
-
-            case LCD_USER_REQUEST_FLASH:
-            {
-              UserStateReqSet(STATES_FLASH);
-              break;
-            }
-
-            case LCD_USER_REQUEST_PLAN_RETURN:
-            {
-              UserStateReqFree();
-              break;
-            }
-        }
+        (void) MmiMaintenanceServiceRequestModeControl(
+          &g_mmiMaintenanceService,
+          SMMIChangeMode.bRequestedMode);
 
         break;
       }
@@ -730,35 +811,24 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_SET_TIME_REQUEST_STD_ID:
       {
         tSMMISetTime SMMISetTime;
-        tSTime SCurrMMITime;
+        MmiLocalClockSettingsV2_t clockSettings;
 
-        memset(&SCurrMMITime, 0, sizeof(SCurrMMITime));
+        memset(&clockSettings, 0, sizeof(clockSettings));
         memset(&SMMISetTime, 0, sizeof(SMMISetTime));
 
         memcpy(&SMMISetTime,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        SCurrMMITime.bCentury = TIME_CURRENT_CENTURY - 1;
-        SCurrMMITime.SCurrentTime.Seconds = SMMISetTime.bSecond;
-        SCurrMMITime.SCurrentTime.Minutes = SMMISetTime.bMinute;
-        SCurrMMITime.SCurrentTime.Hours = SMMISetTime.bHour;
-        SCurrMMITime.SCurrentDate.Date = SMMISetTime.bDay;
-        SCurrMMITime.SCurrentDate.Month = SMMISetTime.bMonth;
-        SCurrMMITime.SCurrentDate.Year = SMMISetTime.bYear;
-        SCurrMMITime.SCurrentDate.WeekDay =
-          TimeWeekDayOfYearCalc(SCurrMMITime.SCurrentDate.Month,
-                                SCurrMMITime.
-                                SCurrentDate.Date,
-                                TimeFullYearCalc
-                                  (&SCurrMMITime));
-
-        if (!GpsModemAliveGet() || !GpsRTCInitialUpdateDoneGet())     /* Set time only if GPS is detached */
+        if (ReadLocalClockSettings(&clockSettings))
         {
-          if (TimeIsValid(&SCurrMMITime))
-          {
-            TimeSet(&SCurrMMITime);
-          }
+          clockSettings.second = SMMISetTime.bSecond;
+          clockSettings.minute = SMMISetTime.bMinute;
+          clockSettings.hour = SMMISetTime.bHour;
+          clockSettings.day = SMMISetTime.bDay;
+          clockSettings.month = SMMISetTime.bMonth;
+          clockSettings.year = SMMISetTime.bYear;
+          (void) WriteLocalClockSettings(&clockSettings);
         }
 
         break;
@@ -770,88 +840,51 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
         tSMMIGetLogRequest SMMIGetLogRequest;
         tSMMILogTime SMMILogTime;
         tSMMILogContent SMMILogContent;
+        MmiEventRecordV2_t logRecord;
 
         memset(&SMMIGetLogRequest, 0, sizeof(tSMMIGetLogRequest));
         memset(&SMMILogTime, 0, sizeof(tSMMILogTime));
         memset(&SMMILogContent, 0, sizeof(tSMMILogContent));
+        memset(&logRecord, 0, sizeof(logRecord));
 
         memcpy(&SMMIGetLogRequest,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        if (LogIndexIsValid(SMMIGetLogRequest.sLogIndex))
+        if (MmiEventLogServiceCanReadFromIndex(&g_mmiEventLogService,
+                                               SMMIGetLogRequest.sLogIndex)
+            && ReadEventLogRecord(SMMIGetLogRequest.sLogIndex, &logRecord))
         {
-          if (LogEventNew(SMMIGetLogRequest.sLogIndex) != LOG_NO_NEW_LOG)
-          {
-            tSLogRecord SMMILog;
+          SMMILogContent.bLog = logRecord.eventCode;
+          SMMILogContent.bParam = logRecord.eventParam;
+          SMMILogContent.sParam = logRecord.eventShortParam;
+          SMMILogContent.lParam = logRecord.eventLongParam;
 
-            if (LogRequest(LOG_REQ_READ_NEXT,
-                           &SMMILog,
-                           0,
-                           0,
-                           0,
-                           0,
-                           SMMIGetLogRequest.sLogIndex))
-            {
-              SMMILogContent.bLog = SMMILog.SEvent.bEvent;
-              SMMILogContent.bParam = SMMILog.SEvent.bParam;
-              SMMILogContent.sParam = SMMILog.SEvent.sParam;
-              SMMILogContent.lParam = SMMILog.SEvent.lParam;
+          SMMILogTime.bSecond = logRecord.second;
+          SMMILogTime.bMinute = logRecord.minute;
+          SMMILogTime.bHour = logRecord.hour;
+          SMMILogTime.bDay = logRecord.day;
+          SMMILogTime.bMonth = logRecord.month;
+          SMMILogTime.bYear = (uint8_t) (logRecord.year % 100U);
 
-              SMMILogTime.bSecond = SMMILog.bSeconds;
-              SMMILogTime.bMinute = SMMILog.bMinutes;
-              SMMILogTime.bHour = SMMILog.bHours;
-              SMMILogTime.bDay = SMMILog.bMonthDay;
-              SMMILogTime.bMonth = SMMILog.bMonth;
-              SMMILogTime.bYear = SMMILog.sYear - (TimeCenturyGet() * 100);
+          TransmitLegacyFrame(sizeof(tSMMILogTime),
+                              CAN_MMI_GET_LOG_ANSWER_DATE_TIME_STD_ID,
+                              &SMMILogTime);
+          TransmitLegacyFrame(sizeof(tSMMILogContent),
+                              CAN_MMI_GET_LOG_ANSWER_CONTENT_STD_ID,
+                              &SMMILogContent);
 
-              canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILogTime);
-              canMMIAnswer.TxHeader.Identifier =
-                CAN_MMI_GET_LOG_ANSWER_DATE_TIME_STD_ID;
-              memcpy(canMMIAnswer.Data, &SMMILogTime, sizeof(tSMMILogTime));
-
-              CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                           CAN_ID_TYPE_STD,
-                           canMMIAnswer.TxHeader.Identifier,
-                           (uint8_t *) canMMIAnswer.Data);
-
-              canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILogContent);
-              canMMIAnswer.TxHeader.Identifier =
-                CAN_MMI_GET_LOG_ANSWER_CONTENT_STD_ID;
-              memcpy(canMMIAnswer.Data, &SMMILogContent,
-                     sizeof(tSMMILogContent));
-
-              CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                           CAN_ID_TYPE_STD,
-                           canMMIAnswer.TxHeader.Identifier,
-                           (uint8_t *) canMMIAnswer.Data);
-
-              fValidLogSent = TRUE;
-            }
-          }
+          fValidLogSent = TRUE;
         }
 
         if (!fValidLogSent)
         {
-          canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILogTime);
-          canMMIAnswer.TxHeader.Identifier =
-            CAN_MMI_GET_LOG_ANSWER_DATE_TIME_STD_ID;
-          memcpy(canMMIAnswer.Data, &SMMILogTime, sizeof(tSMMILogTime));
-
-          CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                       CAN_ID_TYPE_STD,
-                       canMMIAnswer.TxHeader.Identifier,
-                       (uint8_t *) canMMIAnswer.Data);
-
-          canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILogContent);
-          canMMIAnswer.TxHeader.Identifier =
-            CAN_MMI_GET_LOG_ANSWER_CONTENT_STD_ID;
-          memcpy(canMMIAnswer.Data, &SMMILogContent, sizeof(tSMMILogContent));
-
-          CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                       CAN_ID_TYPE_STD,
-                       canMMIAnswer.TxHeader.Identifier,
-                       (uint8_t *) canMMIAnswer.Data);
+          TransmitLegacyFrame(sizeof(tSMMILogTime),
+                              CAN_MMI_GET_LOG_ANSWER_DATE_TIME_STD_ID,
+                              &SMMILogTime);
+          TransmitLegacyFrame(sizeof(tSMMILogContent),
+                              CAN_MMI_GET_LOG_ANSWER_CONTENT_STD_ID,
+                              &SMMILogContent);
         }
 
         break;
@@ -860,47 +893,28 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_GET_LAST_LOG_INDEX_REQUEST_STD_ID:
       {
         tSMMILastLogIndex SMMILastLogIndex;
+        uint16_t latestLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
 
-        if (LogExists())
+        if ((ReadLatestEventLogIndex(&latestLogIndex) != FALSE)
+            && (latestLogIndex != MMI_PROTOCOL_V2_EVENT_CURSOR_NONE))
         {
-          SMMILastLogIndex.sMMILastLogIndex =
-            LogEventNew(CAN_MMI_LOG_INDEX_MAX_VALUE);
-
-          canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILastLogIndex);
-          canMMIAnswer.TxHeader.Identifier =
-            CAN_MMI_GET_LAST_LOG_INDEX_ANSWER_STD_ID;
-          memcpy(canMMIAnswer.Data, &SMMILastLogIndex,
-                 sizeof(tSMMILastLogIndex));
-
-          CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                       CAN_ID_TYPE_STD,
-                       canMMIAnswer.TxHeader.Identifier,
-                       (uint8_t *) canMMIAnswer.Data);
+          SMMILastLogIndex.sMMILastLogIndex = latestLogIndex;
         }
         else
         {
           SMMILastLogIndex.sMMILastLogIndex = CAN_MMI_LOG_INDEX_MAX_VALUE;
-
-          canMMIAnswer.TxHeader.DataLength = sizeof(tSMMILastLogIndex);
-          canMMIAnswer.TxHeader.Identifier =
-            CAN_MMI_GET_LAST_LOG_INDEX_ANSWER_STD_ID;
-          memcpy(canMMIAnswer.Data, &SMMILastLogIndex,
-                 sizeof(tSMMILastLogIndex));
-
-          CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                       CAN_ID_TYPE_STD,
-                       canMMIAnswer.TxHeader.Identifier,
-                       (uint8_t *) canMMIAnswer.Data);
         }
+
+        TransmitLegacyFrame(sizeof(tSMMILastLogIndex),
+                            CAN_MMI_GET_LAST_LOG_INDEX_ANSWER_STD_ID,
+                            &SMMILastLogIndex);
 
         break;
       }
 
       case CAN_MMI_GET_GPRS_MODEM_LOG_REQUEST_STD_ID:
       {
-        tSMMIGprsLog SMMIGprsLog;
-
-        memset(&SMMIGprsLog, 0, sizeof(tSMMIGprsLog));
+        StreamGPRSState();
         break;
       }
 
@@ -911,25 +925,29 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
         memcpy(&SMMIRelayState,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
-        SetLCDPowerRelay(SMMIRelayState.bRelayStateRequest);
-        SetLCDPowerRelayRequest(TRUE);
+        (void) MmiMaintenanceServiceRequestRelayState(
+          &g_mmiMaintenanceService,
+          SMMIRelayState.bRelayStateRequest);
         break;
       }
 
       case CAN_MMI_SET_GPS_PORT_REQUEST_STD_ID:
       {
         tSMMIGpsSettingsPort SMMIGpsSettingsPort;
+        MmiLocalGpsSettingsV2_t gpsSettings;
 
         memcpy(&SMMIGpsSettingsPort,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        if (GpsPortGet() != SMMIGpsSettingsPort.bGpsPortRequest)
+        if (ReadLocalGpsSettings(&gpsSettings)
+            && (gpsSettings.gpsPortType
+                != SMMIGpsSettingsPort.bGpsPortRequest))
         {
-          GpsPortSet(SMMIGpsSettingsPort.bGpsPortRequest);
-          if (GpsPortWrite())
+          gpsSettings.gpsPortType = SMMIGpsSettingsPort.bGpsPortRequest;
+          if (WriteLocalGpsSettings(&gpsSettings))
           {
-            SecureSystemReset();
+            SystemResetPortRequest(&g_systemResetPort);
           }
         }
 
@@ -938,60 +956,37 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
 
       case CAN_MMI_SET_GPS_BAUD_RATE_REQUEST_STD_ID:
       {
-        uint8_t bAckNack;
         tSMMIGpsSettingsBaudRateIndex SMMIGpsSettingsBaudRateIndex;
+        MmiLocalGpsSettingsV2_t gpsSettings;
 
         memcpy(&SMMIGpsSettingsBaudRateIndex,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        if (GpsBaudRateIndexGet()
-            != SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest)
+        if (ReadLocalGpsSettings(&gpsSettings)
+            && (gpsSettings.gpsBaudRateIndex
+                != SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest))
         {
-          GpsBaudRateIndexSet(
-            SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest);
-          if (GpsBaudRateIndexWrite())
+          gpsSettings.gpsBaudRateIndex =
+            SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest;
+          if (WriteLocalGpsSettings(&gpsSettings))
           {
-            tSMMIGpsSettingsBaudRateIndex SMMIGpsSettingsBaudRateIndex;
+            tSMMIGpsSettingsBaudRateIndex SMMIBaudRateAnswer;
 
-            bAckNack = MCS_ASYNCH_MSG_ACK;
+            TransmitLegacyAck(CAN_MMI_SET_GPS_BAUD_RATE_ANSWER_STD_ID, TRUE);
 
-            canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-            canMMIAnswer.TxHeader.Identifier =
-              CAN_MMI_SET_GPS_BAUD_RATE_ANSWER_STD_ID;
-            memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-            CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                         CAN_ID_TYPE_STD,
-                         canMMIAnswer.TxHeader.Identifier,
-                         (uint8_t *) canMMIAnswer.Data);
+            SMMIBaudRateAnswer.bGpsBaudRateIndexRequest =
+              gpsSettings.gpsBaudRateIndex;
 
-            SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest =
-              GpsBaudRateIndexGet();
+            TransmitLegacyFrame(sizeof(tSMMIGpsSettingsBaudRateIndex),
+                                CAN_MMI_GET_GPS_BAUD_RATE_ANSWER_STD_ID,
+                                &SMMIBaudRateAnswer);
 
-            canMMIAnswer.TxHeader.DataLength =
-              sizeof(tSMMIGpsSettingsBaudRateIndex);
-            canMMIAnswer.TxHeader.Identifier =
-              CAN_MMI_GET_GPS_BAUD_RATE_ANSWER_STD_ID;
-            memcpy(canMMIAnswer.Data, &SMMIGpsSettingsBaudRateIndex,
-                   sizeof(tSMMIGpsSettingsBaudRateIndex));
-            CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                         CAN_ID_TYPE_STD,
-                         canMMIAnswer.TxHeader.Identifier,
-                         (uint8_t *) canMMIAnswer.Data);
-
-            SecureSystemReset();
+            SystemResetPortRequest(&g_systemResetPort);
           }
           else
           {
-            bAckNack = MCS_ASYNCH_MSG_NAK;
-            canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-            canMMIAnswer.TxHeader.Identifier =
-              CAN_MMI_SET_GPS_BAUD_RATE_ANSWER_STD_ID;
-            memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-            CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                         CAN_ID_TYPE_STD,
-                         canMMIAnswer.TxHeader.Identifier,
-                         (uint8_t *) canMMIAnswer.Data);
+            TransmitLegacyAck(CAN_MMI_SET_GPS_BAUD_RATE_ANSWER_STD_ID, FALSE);
           }
         }
 
@@ -1001,20 +996,18 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_GET_GPS_BAUD_RATE_REQUEST_STD_ID:
       {
         tSMMIGpsSettingsBaudRateIndex SMMIGpsSettingsBaudRateIndex;
+        MmiLocalGpsSettingsV2_t gpsSettings;
 
-        SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest =
-          GpsBaudRateIndexGet();
+        memset(&SMMIGpsSettingsBaudRateIndex, 0, sizeof(SMMIGpsSettingsBaudRateIndex));
+        if (ReadLocalGpsSettings(&gpsSettings))
+        {
+          SMMIGpsSettingsBaudRateIndex.bGpsBaudRateIndexRequest =
+            gpsSettings.gpsBaudRateIndex;
+        }
 
-        canMMIAnswer.TxHeader.DataLength =
-          sizeof(tSMMIGpsSettingsBaudRateIndex);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_GPS_BAUD_RATE_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIGpsSettingsBaudRateIndex,
-               sizeof(tSMMIGpsSettingsBaudRateIndex));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSMMIGpsSettingsBaudRateIndex),
+                            CAN_MMI_GET_GPS_BAUD_RATE_ANSWER_STD_ID,
+                            &SMMIGpsSettingsBaudRateIndex);
         break;
       }
 
@@ -1053,22 +1046,16 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_SET_USER_SETTINGS_REQUEST_STD_ID:
       {
         tSMMIUserSettings SMMIUserSettings;
-
-        tSUserSettings SLUserSettings;
-
-        UserSettingsRead();
-        UserSettingsGet(&SLUserSettings);
+        MmiLocalUserFlagsV2_t settings;
 
         memcpy(&SMMIUserSettings,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
-        SLUserSettings.fSettingsChanged = USER_SETTINGS_CHANGE_CONTROL_VLAUE;
-        SLUserSettings.fConfigFlag = SMMIUserSettings.fConfigFlag;
 
-        UserSettingsSet(&SLUserSettings);
-        if (UserSettingsSave())
+        if (ReadLocalFlags(&settings))
         {
-          UserSettingsRead();
+          settings.configFlag = SMMIUserSettings.fConfigFlag;
+          (void) WriteLocalFlags(&settings);
         }
 
         break;
@@ -1077,50 +1064,35 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_GET_USER_SETTINGS_REQUEST_STD_ID:
       {
         tSMMIUserSettings SMMIUserSettings;
-        tSUserSettings SLUserSettings;
+        MmiLocalUserFlagsV2_t settings;
 
         memset(&SMMIUserSettings, 0, sizeof(tSMMIUserSettings));
-        memset(&SLUserSettings, 0, sizeof(tSUserSettings));
+        if (ReadLocalFlags(&settings))
+        {
+          SMMIUserSettings.fSettingsChanged = MMI_LEGACY_USER_SETTINGS_CHANGED;
+          SMMIUserSettings.fConfigFlag = settings.configFlag;
+          SMMIUserSettings.fLogFlag = settings.logFlag;
+          SMMIUserSettings.fTrafficCountsFlag = settings.trafficCountsFlag;
+        }
 
-        UserSettingsRead();
-        UserSettingsGet(&SLUserSettings);
-
-        SMMIUserSettings.fSettingsChanged = SLUserSettings.fSettingsChanged;
-        SMMIUserSettings.fConfigFlag = SLUserSettings.fConfigFlag;
-        SMMIUserSettings.fLogFlag = SLUserSettings.fLogFlag;
-        SMMIUserSettings.fTrafficCountsFlag = SLUserSettings.fTrafficCountsFlag;
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIUserSettings);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_USER_SETTINGS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIUserSettings, sizeof(tSMMIUserSettings));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSMMIUserSettings),
+                            CAN_MMI_GET_USER_SETTINGS_ANSWER_STD_ID,
+                            &SMMIUserSettings);
         break;
       }
 
       case CAN_MMI_SET_USER_SETTINGS_PART2_REQUEST_STD_ID:
       {
         tSMMIUserSettingsPart2 SMMIUserSettingsPart2;
-
-        tSUserSettings SLUserSettings;
-
-        UserSettingsRead();
-        UserSettingsGet(&SLUserSettings);
+        MmiLocalUserFlagsV2_t settings;
 
         memcpy(&SMMIUserSettingsPart2,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
-        SLUserSettings.fSettingsChanged = USER_SETTINGS_CHANGE_CONTROL_VLAUE;
-        SLUserSettings.fStandbyInfoFlag =
-          SMMIUserSettingsPart2.fStandbyInfoFlag;
-
-        UserSettingsSet(&SLUserSettings);
-        if (UserSettingsSave())
+        if (ReadLocalFlags(&settings))
         {
-          UserSettingsRead();
+          settings.standbyInfoFlag = SMMIUserSettingsPart2.fStandbyInfoFlag;
+          (void) WriteLocalFlags(&settings);
         }
 
         break;
@@ -1129,117 +1101,83 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_GET_USER_SETTINGS_PART2_REQUEST_STD_ID:
       {
         tSMMIUserSettingsPart2 SMMIUserSettingsPart2;
-        tSUserSettings SLUserSettings;
+        MmiLocalUserFlagsV2_t settings;
 
         memset(&SMMIUserSettingsPart2, 0, sizeof(tSMMIUserSettingsPart2));
-        memset(&SLUserSettings, 0, sizeof(tSUserSettings));
+        if (ReadLocalFlags(&settings))
+        {
+          SMMIUserSettingsPart2.fStandbyInfoFlag =
+            settings.standbyInfoFlag;
+        }
 
-        UserSettingsRead();
-        UserSettingsGet(&SLUserSettings);
-
-        SMMIUserSettingsPart2.fStandbyInfoFlag =
-          SLUserSettings.fStandbyInfoFlag;
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMIUserSettingsPart2);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_USER_SETTINGS_PART2_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIUserSettingsPart2,
-               sizeof(tSMMIUserSettingsPart2));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSMMIUserSettingsPart2),
+                            CAN_MMI_GET_USER_SETTINGS_PART2_ANSWER_STD_ID,
+                            &SMMIUserSettingsPart2);
         break;
       }
 
       case CAN_MMI_SET_BROKEN_INPUT_SETTINGS_REQUEST_STD_ID:
       {
-        uint8_t bAckNack = MCS_ASYNCH_MSG_NAK;
-        tSBrokenInputSettings SSettings;
+        tSMMIBrokenInputSettings SMMISettings;
+        MmiLocalBrokenInputSettingsV2_t settings;
 
-        BrokenInputSettingsRead();
-        BrokenInputSettingsGet(&SSettings);
-
-        memcpy(&SSettings,
+        memcpy(&SMMISettings,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
-        SSettings.fAlreadySet = BROKEN_INPUT_SETTINGS_SET_CONTROL_VLAUE;
+        memset(&settings, 0, sizeof(settings));
+        settings.loopInputFlag = SMMISettings.fLoopInputFlag;
+        settings.digitalInputFlag = SMMISettings.fDigitalInputFlag;
 
-        BrokenInputSettingsSet(&SSettings);
-        if (BrokenInputSettingsSave())
+        if (WriteLocalBrokenInputSettings(&settings))
         {
-          bAckNack = MCS_ASYNCH_MSG_ACK;
+          TransmitLegacyAck(CAN_MMI_SET_BROKEN_INPUT_SETTINGS_ANSWER_STD_ID,
+                            TRUE);
         }
-
-        BrokenInputSettingsRead();
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_SET_BROKEN_INPUT_SETTINGS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        else
+        {
+          TransmitLegacyAck(CAN_MMI_SET_BROKEN_INPUT_SETTINGS_ANSWER_STD_ID,
+                            FALSE);
+        }
         break;
       }
 
       case CAN_MMI_GET_BROKEN_INPUT_SETTINGS_REQUEST_STD_ID:
       {
-        tSBrokenInputSettings SSettings;
         tSMMIBrokenInputSettings SMMISettings;
+        MmiLocalBrokenInputSettingsV2_t settings;
 
-        memset(&SSettings, 0, sizeof(SSettings));
         memset(&SMMISettings, 0, sizeof(SMMISettings));
+        if (ReadLocalBrokenInputSettings(&settings))
+        {
+          SMMISettings.fAlreadySet = MMI_LEGACY_BROKEN_INPUT_SET;
+          SMMISettings.fDigitalInputFlag = settings.digitalInputFlag;
+          SMMISettings.fLoopInputFlag = settings.loopInputFlag;
+        }
 
-        BrokenInputSettingsRead();
-        BrokenInputSettingsGet(&SSettings);
-
-        SMMISettings.fAlreadySet = SSettings.fAlreadySet;
-        SMMISettings.fDigitalInputFlag = SSettings.SFlags.fDigitalBusy;
-        SMMISettings.fLoopInputFlag = SSettings.SFlags.fLoopBusy;
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(SSettings);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_BROKEN_INPUT_SETTINGS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMISettings, sizeof(SMMISettings));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(SMMISettings),
+                            CAN_MMI_GET_BROKEN_INPUT_SETTINGS_ANSWER_STD_ID,
+                            &SMMISettings);
         break;
       }
 
       case CAN_MMI_SET_DAYLIGHT_SAVING_TIME_SETTINGS_REQUEST_STD_ID:
       {
-        uint8_t bMMIDSTFlag;
         tSDaylightSavingTimeSettings SDaylightSavingTimeSettings;
+        MmiLocalClockSettingsV2_t clockSettings;
 
         memset(&SDaylightSavingTimeSettings, 0,
                sizeof(tSDaylightSavingTimeSettings));
-        bMMIDSTFlag = 0;
-
-        ReadDaylightSavingTimeFlag();
-        GetDaylightSavingTimeFlag(&bMMIDSTFlag);
+        memset(&clockSettings, 0, sizeof(clockSettings));
 
         memcpy(&SDaylightSavingTimeSettings,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        SetDaylightSavingTimeFlag(
-          SDaylightSavingTimeSettings.fDaylightSavingTimeFlag);
-        if (WriteDaylightSavingTimeFlag())
+        if (ReadLocalClockSettings(&clockSettings))
         {
-          ReadDaylightSavingTimeFlag();
-        }
-
-        if (GpsModemAliveGet())
-        {
-          if (bMMIDSTFlag
-              != SDaylightSavingTimeSettings.fDaylightSavingTimeFlag)
-          {
-            GpsRTCInitialUpdateDoneSet(FALSE);
-          }
+          clockSettings.daylightSavingEnabled =
+            SDaylightSavingTimeSettings.fDaylightSavingTimeFlag;
+          (void) WriteLocalClockSettings(&clockSettings);
         }
 
         break;
@@ -1248,188 +1186,54 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_GET_DAYLIGHT_SAVING_TIME_SETTINGS_REQUEST_STD_ID:
       {
         tSDaylightSavingTimeSettings SDaylightSavingTimeSettings;
-        uint8_t bMMIDSTFlag;
+        MmiLocalClockSettingsV2_t clockSettings;
 
         memset(&SDaylightSavingTimeSettings, 0,
                sizeof(tSDaylightSavingTimeSettings));
-        bMMIDSTFlag = 0;
+        memset(&clockSettings, 0, sizeof(clockSettings));
+        if (ReadLocalClockSettings(&clockSettings))
+        {
+          SDaylightSavingTimeSettings.fDaylightSavingTimeFlag =
+            clockSettings.daylightSavingEnabled;
+        }
 
-        ReadDaylightSavingTimeFlag();
-        GetDaylightSavingTimeFlag(&bMMIDSTFlag);
-
-        SDaylightSavingTimeSettings.fDaylightSavingTimeFlag = bMMIDSTFlag;
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSDaylightSavingTimeSettings);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_DAYLIGHT_SAVING_TIME_SETTINGS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SDaylightSavingTimeSettings,
-               sizeof(tSDaylightSavingTimeSettings));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(tSDaylightSavingTimeSettings),
+                            CAN_MMI_GET_DAYLIGHT_SAVING_TIME_SETTINGS_ANSWER_STD_ID,
+                            &SDaylightSavingTimeSettings);
         break;
       }
 
       case CAN_MMI_GET_ADMIN_USER_INFO_REQUEST_STD_ID:
       {
-        uint16_t sAdminUsername = GetAdminUsername();
-        uint16_t sAdminPassword = GetAdminPassword();
+        MmiLocalAdminInfoV2_t adminInfo;
+        uint16_t adminInfoLength = 0U;
+        uint16_t sAdminUsername = 0U;
+        uint16_t sAdminPassword = 0xFFFFU;
+
+        memset(&adminInfo, 0, sizeof(adminInfo));
+        (void) MmiLocalSettingsServiceRead(&g_mmiLocalSettingsService,
+                                           MMI_PROTOCOL_V2_LOCAL_RESOURCE_ADMIN,
+                                           (uint8_t *) &adminInfo,
+                                           &adminInfoLength);
+        sAdminUsername = adminInfo.adminUsername;
 
         memcpy(&canMMIAnswer.Data[0], &sAdminUsername, 2);
         memcpy(&canMMIAnswer.Data[4], &sAdminPassword, 2);
-        canMMIAnswer.TxHeader.DataLength = sizeof(canMMIAnswer.Data);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_GET_ADMIN_USER_INFO_ANSWER_STD_ID;
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyFrame(sizeof(canMMIAnswer.Data),
+                            CAN_MMI_GET_ADMIN_USER_INFO_ANSWER_STD_ID,
+                            &canMMIAnswer.Data[0]);
         break;
       }
 
       case CAN_MMI_SET_ADMIN_USER_INFO_REQUEST_STD_ID:
       {
-        uint8_t bAckNack;
-        uint16_t sUsername;
-        uint16_t sPassword;
-        uint16_t sAdminUserName = GetAdminUsername();
-
-        memcpy(&sUsername, &pcanMMIRequest->Data[0], 2);
-        memcpy(&sPassword, &pcanMMIRequest->Data[4], 2);
-
-        if ((LCD_PASSWORD_LENGTH == DigitCountsGet(sUsername))
-            && (LCD_PASSWORD_LENGTH == DigitCountsGet(sPassword))
-            && (sUsername == sAdminUserName) )
-        {
-          SetAdminPassword(sPassword);
-          if (WriteAdminPassword())
-          {
-            SetAdminValidity(TRUE);
-            if (WriteAdminValidity())
-            {
-              bAckNack = MCS_ASYNCH_MSG_ACK;
-              canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-              canMMIAnswer.TxHeader.Identifier =
-                CAN_MMI_SET_ADMIN_USER_INFO_ANSWER_STD_ID;
-              memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-              CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                           CAN_ID_TYPE_STD,
-                           canMMIAnswer.TxHeader.Identifier,
-                           (uint8_t *) canMMIAnswer.Data);
-              break;
-            }
-          }
-        }
-
-        bAckNack = MCS_ASYNCH_MSG_NAK;
-        canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-        canMMIAnswer.TxHeader.Identifier =
-          CAN_MMI_SET_ADMIN_USER_INFO_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyAck(CAN_MMI_SET_ADMIN_USER_INFO_ANSWER_STD_ID, FALSE);
         break;
       }
 
       case CAN_MMI_GET_SIGNALS_REQUEST_STD_ID:
       {
-        uint16_t sSSMNo = 0;
-        uint8_t bSGNo = 0, bSONo = 0, bSignal = 0, bVoltages = 0,
-                bCurrentSG = 0, bCurrentSO = 0, bSOType = 0;
-        uint16_t sPeriod = 0;
-        tSMMISGSignals SMMISGSignals;
-
-        memset(&SMMISGSignals, 0, sizeof(SMMISGSignals));
-        for (sSSMNo = 0; sSSMNo < MODULES_SSM_MAX / 2; sSSMNo++)
-        {
-          SMMISGSignals.SMMISSMSignals[sSSMNo
-                                       % CAN_MMI_MAX_SSM_PER_MSG] = (sSSMNo
-                                                                     + 1) << 12;
-          for (bSGNo = 0; bSGNo < 4; bSGNo++)
-          {
-            bCurrentSG = (sSSMNo * 4) + bSGNo;
-            for (bSONo = 0; bSONo < 3; bSONo++)
-            {
-              bCurrentSO = (bCurrentSG * 3) + bSONo;
-              bSOType = GetSOType(bCurrentSO);
-              bSignal = SGSignalGet(bCurrentSG);
-              if (bSOType)
-              {
-                bVoltages = SignalVoltagesGet(bSignal);
-                sPeriod = SubSignalHasFlash(bSignal, bSOType);
-
-                if ((sPeriod == 0) || ((sPeriod > 0) && FlashOnGet(sPeriod)))
-                {
-                  if (bVoltages & bSOType)
-                  {
-                    SMMISGSignals.SMMISSMSignals[sSSMNo
-                                                 % CAN_MMI_MAX_SSM_PER_MSG] |=
-                      laValue2Bit[11
-                                  -
-                                  (
-                                    bCurrentSO % 12)];
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISGSignals);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_SIGNALS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMISGSignals, sizeof(tSMMISGSignals));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
-
-        memset(&SMMISGSignals, 0, sizeof(SMMISGSignals));
-        for (sSSMNo = 4; sSSMNo < MODULES_SSM_MAX; sSSMNo++)
-        {
-          SMMISGSignals.SMMISSMSignals[sSSMNo
-                                       % CAN_MMI_MAX_SSM_PER_MSG] = (sSSMNo
-                                                                     + 1) << 12;
-          for (bSGNo = 0; bSGNo < 4; bSGNo++)
-          {
-            bCurrentSG = (sSSMNo * 4) + bSGNo;
-            for (bSONo = 0; bSONo < 3; bSONo++)
-            {
-              bCurrentSO = (bCurrentSG * 3) + bSONo;
-              bSOType = GetSOType(bCurrentSO);
-              bSignal = SGSignalGet(bCurrentSG);
-              if (bSOType)
-              {
-                bVoltages = SignalVoltagesGet(bSignal);
-                sPeriod = SubSignalHasFlash(bSignal,
-                                            bSOType);
-
-                if ((sPeriod == 0) || ((sPeriod > 0) && FlashOnGet(sPeriod)))
-                {
-                  if (bVoltages & bSOType)
-                  {
-                    SMMISGSignals.SMMISSMSignals[sSSMNo
-                                                 % CAN_MMI_MAX_SSM_PER_MSG] |=
-                      laValue2Bit[11
-                                  -
-                                  (
-                                    bCurrentSO % 12)];
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(tSMMISGSignals);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_SIGNALS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMISGSignals, sizeof(tSMMISGSignals));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        StreamSignals();
         break;
       }
 
@@ -1447,40 +1251,7 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
 
       case CAN_MMI_GET_INPUTS_REQUEST_STD_ID:
       {
-        tSMMIInputs SMMIInputs;
-        uint8_t bModuleIndex = 0;
-        uint8_t bitIndex = 0;
-
-        memset(&SMMIInputs, 0, sizeof(SMMIInputs));
-        /* input levels */
-        for (bModuleIndex = 0; bModuleIndex < MODULES_IO_MAX; bModuleIndex++)
-        {
-          for (bitIndex = 0; bitIndex < 16; bitIndex++)
-          {
-            if (!GetBitValue(
-                  SaCanDetectorIOInputs[bModuleIndex].sLoopEmptyStates,
-                  bitIndex))
-            {
-              SetBitValue(SMMIInputs.lLoopDemands,
-                          ((!bModuleIndex) ? bitIndex : (bitIndex + 16)));
-            }
-
-            if (!GetBitValue(SaCanDigitalIOInputs[bModuleIndex].sInputStates,
-                             bitIndex))
-            {
-              SetBitValue(SMMIInputs.lDigitalInputDemands,
-                          ((!bModuleIndex) ? bitIndex : (bitIndex + 16)));
-            }
-          }
-        }
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(SMMIInputs);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_GET_INPUTS_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &SMMIInputs, sizeof(SMMIInputs));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        StreamInputs();
         break;
       }
 
@@ -1540,17 +1311,19 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
       case CAN_MMI_SET_GPRS_MODEM_REQUEST_STD_ID:
       {
         tSMMISetGprsModem SMMISetGprsModem;
+        MmiLocalModemSettingsV2_t settings;
 
         memcpy(&SMMISetGprsModem,
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        if (MCSGetModemType() != SMMISetGprsModem.bModemType)
+        if (ReadLocalModemSettings(&settings)
+            && (settings.modemType != SMMISetGprsModem.bModemType))
         {
-          MCSSetModemType(SMMISetGprsModem.bModemType);
-          if (MCSWriteConInfo())
+          settings.modemType = SMMISetGprsModem.bModemType;
+          if (WriteLocalModemSettings(&settings))
           {
-            SecureSystemReset();
+            SystemResetPortRequest(&g_systemResetPort);
           }
         }
 
@@ -1559,52 +1332,36 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
 
       case CAN_MMI_IAP_MODE_REQUEST_STD_ID:
       {
-        uint8_t bAckNack = MCS_ASYNCH_MSG_NAK;
-
-        canMMIAnswer.TxHeader.DataLength = sizeof(bAckNack);
-        canMMIAnswer.TxHeader.Identifier = CAN_MMI_IAP_MODE_ANSWER_STD_ID;
-        memcpy(canMMIAnswer.Data, &bAckNack, sizeof(bAckNack));
-        CANTxRequest(canMMIAnswer.TxHeader.DataLength,
-                     CAN_ID_TYPE_STD,
-                     canMMIAnswer.TxHeader.Identifier,
-                     (uint8_t *) canMMIAnswer.Data);
+        TransmitLegacyAck(CAN_MMI_IAP_MODE_ANSWER_STD_ID,
+                          MmiMaintenanceServiceEnterIapMode(
+                            &g_mmiMaintenanceService));
         break;
       }
 
       case CAN_MMI_FACTORY_DEFAULTS_REQUEST_STD_ID:
       {
-        ReturnFactorySettings();
+        (void) MmiMaintenanceServiceFactoryReset(&g_mmiMaintenanceService);
         break;
       }
 
       case CAN_MMI_SO_TEST_START_STD_ID:
       {
-        StartSSMTest(SSM_TEST_FROM_MMI);
-        LogRequest(LOG_REQ_APPEND_ASYNCH,
-                   NULL,
-                   EVENT_USER_REQ_SSM_TEST_STARTS,
-                   0,
-                   0,
-                   0,
-                   0);
-        SMMIRuntime.bSOTestSONo = 0;
-        SMMIRuntime.SFlags.fSOTestStream = TRUE;
+        if (MmiMaintenanceServiceStartOutputTest(&g_mmiMaintenanceService)
+            != FALSE)
+        {
+          SMMIRuntime.bSOTestSONo = 0U;
+          SMMIRuntime.SFlags.fSOTestStream = TRUE;
+        }
         break;
       }
 
       case CAN_MMI_SO_TEST_STOP_STD_ID:
       {
-        SMMIRuntime.SFlags.fSOTestStream = FALSE;
-        StopSSMTest();
-        LoadProgramEnds();
-        RestartProgram();
-        LogRequest(LOG_REQ_APPEND_ASYNCH,
-                   NULL,
-                   EVENT_USER_REQ_SSM_TEST_ENDS,
-                   0,
-                   0,
-                   0,
-                   0);
+        if (MmiMaintenanceServiceStopOutputTest(&g_mmiMaintenanceService)
+            != FALSE)
+        {
+          SMMIRuntime.SFlags.fSOTestStream = FALSE;
+        }
         break;
       }
 
@@ -1617,8 +1374,12 @@ void ParseMMIRequest(tSFDCANRxMsg *pcanMMIRequest)
                pcanMMIRequest->Data,
                pcanMMIRequest->RxHeader.DataLength);
 
-        SMMIRuntime.bSOTestSONo = SMMISOTest.bSONo;
-        SetOnSONo(SMMIRuntime.bSOTestSONo);
+        if (MmiMaintenanceServiceSelectOutputTest(&g_mmiMaintenanceService,
+                                                  SMMISOTest.bSONo)
+            != FALSE)
+        {
+          SMMIRuntime.bSOTestSONo = SMMISOTest.bSONo;
+        }
         break;
       }
   } /* switch */

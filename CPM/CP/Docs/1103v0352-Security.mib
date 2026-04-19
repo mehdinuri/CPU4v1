@@ -1,0 +1,237 @@
+-- A.8 TMP Security MIB Header
+-- Filename:     1103v0352-Security.MIB
+-- Description:  This MIB defines various objects related to managing and 
+--               monitoring the TMP security objects. 
+--               Specifically, these include objects related to: 
+--               (a) configuration of community names
+--               This MIB replaces portions of TMIB-II.
+--
+-- MIB Revision History:
+-- 08/01/96   Original standard approved
+-- 01/01/98   Preliminary Release of TS 3.2 TMIB MIB formatted for 80
+--               columns and no TABs
+-- 01/07/98   Replaced some missed TABs with spaces
+-- 07/08/98   Added Copyright Notice
+-- 10/07/98   Amendment 1
+-- 03/09/00   Removed all the special edits to that were done to use the 
+--               SMIC Compiler
+--               Defined DisplayString to eliminate reference to RFC 1212
+--               END is still left "Dynamic Object Data" group
+--               Changed filename and updated copyright years
+--               Updated the MIB to Amendment 1
+-- 08/09/00   Modified header format and wording of copyright and MIB
+-- 11/16/01   Added objects for sfmp and stmp statistics
+--               Moved security node into this MIB from NTCIP 1201
+--               Added objects to support logical names
+--               Renamed the module to NTCIP1103-A-2002 from TMIB-II
+--               Renamed the text name to Transportation Management 
+--               Protocols MIB from Transportation MIB
+--               Changed STATUS of all objects to optional to reflect new 
+--               conformance rules being defined in NTCIP 8004
+-- 06/08/04   Moved report node into this MIB from NTCIP 1201
+-- 09/27/04   Changed name of file.
+-- 10/11/04   Per KLV e-mails 10/08/04 updated version and 
+--               Changed Index on logicalNameTranslation-index 
+--                  from (0..255) to (1..255)
+--                Changed all STATUS optional to mandatory
+-- 06/13/05   Updated filename.
+-- 08/09/05   Added object definitions for Trap Management, Watch Block 
+--            Objects
+--               Updated filename; re-instantiated the OIDs for the 
+--               13 dynamic objects.
+-- 04/19/06   Broke the various logical groupings of objects into separate
+--               MIBs to allow for separate compiling for various deployment
+--               needs.
+-- 12/14/07   Changed the name of this MIB only to reflect the version number.
+-- 11/07/16   Changed the name of this MIB only to reflect the version number.
+-- 12/03/16   Modified to correct issues found in compiling MIBs with SMICng v2.2.07
+--
+--              DISTRIBUTION NOTICE
+--Copyright 1996 - 2016 by the American Association of State Highway and
+--Transportation Officials (AASHTO), the Institute of Transportation Engineers
+--(ITE), and the National Electrical Manufacturers Association (NEMA). All
+--intellectual property rights, including, but not limited to, the rights of
+--reproduction in whole or in part in any form, translation into other
+--languages and display are reserved by the copyright owners under the laws of
+--the United States of America, the Universal Copyright Convention, the Berne
+--Convention, and the International and Pan American Copyright Conventions.
+--Except for the MIB, Do not copy without written permission of either AASHTO,
+--ITE, or NEMA.
+--
+--                     Joint NEMA, AASHTO, and ITE
+--                  NTCIP Management Information Base
+--                        DISTRIBUTION NOTICE
+--
+--To the extent and in the limited event these materials are distributed by
+--AASHTO/ITE/NEMA in the form of a Management Information Base ("MIB"), 
+--AASHTO/ITE/NEMA extends the following permissions:
+--
+--(i) you may make and/or distribute unlimited copies (including derivative
+--works) of the MIB, including copies for commercial distribution, provided
+--that (a) each copy you make and/or distribute contains this Notice and (b)
+--each derivative work of the MIB uses the same module name followed by "-",
+--followed by your Internet Assigned Number Authority (IANA)-assigned 
+--enterprise number;
+--(ii) use of the MIB is restricted in that the syntax field may be modified
+--only to reflect a more restrictive sub-range or enumerated values;
+--(iii) the description field may be modified but only to the extent that:
+--(a) only those bit values or enumerated values that are supported are
+--listed; and (b) the more restrictive subrange is expressed.
+--
+--These materials are delivered "AS IS" without any warranties as to their use
+--or performance.
+--
+--AASHTO/ITE/NEMA AND THEIR SUPPLIERS DO NOT WARRANT THE PERFORMANCE OR
+--RESULTS YOU MAY OBTAIN BY USING THESE MATERIALS. AASHTO/ITE/NEMA AND THEIR
+--SUPPLIERS MAKE NO WARRANTIES, EXPRESS OR IMPLIED, AS TO NONINFRINGEMENT OF
+--THIRD PARTY RIGHTS, MERCHANTABILITY, OR FITNESS FOR ANY PARTICULAR PURPOSE.
+--IN NO EVENT WILL AASHTO, ITE OR NEMA OR THEIR SUPPLIERS BE LIABLE TO YOU OR
+--ANY THIRD PARTY FOR ANY CLAIM OR FOR ANY CONSEQUENTIAL, INCIDENTAL OR
+--SPECIAL DAMAGES, INCLUDING ANY LOST PROFITS OR LOST SAVINGS, ARISING FROM
+--YOUR REPRODUCTION OR USE OF THESE MATERIALS, EVEN IF AN AASHTO, ITE, OR NEMA
+--REPRESENTATIVE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. Some
+--states or jurisdictions do not allow the exclusion or limitation of
+--incidental, consequential or special damages, or the exclusion of implied
+--warranties, so the above limitations may not apply to you.
+--
+--Use of these materials does not constitute an endorsement or affiliation by
+--or between AASHTO, ITE, or NEMA and you, your company, or your products and
+--services.
+--
+--NTCIP is a trademark of AASHTO/ITE/NEMA.
+--****************************************************************************
+
+NTCIP1103v0352-Security DEFINITIONS ::= BEGIN
+
+IMPORTS
+      Gauge
+            FROM RFC1155-SMI
+      OBJECT-TYPE
+            FROM RFC-1212
+      global
+            FROM NTCIP8004-2008;
+-- EXPORTS EVERYTHING
+
+security OBJECT IDENTIFIER ::= {global 5}
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5
+-- This node is an identifier used to group all objects related to the
+-- assignment of community names and the access rights they provide.
+-- These objects were previously defined in NTCIP 1201, but were moved 
+-- here as they relate to the protocols more than the end application.
+
+-- A.8.1 Community Name Administrator Parameter
+communityNameAdmin  OBJECT-TYPE
+   SYNTAX  OCTET STRING (SIZE(8..16))
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object is the community name that shall be 
+        used to specifically gain access to information under the 
+        security node. A message with this value in the community 
+        name field of an SNMP message has user read-write access to 
+        the security node objects and all other objects implemented 
+        in the device. The syntax is defined as an OCTET STRING 
+        and therefore any character can have a value of 0..255. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.1
+      "
+   DEFVAL  { "administrator" }
+::= { security 1 }
+
+-- A.8.2 Maximum Community Names Parameter
+communityNamesMax  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object specifies the maximum number of 
+        rows that are implemented in the community name table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.2
+      "
+::= { security 2 }
+
+-- A.8.3 Community Names Table
+communityNameTable  OBJECT-TYPE
+   SYNTAX  SEQUENCE OF CommunityNameTableEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+        "<Definition> This table defines the community names that 
+          can appear in the community name field of the SNMP message 
+          and access privileges associated with that community name. 
+       <TableType> static 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.3
+      "
+::= { security 3 }
+
+communityNameTableEntry  OBJECT-TYPE
+   SYNTAX  CommunityNameTableEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This is the row index of information in the 
+        community name table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.3.1
+      "
+   INDEX  { communityNameIndex }
+::= { communityNameTable 1}
+
+CommunityNameTableEntry::=SEQUENCE
+     {  communityNameIndex       INTEGER,
+        communityNameUser        OCTET STRING,
+        communityNameAccessMask  Gauge
+     }
+
+-- A.8.3.1 Community Name Index Parameter
+communityNameIndex  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object defines the row index into the 
+        communityNameTable. This value shall not exceed the 
+        communityNamesMax object value. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.3.1.1
+      "
+::=  { communityNameTableEntry 1 }
+
+-- A.8.3.2 User Community Name Parameter
+communityNameUser  OBJECT-TYPE
+   SYNTAX  OCTET STRING (SIZE(6..16))
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object defines a community name value that 
+        a security administrator can assign user read-write access 
+        to information (other than security) in a device. A message 
+        with this value in the community name field of an SNMP/SFMP 
+        message has user access rights as defined in the 
+        communityNameAccessMask. The syntax is defined as an OCTET 
+        STRING and therefore any character can have a value of 0..255. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.3.1.2
+      "
+   DEFVAL  { "public" }
+::=  { communityNameTableEntry 2 }
+
+-- A.8.3.3 User Community Name Mask Parameter
+communityNameAccessMask  OBJECT-TYPE
+   SYNTAX  Gauge 
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object defines a 32 bit mask that can be 
+        used to associate 'write access' with a community name. A 
+        value of 0x00 00 00 00 grants the community name user 
+        read-only access and overrides any individual object's 
+        read-write access clause. A value of 0xFF FF FF FF grants 
+        the community name user read-write access and an individual 
+        object's read-write access clause applies. Values other 
+        than 0x00 00 00 00 and 0xFF FF FF FF are implementation 
+        specific and may limit viewing and/or accessing the 
+        information in a device. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.2.6.5.3.1.3
+      "
+   DEFVAL  { 4294967295 }
+::= { communityNameTableEntry 3 }
+
+END  -- NTCIP1103v0352-Security
+

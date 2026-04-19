@@ -7,80 +7,6 @@
 
 #include <string.h>
 
-static uint8_t ChannelFeedbackMatchesAspect(OutputDriverAspect_t expectedAspect,
-                                            uint8_t feedbackRed,
-                                            uint8_t feedbackYellow,
-                                            uint8_t feedbackGreen)
-{
-  switch (expectedAspect)
-  {
-      case OUTPUT_DRIVER_ASPECT_RED:
-      {
-        return (uint8_t) ((feedbackRed != 0U) && (feedbackYellow == 0U)
-                          && (feedbackGreen == 0U));
-      }
-
-      case OUTPUT_DRIVER_ASPECT_YELLOW:
-      {
-        return (uint8_t) ((feedbackRed == 0U) && (feedbackYellow != 0U)
-                          && (feedbackGreen == 0U));
-      }
-
-      case OUTPUT_DRIVER_ASPECT_GREEN:
-      {
-        return (uint8_t) ((feedbackRed == 0U) && (feedbackYellow == 0U)
-                          && (feedbackGreen != 0U));
-      }
-
-      case OUTPUT_DRIVER_ASPECT_DARK:
-      {
-        return (uint8_t) ((feedbackRed == 0U) && (feedbackYellow == 0U)
-                          && (feedbackGreen == 0U));
-      }
-
-      case OUTPUT_DRIVER_ASPECT_FLASH_RED:
-      case OUTPUT_DRIVER_ASPECT_FLASH_YELLOW:
-      case OUTPUT_DRIVER_ASPECT_FLASH_GREEN:
-      default:
-      {
-        return 1U;
-      }
-  }
-}
-
-static uint8_t OutputFeedbackMatchesDispatcher(
-  const IntersectionOutputDispatcher_t *dispatcher,
-  const ModuleBusSnapshot_t *
-  snapshot)
-{
-  OutputDriverImage_t appliedImage;
-  uint8_t channelNumber;
-
-  if ((dispatcher == NULL) || (snapshot == NULL)
-      || (dispatcher->lastDispatchOk == 0U)
-      || (IntersectionOutputDispatcherGetLastAppliedImage(dispatcher,
-                                                          &appliedImage) == 0U))
-  {
-    return 1U;
-  }
-
-  for (channelNumber = 1U; channelNumber <= INTERSECTION_CHANNEL_COUNT_MAX;
-       ++channelNumber)
-  {
-    if (ChannelFeedbackMatchesAspect(
-          appliedImage.channels[channelNumber - 1U],
-          ModuleBusSnapshotLoadSwitchShowsRed(snapshot, channelNumber),
-          ModuleBusSnapshotLoadSwitchShowsYellow(snapshot, channelNumber),
-          ModuleBusSnapshotLoadSwitchShowsGreen(snapshot, channelNumber))
-        == 0U)
-    {
-      return 0U;
-    }
-  }
-
-  return 1U;
-}
-
 static uint8_t SnapshotMatchesControllerContract(
   const IntersectionController_t *controller,
   const ModuleBusSnapshot_t *snapshot)
@@ -334,13 +260,10 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
   uint8_t detectorNumber;
   uint8_t pedDetectorNumber;
   uint8_t preemptNumber;
-  uint8_t mmuFlashActive;
   uint8_t detectorSourceReady;
   uint8_t pedSourceReady;
   uint8_t preemptInputReady;
   uint8_t preemptControlReady;
-  uint8_t mmuSourceReady;
-  uint8_t loadSwitchSourceReady;
 
   if ((controller == NULL) || (controller->engine == NULL)
       || (snapshot == NULL))
@@ -361,11 +284,6 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
   preemptControlReady = ModuleBusSnapshotSourceReady(
     snapshot,
     MODULE_BUS_SNAPSHOT_VALID_PREEMPT_CONTROLS);
-  mmuSourceReady = ModuleBusSnapshotSourceReady(snapshot,
-                                                MODULE_BUS_SNAPSHOT_VALID_MMU_STATUS);
-  loadSwitchSourceReady = ModuleBusSnapshotSourceReady(
-    snapshot,
-    MODULE_BUS_SNAPSHOT_VALID_LOAD_SWITCH);
 
   if (snapshotContractOk == 0U)
   {
@@ -373,8 +291,6 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
     pedSourceReady = 0U;
     preemptInputReady = 0U;
     preemptControlReady = 0U;
-    mmuSourceReady = 0U;
-    loadSwitchSourceReady = 0U;
   }
 
   effectiveSnapshot = *snapshot;
@@ -446,40 +362,10 @@ static uint8_t ApplyModuleBusSnapshot(IntersectionController_t *controller,
       preemptNumber,
       preemptControlActive);
   }
-
-  mmuFlashActive = 0U;
-
-  if ((snapshot->validMask & MODULE_BUS_SNAPSHOT_VALID_MMU_STATUS) != 0U)
-  {
-    if ((snapshotContractOk != 0U) && (mmuSourceReady != 0U))
-    {
-      mmuFlashActive = ModuleBusSnapshotMmuForcesAllRed(snapshot);
-    }
-    else
-    {
-      mmuFlashActive = 1U;
-    }
-  }
-
-  if (((snapshot->validMask & MODULE_BUS_SNAPSHOT_VALID_LOAD_SWITCH) != 0U)
-      && (mmuFlashActive == 0U))
-  {
-    if ((snapshotContractOk == 0U) || (loadSwitchSourceReady == 0U))
-    {
-      mmuFlashActive = 1U;
-    }
-    else if (OutputFeedbackMatchesDispatcher(controller->outputDispatcher,
-                                             &effectiveSnapshot) == 0U)
-    {
-      mmuFlashActive = 1U;
-    }
-  }
-
-  (void) IntersectionEngineSetMmuFlashControl(controller->engine,
-                                              mmuFlashActive);
   controller->lastSnapshot = effectiveSnapshot;
   controller->lastSnapshotValid = 1U;
-  return MmuSetForceAllRed(controller->mmuPort, mmuFlashActive);
+
+  return 1U;
 } /* ApplyModuleBusSnapshot */
 
 void IntersectionControllerInit(IntersectionController_t *controller)
@@ -490,6 +376,7 @@ void IntersectionControllerInit(IntersectionController_t *controller)
   }
 
   memset(controller, 0, sizeof(*controller));
+  controller->mmuSafetyAction = MMU_CONTROL_ACTION_NORMAL;
 }
 
 void IntersectionControllerBind(IntersectionController_t *controller,
@@ -511,6 +398,7 @@ void IntersectionControllerBind(IntersectionController_t *controller,
   controller->moduleBusPort = moduleBusPort;
   controller->unitInputPort = unitInputPort;
   controller->mmuPort = mmuPort;
+  controller->mmuSafetyAction = MMU_CONTROL_ACTION_NORMAL;
   controller->expectedModuleBusConfigEpoch = 0U;
   controller->lastStepOk = 0U;
 }
@@ -527,6 +415,20 @@ void IntersectionControllerSetExpectedModuleBusConfigEpoch(
   controller->expectedModuleBusConfigEpoch = configEpoch;
 }
 
+uint8_t IntersectionControllerSetMmuSafetyAction(
+  IntersectionController_t *controller,
+  MmuControlAction_t action)
+{
+  if (controller == NULL)
+  {
+    return 0U;
+  }
+
+  controller->mmuSafetyAction = action;
+
+  return MmuSetSafetyAction(controller->mmuPort, action);
+}
+
 uint8_t IntersectionControllerStep(IntersectionController_t *controller)
 {
   ModuleBusSnapshot_t snapshot;
@@ -541,6 +443,9 @@ uint8_t IntersectionControllerStep(IntersectionController_t *controller)
   }
 
   ApplyLocalUnitInputs(controller);
+  (void) IntersectionEngineSetMmuFlashControl(
+    controller->engine,
+    (uint8_t) (controller->mmuSafetyAction == MMU_CONTROL_ACTION_FLASH));
 
   if ((controller->moduleBusPort != NULL)
       && (ModuleBusReadSnapshot(controller->moduleBusPort, &snapshot) != 0U))

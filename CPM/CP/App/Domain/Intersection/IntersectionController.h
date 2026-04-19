@@ -22,6 +22,7 @@ typedef struct IntersectionController
   IModuleBusPort_t                *moduleBusPort;
   IUnitInputPort_t                *unitInputPort;
   IMmuPort_t                      *mmuPort;
+  MmuControlAction_t               mmuSafetyAction;
   uint16_t expectedModuleBusConfigEpoch;
   ModuleBusSnapshot_t lastSnapshot;
   uint8_t lastSnapshotValid;
@@ -39,6 +40,9 @@ void IntersectionControllerBind(IntersectionController_t *controller,
 void IntersectionControllerSetExpectedModuleBusConfigEpoch(
   IntersectionController_t *controller,
   uint16_t configEpoch);
+uint8_t IntersectionControllerSetMmuSafetyAction(
+  IntersectionController_t *controller,
+  MmuControlAction_t action);
 uint8_t IntersectionControllerStep(IntersectionController_t *controller);
 uint8_t IntersectionControllerGetLastSnapshot(
   const IntersectionController_t *controller,

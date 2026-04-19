@@ -152,6 +152,100 @@ static const IntersectionRuntime_t *GetRuntime(const NtcipContext_t *context)
 static uint8_t AnyAlarmGroupStateActive(const NtcipContext_t *context);
 static uint32_t GetUnitAlarmStatus2(const NtcipContext_t *context);
 
+static uint8_t GetCpMpFaultStatus(const NtcipContext_t *context,
+                                  CpMpFaultStatusImageV1_t *faultStatus)
+{
+  if ((context == NULL) || (faultStatus == NULL)
+      || (context->cpMpLinkService == NULL))
+  {
+    return 0U;
+  }
+
+  return CpMpLinkServiceGetFaultStatus(context->cpMpLinkService, faultStatus);
+}
+
+static uint32_t GetCpMpMappedUnitAlarmStatus1(const NtcipContext_t *context)
+{
+  CpMpFaultStatusImageV1_t faultStatus;
+  uint32_t status = 0U;
+
+  if (GetCpMpFaultStatus(context, &faultStatus) == 0U)
+  {
+    return 0U;
+  }
+
+  if ((faultStatus.globalFlags & CPMP_FAULT_GLOBAL_FLAG_LOCAL_FLASH_ACTIVE)
+      != 0U)
+  {
+    status |= 0x20U;
+  }
+
+  if ((faultStatus.globalFlags & CPMP_FAULT_GLOBAL_FLAG_MMU_FLASH_ACTIVE) != 0U)
+  {
+    status |= 0x10U;
+  }
+
+  return status;
+}
+
+static uint32_t GetCpMpMappedUnitAlarmStatus2(const NtcipContext_t *context)
+{
+  CpMpFaultStatusImageV1_t faultStatus;
+  uint32_t status = 0U;
+
+  if (GetCpMpFaultStatus(context, &faultStatus) == 0U)
+  {
+    return 0U;
+  }
+
+  if ((faultStatus.globalFlags & CPMP_FAULT_GLOBAL_FLAG_WATCHDOG) != 0U)
+  {
+    status |= 0x40U;
+  }
+
+  return status;
+}
+
+static uint32_t GetCpMpMappedUnitAlarmStatus3(const NtcipContext_t *context)
+{
+  CpMpFaultStatusImageV1_t faultStatus;
+  uint32_t status = 0U;
+
+  if (GetCpMpFaultStatus(context, &faultStatus) != 0U)
+  {
+    if ((faultStatus.globalFlags & (CPMP_FAULT_GLOBAL_FLAG_AC_LINE
+                                    | CPMP_FAULT_GLOBAL_FLAG_RAIL_24V
+                                    | CPMP_FAULT_GLOBAL_FLAG_RAIL_5V)) != 0U)
+    {
+      status |= 0x10U;
+    }
+
+    if ((faultStatus.globalFlags & (CPMP_FAULT_GLOBAL_FLAG_CP_MISSING
+                                    | CPMP_FAULT_GLOBAL_FLAG_PSM_MISSING
+                                    | CPMP_FAULT_GLOBAL_FLAG_SSM_MISSING)) != 0U)
+    {
+      status |= 0x01U;
+    }
+  }
+
+  if ((context != NULL) && (context->cpMpLinkService != NULL)
+      && (CpMpLinkServicePeerHealthy(context->cpMpLinkService) == 0U)
+      && (CpMpLinkServiceGetFaultStatus(context->cpMpLinkService,
+                                        &faultStatus) != 0U))
+  {
+    status |= 0x01U;
+  }
+
+  return status;
+}
+
+static uint32_t GetCpMpMappedUnitAlarmStatus4(const NtcipContext_t *context)
+{
+  (void) context;
+
+  return 0U;
+}
+
 static NtcipError_t ValidateDatabaseWrite(const NtcipContext_t *context,
                                           const NtcipRequestContext_t *request)
 {
@@ -326,6 +420,52 @@ static uint8_t AnyDetectorFaultActive(const NtcipContext_t *context)
   return 0U;
 } /* AnyDetectorFaultActive */
 
+static uint8_t ControllerFaultMonitorActive(const NtcipContext_t *context)
+{
+  if (context == NULL)
+  {
+    return 0U;
+  }
+
+  if (context->cpMpLinkService != NULL)
+  {
+    return (uint8_t) (CpMpLinkServiceGetEffectiveSafetyAction(
+                        context->cpMpLinkService)
+                      == CPMP_SAFETY_ACTION_FLASH);
+  }
+
+  if (context->intersectionController == NULL)
+  {
+    return 0U;
+  }
+
+  return (uint8_t) (context->intersectionController->mmuSafetyAction
+                    == MMU_CONTROL_ACTION_FLASH);
+}
+
+static uint8_t ControllerDarkOverrideActive(const NtcipContext_t *context)
+{
+  if (context == NULL)
+  {
+    return 0U;
+  }
+
+  if (context->cpMpLinkService != NULL)
+  {
+    return (uint8_t) (CpMpLinkServiceGetEffectiveSafetyAction(
+                        context->cpMpLinkService)
+                      == CPMP_SAFETY_ACTION_DARK);
+  }
+
+  if (context->intersectionController == NULL)
+  {
+    return 0U;
+  }
+
+  return (uint8_t) (context->intersectionController->mmuSafetyAction
+                    == MMU_CONTROL_ACTION_DARK);
+}
+
 static uint32_t GetUnitControlStatus(const NtcipContext_t *context)
 {
   const IntersectionRuntime_t *runtime = GetRuntime(context);
@@ -356,6 +496,16 @@ static uint32_t GetUnitFlashStatus(const NtcipContext_t *context)
   if (runtime->startUpFlashActive != 0U)
   {
     return UNIT_FLASH_STATUS_STARTUP;
+  }
+
+  if (ControllerFaultMonitorActive(context) != 0U)
+  {
+    return UNIT_FLASH_STATUS_FAULT_MONITOR;
+  }
+
+  if (ControllerDarkOverrideActive(context) != 0U)
+  {
+    return UNIT_FLASH_STATUS_OTHER;
   }
 
   if (runtime->mmuFlashActive != 0U)
@@ -456,6 +606,7 @@ static uint32_t GetUnitAlarmStatus1(const NtcipContext_t *context)
     }
 
     if ((runtime->mmuFlashActive != 0U)
+        && (ControllerFaultMonitorActive(context) == 0U)
         && (runtime->startUpFlashActive == 0U))
     {
       status |= 0x10U;
@@ -481,6 +632,8 @@ static uint32_t GetUnitAlarmStatus1(const NtcipContext_t *context)
       status |= 0x01U;
     }
   }
+
+  status |= GetCpMpMappedUnitAlarmStatus1(context);
 
   if ((context != NULL) && (context->unitAlarmPort != NULL)
       && (UnitAlarmPortGetUnitAlarmStatus1(context->unitAlarmPort,
@@ -552,16 +705,17 @@ static uint32_t GetShortAlarmStatus(const NtcipContext_t *context)
 
 static uint32_t GetUnitAlarmStatus3(const NtcipContext_t *context)
 {
+  uint32_t status = GetCpMpMappedUnitAlarmStatus3(context);
   uint8_t externalStatus = 0U;
 
   if ((context != NULL) && (context->unitAlarmPort != NULL)
       && (UnitAlarmPortGetUnitAlarmStatus3(context->unitAlarmPort,
                                            &externalStatus) != 0U))
   {
-    return externalStatus;
+    status |= externalStatus;
   }
 
-  return 0U;
+  return status;
 }
 
 static uint8_t GetMaxAlarmGroups(const NtcipContext_t *context)
@@ -664,7 +818,7 @@ static uint32_t GetUnitAlarmStatus2(const NtcipContext_t *context)
 {
   const IntersectionRuntime_t *runtime = GetRuntime(context);
   uint8_t unitAlarmStatus2 = 0U;
-  uint32_t status = 0U;
+  uint32_t status = GetCpMpMappedUnitAlarmStatus2(context);
 
   if ((runtime != NULL) && (runtime->coordSyncStatusSeconds != 0U))
   {
@@ -689,20 +843,23 @@ static uint32_t GetUnitAlarmStatus2(const NtcipContext_t *context)
 
 static uint32_t GetUnitAlarmStatus4(const NtcipContext_t *context)
 {
+  uint32_t status = GetCpMpMappedUnitAlarmStatus4(context);
   uint8_t unitAlarmStatus4 = 0U;
 
   if ((context == NULL) || (context->unitAlarmPort == NULL))
   {
-    return 0U;
+    return status;
   }
 
   if (UnitAlarmPortGetUnitAlarmStatus4(context->unitAlarmPort,
                                        &unitAlarmStatus4) == 0U)
   {
-    return 0U;
+    return status;
   }
 
-  return unitAlarmStatus4;
+  status |= unitAlarmStatus4;
+
+  return status;
 }
 
 static NtcipError_t SetTestUnitObject(void *groupContext,

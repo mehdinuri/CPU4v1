@@ -7,6 +7,7 @@
 #define LWIP_SNMP_ADAPTER_H
 
 #include "Domain/Intersection/ConfigurationService.h"
+#include "Domain/Intersection/CpMpLinkService.h"
 #include "Domain/Intersection/IntersectionActivationService.h"
 #include "Domain/Intersection/DetectorReportService.h"
 #include "Domain/Intersection/GlobalTimeManagementService.h"
@@ -82,6 +83,8 @@ void LWIPSNMPAdapterBindUnitAlarmPort(LWIPSNMPAdapterCtx_t *ctx,
                                       IUnitAlarmPort_t *unitAlarmPort);
 void LWIPSNMPAdapterBindUnitClockPort(LWIPSNMPAdapterCtx_t *ctx,
                                       IUnitClockPort_t *unitClockPort);
+void LWIPSNMPAdapterBindCpMpLinkService(LWIPSNMPAdapterCtx_t *ctx,
+                                        CpMpLinkService_t *cpMpLinkService);
 LWIPSNMPManagedState_t LWIPSNMPAdapterGetManagedState(
   const LWIPSNMPAdapterCtx_t *ctx,
   const uint32_t *oid,

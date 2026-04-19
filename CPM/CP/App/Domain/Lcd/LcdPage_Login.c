@@ -37,6 +37,7 @@ static void OnEnter(void *ctx, LcdEngine_t *e)
   LoginCtx_t *c = (LoginCtx_t *) ctx;
 
   (void) e;
+  UserLogout(c->services->user);
   c->step = LOGIN_STEP_USERNAME;
   c->username = 0;
   c->password = 0;
@@ -98,14 +99,21 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
     }
     else
     {
-      if (UserValidateLogin(c->services->user, c->username, c->password))
+      if (UserLogin(c->services->user, c->username, c->password)
+          != USER_ROLE_NONE)
       {
         LcdEngine_SwitchPage(e, c->pages->menu);
+      }
+      else
+      {
+        c->password = 0;
+        c->digitIndex = 0;
       }
     }
   }
   else if (key == KEY_CLEAR)
   {
+    UserLogout(c->services->user);
     LcdEngine_SwitchPage(e, c->pages->home);
   }
 }

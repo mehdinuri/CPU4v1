@@ -204,18 +204,35 @@ static void LcdSetLanguage(void *ctx, uint8_t lang)
   (void) ctx; bLanguage = lang;
 }
 
-static uint8_t LcdValidateLogin(void *ctx, uint16_t username, uint16_t password)
+static UserRole_t LcdLogin(void *ctx, uint16_t username, uint16_t password)
 {
   (void) ctx;
-  if (((username == GetAdminUsername()) && (password == GetAdminPassword()))
-      || ((username == GetSuperAdminUsername())
-          && (password == GetSuperAdminPassword()))
-      || ((username == GetGuestUsername()) && (password == GetGuestPassword())))
-  {
-    return TRUE;
-  }
+  return UserAuthServiceLogin(&g_userAuthService, username, password);
+}
 
-  return FALSE;
+static UserRole_t LcdGetActiveRole(void *ctx)
+{
+  (void) ctx;
+  return UserAuthServiceGetActiveRole(&g_userAuthService);
+}
+
+static void LcdLogout(void *ctx)
+{
+  (void) ctx;
+  UserAuthServiceLogout(&g_userAuthService);
+}
+
+static uint8_t LcdChangeAdminPassword(void *ctx,
+                                      uint16_t currentPassword,
+                                      uint16_t newPassword)
+{
+  UserAuthChangeStatus_t status;
+
+  (void) ctx;
+  status = UserAuthServiceChangeAdminPin(&g_userAuthService,
+                                         currentPassword,
+                                         newPassword);
+  return (uint8_t) (status == USER_AUTH_CHANGE_OK);
 }
 
 static uint8_t LcdLogRead(void *ctx,
@@ -344,9 +361,27 @@ static uint32_t LcdGpsIndexToBaudRate(void *ctx, uint8_t index)
   (void) ctx; return GpsIndexToBaudRate(index);
 }
 
-static void LcdGpsSaveConfig(void *ctx)
+static uint8_t LcdGpsSaveConfig(void *ctx)
 {
-  (void) ctx; (void) GpsPortWrite(); (void) GpsBaudRateIndexWrite();
+  uint8_t ok;
+
+  (void) ctx;
+  ok = GpsPortWrite();
+  ok = (uint8_t) (ok && GpsBaudRateIndexWrite());
+  return ok;
+}
+
+static uint8_t LcdGpsIsValidPortType(void *ctx, uint8_t type)
+{
+  (void) ctx;
+  return (uint8_t) (type <= GPS_PORT_TYPE_MAX);
+}
+
+static uint8_t LcdGpsIsValidBaudRateIndex(void *ctx, uint8_t index)
+{
+  (void) ctx;
+  return (uint8_t) ((index >= GPS_MIN_BAUD_RATE_INDEX)
+                    && (index <= GPS_MAX_BAUD_RATE_INDEX));
 }
 
 void InitLCDTask(void)
@@ -381,7 +416,10 @@ void InitLCDTask(void)
   s_lcdCommsPort.GetRemoteIp = LcdGetRemoteIp;
 
   s_lcdUserPort.ctx = NULL;
-  s_lcdUserPort.ValidateLogin = LcdValidateLogin;
+  s_lcdUserPort.Login = LcdLogin;
+  s_lcdUserPort.GetActiveRole = LcdGetActiveRole;
+  s_lcdUserPort.Logout = LcdLogout;
+  s_lcdUserPort.ChangeAdminPassword = LcdChangeAdminPassword;
 
   s_lcdLogPort.ctx = NULL;
   s_lcdLogPort.Read = LcdLogRead;
@@ -401,6 +439,8 @@ void InitLCDTask(void)
   s_lcdGpsPort.SetBaudRateIndex = LcdGpsSetBaudRateIndex;
   s_lcdGpsPort.IndexToBaudRate = LcdGpsIndexToBaudRate;
   s_lcdGpsPort.SaveConfig = LcdGpsSaveConfig;
+  s_lcdGpsPort.IsValidPortType = LcdGpsIsValidPortType;
+  s_lcdGpsPort.IsValidBaudRateIndex = LcdGpsIsValidBaudRateIndex;
 
   /* Initialize Page Registry */
   g_lcdPages.home = &LcdPage_Home;

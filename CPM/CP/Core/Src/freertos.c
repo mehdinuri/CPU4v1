@@ -1325,14 +1325,17 @@ void MX_FREERTOS_Init(void) {
   /* creation of CANMsgSenderTask */
   CANMsgSenderTaskHandle = osThreadNew(CANMsgSenderTaskFunc, NULL, &CANMsgSenderTask_attributes);
 
-  /* creation of SignalCardDriveTask */
-  SignalCardDriveTaskHandle = osThreadNew(SignalCardDriveTaskFunc, NULL, &SignalCardDriveTask_attributes);
+  /* legacy signal-card task intentionally disabled:
+   * the clean FieldOutputCanAdapter on IntersectionControlTask owns
+   * FDCAN1 SSM/PSM publishing now. */
+  SignalCardDriveTaskHandle = NULL;
 
   /* creation of IntersectionControlTask */
   IntersectionControlTaskHandle = osThreadNew(IntersectionControlTaskFunc, NULL, &IntersectionControlTask_attributes);
 
-  /* creation of CPMPComTask */
-  CPMPComTaskHandle = osThreadNew(CPMPComTaskFunc, NULL, &CPMPComTask_attributes);
+  /* legacy CP<->MP comm task intentionally disabled:
+   * the clean CpMpLinkService on FDCAN2 owns this path now. */
+  CPMPComTaskHandle = NULL;
 
   /* creation of GPSMsgParserTask */
   GPSMsgParserTaskHandle = osThreadNew(GPSMsgParserTaskFunc, NULL, &GPSMsgParserTask_attributes);
@@ -1402,16 +1405,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   if (CANMsgSenderTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (SignalCardDriveTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (CPMPComTaskHandle == NULL)
   {
     Error_Handler();
   }

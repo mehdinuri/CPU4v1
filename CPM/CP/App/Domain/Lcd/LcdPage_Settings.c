@@ -20,6 +20,16 @@ typedef struct
   uint8_t selectedIndex;
 } SettingsCtx_t;
 
+static void OnEnter(void *ctx, LcdEngine_t *e)
+{
+  SettingsCtx_t *c = (SettingsCtx_t *) ctx;
+
+  if (UserCanAccessConfiguration(c->services->user) == 0U)
+  {
+    LcdEngine_SwitchPage(e, c->pages->menu);
+  }
+}
+
 static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 {
   SettingsCtx_t *c = (SettingsCtx_t *) ctx;
@@ -100,7 +110,7 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
 static SettingsCtx_t s_settingsCtx;
 LcdPage_t LcdPage_Settings = {
   .ctx = &s_settingsCtx,
-  .OnEnter = NULL,
+  .OnEnter = OnEnter,
   .OnUpdate = NULL,
   .OnInput = OnInput,
   .OnDraw = OnDraw,

@@ -6,6 +6,7 @@
 
 #include "Domain/NTCIP/NTCIP1201.h"
 #include "Domain/NTCIP/NTCIP1202.h"
+#include "Domain/NTCIP/MibVendor59748/CpMpDiagnosticsObjects.h"
 
 #include <string.h>
 
@@ -202,6 +203,7 @@ void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
   NtcipObjectDirectoryInit(&ctx->objectDirectory);
   Ntcip1201RegisterObjects(&ctx->objectDirectory, &ctx->ntcipContext);
   Ntcip1202RegisterObjects(&ctx->objectDirectory, &ctx->ntcipContext);
+  CpMpDiagnosticsObjectsRegister(&ctx->objectDirectory, &ctx->ntcipContext);
 }
 
 void LWIPSNMPAdapterBindDetectorReportService(
@@ -305,6 +307,17 @@ void LWIPSNMPAdapterBindUnitClockPort(LWIPSNMPAdapterCtx_t *ctx,
 
   ctx->unitClockPort = unitClockPort;
   NtcipContextBindUnitClockPort(&ctx->ntcipContext, unitClockPort);
+}
+
+void LWIPSNMPAdapterBindCpMpLinkService(LWIPSNMPAdapterCtx_t *ctx,
+                                        CpMpLinkService_t *cpMpLinkService)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  NtcipContextBindCpMpLinkService(&ctx->ntcipContext, cpMpLinkService);
 }
 
 LWIPSNMPManagedState_t LWIPSNMPAdapterGetManagedState(

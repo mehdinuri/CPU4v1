@@ -86,6 +86,7 @@ static void BindDomainSnmpAdapter(void)
                                       &g_powerMonitorPort);
   LWIPSNMPAdapterBindUnitAlarmPort(&s_lwipSnmpAdapterCtx, &g_unitAlarmPort);
   LWIPSNMPAdapterBindUnitClockPort(&s_lwipSnmpAdapterCtx, &g_unitClockPort);
+  LWIPSNMPAdapterBindCpMpLinkService(&s_lwipSnmpAdapterCtx, &g_cpMpLinkService);
   LWIPSNMPBridgeBindAdapter(&s_lwipSnmpAdapterCtx);
 }
 

@@ -30,22 +30,48 @@ static const char *const pStrMenuEntries[LANGUAGES_MAX][6] = {
     "SETTINGS" }
 };
 
+static uint8_t MenuEntryCount(const MenuCtx_t *ctx)
+{
+  return (uint8_t) ((UserGetActiveRole(ctx->services->user) == USER_ROLE_ADMIN)
+                    ? 6U : 5U);
+}
+
+static void OnEnter(void *ctx, LcdEngine_t *e)
+{
+  MenuCtx_t *c = (MenuCtx_t *) ctx;
+  uint8_t entryCount;
+
+  (void) e;
+  entryCount = MenuEntryCount(c);
+  if (c->selectedIndex >= entryCount)
+  {
+    c->selectedIndex = (uint8_t) (entryCount - 1U);
+  }
+
+  if (c->scrollIndex > c->selectedIndex)
+  {
+    c->scrollIndex = c->selectedIndex;
+  }
+}
+
 static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 {
   MenuCtx_t *c = (MenuCtx_t *) ctx;
   char buf[21];
+  uint8_t entryCount;
 
   (void) e;
 
   DisplayClear(display);
 
   uint8_t lang = ISystemPort_GetLanguage(c->services->system);
+  entryCount = MenuEntryCount(c);
 
   for (uint8_t i = 0; i < 4; i++)
   {
     uint8_t entryIdx = c->scrollIndex + i;
 
-    if (entryIdx >= 6)
+    if (entryIdx >= entryCount)
     {
       break;
     }
@@ -60,15 +86,17 @@ static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
 {
   MenuCtx_t *c = (MenuCtx_t *) ctx;
+  uint8_t entryCount = MenuEntryCount(c);
 
   if (key == KEY_DELETE_DOWN)
   {
-    if (c->selectedIndex < 5)
+    if (c->selectedIndex + 1U < entryCount)
     {
       c->selectedIndex++;
     }
 
-    if (c->selectedIndex >= c->scrollIndex + 4)
+    if ((c->selectedIndex >= c->scrollIndex + 4U)
+        && (c->scrollIndex + 4U < entryCount))
     {
       c->scrollIndex++;
     }
@@ -111,6 +139,7 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
   }
   else if (key == KEY_CLEAR)
   {
+    UserLogout(c->services->user);
     LcdEngine_SwitchPage(e, c->pages->home);
   }
 } /* OnInput */
@@ -118,7 +147,7 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
 static MenuCtx_t s_menuCtx;
 LcdPage_t LcdPage_Menu = {
   .ctx = &s_menuCtx,
-  .OnEnter = NULL,
+  .OnEnter = OnEnter,
   .OnUpdate = NULL,
   .OnInput = OnInput,
   .OnDraw = OnDraw,

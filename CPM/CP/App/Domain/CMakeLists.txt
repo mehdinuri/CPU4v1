@@ -7,6 +7,7 @@ add_library(Domain STATIC)
 target_sources(Domain PRIVATE
     Intersection/IntersectionConfig.c
     Intersection/ConfigurationService.c
+    Intersection/CpMpLinkService.c
     Intersection/IntersectionEngine.c
     Intersection/IntersectionActivationService.c
     Intersection/IntersectionController.c
@@ -19,6 +20,13 @@ target_sources(Domain PRIVATE
     Intersection/Detector.c
     Intersection/Sequence.c
     Intersection/Program.c
+    Services/MmiProtocol.c
+    Services/MmiService.c
+    Services/MmiSnapshotCache.c
+    Services/MmiLocalSettingsService.c
+    Services/MmiEventLogService.c
+    Services/MmiMaintenanceService.c
+    Services/UserAuthService.c
     Lcd/LcdEngine.c
     Lcd/LcdLanguage.c
     Lcd/LcdPage_Home.c
@@ -63,12 +71,14 @@ target_sources(Domain PRIVATE
     NTCIP/Mib1202v0335/OverlapStatusObjects.c
     NTCIP/Mib1202v0335/PreemptObjects.c
     NTCIP/Mib1202v0335/UnitObjects.c
+    NTCIP/MibVendor59748/CpMpDiagnosticsObjects.c
     Intersection/DetectorReportService.c
 )
 
 # Domain headers are public so Ports/, Adapters/, Platform/ can include them
 target_include_directories(Domain
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/..   # allows: #include "Domain/Intersection/Phase.h"
+            ${CMAKE_SOURCE_DIR}/../Libs
 )
 
 # Strict warnings enforced for all Domain code on all targets

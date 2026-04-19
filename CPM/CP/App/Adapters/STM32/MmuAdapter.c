@@ -8,6 +8,41 @@
 
 #include <string.h>
 
+static uint8_t ComputePermitOutputPower(const MmuAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0U;
+  }
+
+  return (uint8_t) (ctx->safetyAction != MMU_CONTROL_ACTION_DARK);
+}
+
+static void RefreshRelayDrive(MmuAdapterCtx_t *ctx)
+{
+  uint8_t relayDrive;
+
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->permitOutputPower = ComputePermitOutputPower(ctx);
+  relayDrive = ctx->permitOutputPower;
+
+  if (ctx->relayTopology == MMU_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP)
+  {
+    relayDrive = (uint8_t) (ctx->permitOutputPower == 0U);
+  }
+
+  ctx->lastRelayDrive = relayDrive;
+
+  if (ctx->relayPort != NULL)
+  {
+    RelaySet(ctx->relayPort, relayDrive);
+  }
+}
+
 static void SetAllRed(OutputDriverImage_t *image)
 {
   uint8_t channelIndex;
@@ -21,6 +56,24 @@ static void SetAllRed(OutputDriverImage_t *image)
        ++channelIndex)
   {
     image->channels[channelIndex] = OUTPUT_DRIVER_ASPECT_RED;
+    image->channelDimmed[channelIndex] = 0U;
+    image->channelDimAlternateHalfCycle[channelIndex] = 0U;
+  }
+}
+
+static void SetAllDark(OutputDriverImage_t *image)
+{
+  uint8_t channelIndex;
+
+  if (image == NULL)
+  {
+    return;
+  }
+
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       ++channelIndex)
+  {
+    image->channels[channelIndex] = OUTPUT_DRIVER_ASPECT_DARK;
     image->channelDimmed[channelIndex] = 0U;
     image->channelDimAlternateHalfCycle[channelIndex] = 0U;
   }
@@ -43,6 +96,10 @@ static uint8_t FilterOutputImage(void *ctx,
   {
     SetAllRed(approved);
   }
+  else if (adapterCtx->safetyAction == MMU_CONTROL_ACTION_DARK)
+  {
+    SetAllDark(approved);
+  }
   else
   {
     *approved = *requested;
@@ -60,6 +117,13 @@ static uint8_t SetForceAllRedPort(void *ctx, uint8_t forceAllRed)
   return 1U;
 }
 
+static uint8_t SetSafetyActionPort(void *ctx, MmuControlAction_t action)
+{
+  MmuAdapterSetSafetyAction((MmuAdapterCtx_t *) ctx, action);
+
+  return 1U;
+}
+
 void MmuAdapterInit(MmuAdapterCtx_t *ctx)
 {
   if (ctx == NULL)
@@ -70,6 +134,32 @@ void MmuAdapterInit(MmuAdapterCtx_t *ctx)
   memset(ctx, 0, sizeof(*ctx));
   SetAllRed(&ctx->lastRequestedImage);
   SetAllRed(&ctx->lastApprovedImage);
+  ctx->safetyAction = MMU_CONTROL_ACTION_DARK;
+  ctx->relayTopology = MMU_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE;
+  RefreshRelayDrive(ctx);
+}
+
+void MmuAdapterBindRelayPort(MmuAdapterCtx_t *ctx, IRelayPort_t *relayPort)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->relayPort = relayPort;
+  RefreshRelayDrive(ctx);
+}
+
+void MmuAdapterSetRelayTopology(MmuAdapterCtx_t *ctx,
+                                MmuRelayTopology_t topology)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->relayTopology = topology;
+  RefreshRelayDrive(ctx);
 }
 
 void MmuAdapterSetForceAllRed(MmuAdapterCtx_t *ctx, uint8_t forceAllRed)
@@ -82,12 +172,44 @@ void MmuAdapterSetForceAllRed(MmuAdapterCtx_t *ctx, uint8_t forceAllRed)
   ctx->forceAllRed = (uint8_t) (forceAllRed != 0U);
 }
 
+void MmuAdapterSetSafetyAction(MmuAdapterCtx_t *ctx, MmuControlAction_t action)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->safetyAction = action;
+  RefreshRelayDrive(ctx);
+}
+
+uint8_t MmuAdapterGetPermitOutputPower(const MmuAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0U;
+  }
+
+  return ctx->permitOutputPower;
+}
+
+uint8_t MmuAdapterGetLastRelayDrive(const MmuAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0U;
+  }
+
+  return ctx->lastRelayDrive;
+}
+
 IMmuPort_t MmuAdapterCreatePort(MmuAdapterCtx_t *ctx)
 {
   IMmuPort_t port;
 
   port.ctx = ctx;
   port.SetForceAllRed = SetForceAllRedPort;
+  port.SetSafetyAction = SetSafetyActionPort;
   port.FilterOutputImage = FilterOutputImage;
 
   return port;

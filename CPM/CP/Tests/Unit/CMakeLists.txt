@@ -17,12 +17,27 @@ Add_Unity_Test(Test_DetectorReportService Test_DetectorReportService.c)
 Add_Unity_Test(Test_DetectorReportObjects Test_DetectorReportObjects.c)
 Add_Unity_Test(Test_GlobalTimeManagementService Test_GlobalTimeManagementService.c)
 Add_Unity_Test(Test_GlobalTimeManagementObjects Test_GlobalTimeManagementObjects.c)
+Add_Unity_Test(Test_MmiService Test_MmiService.c)
+Add_Unity_Test(Test_MmiSnapshotCache Test_MmiSnapshotCache.c)
+Add_Unity_Test(Test_MmiLocalSettingsService Test_MmiLocalSettingsService.c)
+Add_Unity_Test(Test_MmiEventLogService Test_MmiEventLogService.c)
+Add_Unity_Test(Test_MmiMaintenanceService Test_MmiMaintenanceService.c)
+Add_Unity_Test(Test_UserAuthService Test_UserAuthService.c)
 Add_Unity_Test(Test_CabinetEnvironmentObjects Test_CabinetEnvironmentObjects.c)
 Add_Unity_Test(Test_AscIoInputMappingObjects Test_AscIoInputMappingObjects.c)
 Add_Unity_Test(Test_AscIoOutputMappingObjects Test_AscIoOutputMappingObjects.c)
 Add_Unity_Test(Test_IntersectionEngine Test_IntersectionEngine.c)
 Add_Unity_Test(Test_IntersectionController Test_IntersectionController.c)
+Add_Unity_Test(Test_CpMpLinkService Test_CpMpLinkService.c)
 Add_Unity_Test(Test_IntersectionOutputDispatcher Test_IntersectionOutputDispatcher.c)
+Add_Unity_Test(Test_MmuAdapter
+               Test_MmuAdapter.c
+               ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/MmuAdapter.c)
+target_include_directories(Test_MmuAdapter PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32
+    ${CMAKE_SOURCE_DIR}/App/Domain
+    ${CMAKE_SOURCE_DIR}/App/Ports
+)
 Add_Unity_Test(Test_PhaseObjects Test_PhaseObjects.c)
 Add_Unity_Test(Test_ClockObjects Test_ClockObjects.c)
 Add_Unity_Test(Test_NtcipDbTransactionService Test_NtcipDbTransactionService.c)

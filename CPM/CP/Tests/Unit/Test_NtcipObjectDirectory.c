@@ -5,10 +5,12 @@
  */
 #include "unity.h"
 
+#include "Domain/Intersection/CpMpLinkService.h"
 #include "Domain/Intersection/IntersectionController.h"
 #include "Domain/Intersection/IntersectionEngine.h"
 #include "Domain/NTCIP/NTCIP1201.h"
 #include "Domain/NTCIP/NTCIP1202.h"
+#include "Domain/NTCIP/MibVendor59748/CpMpDiagnosticsObjects.h"
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
 #include "Domain/NTCIP/Core/NtcipObjectDirectory.h"
 #include "Domain/NTCIP/NtcipContext.h"
@@ -545,12 +547,39 @@ static const uint32_t kPreemptGateDescriptionOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 9U, 1U, 3U, 1U
 };
+static const uint32_t kCpMpDiagPeerHealthyOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 2U, 0U
+};
+static const uint32_t kCpMpDiagSafetyActionOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 5U, 0U
+};
+static const uint32_t kCpMpDiagSafetyReasonCodeOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 6U, 0U
+};
+static const uint32_t kCpMpDiagGlobalFlagsOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 8U, 0U
+};
+static const uint32_t kCpMpDiagChannelFlagsOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 10U, 1U, 2U, 1U
+};
+
+enum
+{
+  TEST_CPMP_REASON_CONFLICT = 1U,
+  TEST_CPMP_REASON_CONFIG_INVALID = 53U
+};
 
 static MockConfigRepositoryAdapterCtx_t s_repoCtx;
 static IConfigRepositoryPort_t s_repoPort;
 static ConfigurationService_t s_configurationService;
 static IntersectionEngine_t s_engine;
 static IntersectionController_t s_controller;
+static CpMpLinkService_t s_cpMpLinkService;
 static IModuleBusPort_t s_moduleBusPort;
 static NtcipDbTransactionService_t s_dbTransactionService;
 static NtcipObjectDirectory_t s_directory;
@@ -753,7 +782,38 @@ void setUp(void)
   NtcipObjectDirectoryInit(&s_directory);
   Ntcip1201RegisterObjects(&s_directory, &s_ntcipContext);
   Ntcip1202RegisterObjects(&s_directory, &s_ntcipContext);
+  CpMpDiagnosticsObjectsRegister(&s_directory, &s_ntcipContext);
   ReloadEngine();
+}
+
+static void PrimeCpMpLinkService(CpMpSafetyAction_t safetyAction,
+                                 uint8_t safetyReasonCode,
+                                 uint32_t globalFlags,
+                                 uint16_t channel0Flags)
+{
+  (void) memset(&s_cpMpLinkService, 0, sizeof(s_cpMpLinkService));
+  s_cpMpLinkService.configurationService = &s_configurationService;
+  s_cpMpLinkService.controller = &s_controller;
+  s_cpMpLinkService.tickCount = 10U;
+  s_cpMpLinkService.lastMpHeartbeatTick = 10U;
+  s_cpMpLinkService.lastMpHeartbeatSeen = 1U;
+  s_cpMpLinkService.configGeneration =
+    ConfigurationServiceGetActiveGeneration(&s_configurationService);
+  s_cpMpLinkService.configSetId =
+    ConfigurationServiceGetActiveSetId(&s_configurationService);
+  s_cpMpLinkService.lastMpConfigGeneration = s_cpMpLinkService.configGeneration;
+  s_cpMpLinkService.lastMpConfigSetId = s_cpMpLinkService.configSetId;
+  s_cpMpLinkService.lastMpConfigState = CPMP_CONFIG_STATE_APPLIED;
+  s_cpMpLinkService.lastSafetyAction = safetyAction;
+  s_cpMpLinkService.lastSafetyReasonCode = safetyReasonCode;
+  s_cpMpLinkService.lastFaultStatusValid = 1U;
+  s_cpMpLinkService.lastFaultStatus.sequence = 0x11223344UL;
+  s_cpMpLinkService.lastFaultStatus.globalFlags = globalFlags;
+  s_cpMpLinkService.lastFaultStatus.channelFlags[0] = channel0Flags;
+  s_cpMpLinkService.lastFaultStatus.safetyAction = (uint8_t) safetyAction;
+  s_cpMpLinkService.lastFaultStatus.safetyReasonCode = safetyReasonCode;
+  s_cpMpLinkService.lastFaultStatus.configState = CPMP_CONFIG_STATE_APPLIED;
+  NtcipContextBindCpMpLinkService(&s_ntcipContext, &s_cpMpLinkService);
 }
 
 void tearDown(void)
@@ -2849,6 +2909,153 @@ void test_unit_flash_status_reports_startup_and_defers_mmu_until_expiry(void)
   TEST_ASSERT_BITS_HIGH(0x10U, value.data.unsigned32);
 }
 
+void test_unit_flash_status_reports_fault_monitor_for_cp_mp_safety_action(void)
+{
+  NtcipValue_t value;
+
+  PrimeCpMpLinkService(CPMP_SAFETY_ACTION_FLASH,
+                       TEST_CPMP_REASON_CONFIG_INVALID,
+                       CPMP_FAULT_GLOBAL_FLAG_CONFIG_INVALID,
+                       0U);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitFlashStatusOid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(5U, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitAlarmStatus1Oid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_BITS_LOW(0x30U, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitAlarmStatus4Oid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(0U, value.data.unsigned32);
+}
+
+void test_unit_flash_status_does_not_report_fault_monitor_for_cp_mp_dark_action(void)
+{
+  NtcipValue_t value;
+
+  PrimeCpMpLinkService(CPMP_SAFETY_ACTION_DARK,
+                       TEST_CPMP_REASON_CONFLICT,
+                       0U,
+                       CPMP_FAULT_CHANNEL_FLAG_CONFLICT);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitFlashStatusOid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
+}
+
+void test_unit_alarm_statuses_map_cp_mp_fault_flags_to_standard_bits(void)
+{
+  NtcipValue_t value;
+
+  PrimeCpMpLinkService(CPMP_SAFETY_ACTION_FLASH,
+                       TEST_CPMP_REASON_CONFLICT,
+                       CPMP_FAULT_GLOBAL_FLAG_LOCAL_FLASH_ACTIVE
+                         | CPMP_FAULT_GLOBAL_FLAG_MMU_FLASH_ACTIVE
+                         | CPMP_FAULT_GLOBAL_FLAG_WATCHDOG
+                         | CPMP_FAULT_GLOBAL_FLAG_AC_LINE
+                         | CPMP_FAULT_GLOBAL_FLAG_PSM_MISSING,
+                       0U);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitAlarmStatus1Oid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_BITS_HIGH(0x30U, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitAlarmStatus2Oid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_BITS_HIGH(0x40U, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitAlarmStatus3Oid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_BITS_HIGH(0x11U, value.data.unsigned32);
+}
+
+void test_vendor_cp_mp_diagnostics_objects_expose_cached_fault_status(void)
+{
+  NtcipValue_t value;
+
+  PrimeCpMpLinkService(CPMP_SAFETY_ACTION_DARK,
+                       TEST_CPMP_REASON_CONFLICT,
+                       CPMP_FAULT_GLOBAL_FLAG_CP_MISSING
+                         | CPMP_FAULT_GLOBAL_FLAG_CONFIG_INVALID,
+                       CPMP_FAULT_CHANNEL_FLAG_CONFLICT
+                         | CPMP_FAULT_CHANNEL_FLAG_RED_FAIL);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kCpMpDiagPeerHealthyOid,
+                                                10U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kCpMpDiagSafetyActionOid,
+                                                10U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(CPMP_SAFETY_ACTION_DARK, value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kCpMpDiagSafetyReasonCodeOid,
+                                                10U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(TEST_CPMP_REASON_CONFLICT,
+                           value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kCpMpDiagGlobalFlagsOid,
+                                                10U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(CPMP_FAULT_GLOBAL_FLAG_CP_MISSING
+                             | CPMP_FAULT_GLOBAL_FLAG_CONFIG_INVALID,
+                           value.data.unsigned32);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kCpMpDiagChannelFlagsOid,
+                                                12U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(CPMP_FAULT_CHANNEL_FLAG_CONFLICT
+                             | CPMP_FAULT_CHANNEL_FLAG_RED_FAIL,
+                           value.data.unsigned32);
+}
+
 void test_short_alarm_status_clears_local_cycle_zero_bit_after_read(void)
 {
   NtcipValue_t value;
@@ -3976,6 +4183,9 @@ int main(void)
   RUN_TEST(
     test_short_alarm_status_sets_coordination_alarm_after_three_failed_cycles);
   RUN_TEST(test_unit_flash_status_reports_startup_and_defers_mmu_until_expiry);
+  RUN_TEST(test_unit_flash_status_reports_fault_monitor_for_cp_mp_safety_action);
+  RUN_TEST(test_unit_flash_status_does_not_report_fault_monitor_for_cp_mp_dark_action);
+  RUN_TEST(test_vendor_cp_mp_diagnostics_objects_expose_cached_fault_status);
   RUN_TEST(test_short_alarm_status_clears_local_cycle_zero_bit_after_read);
   RUN_TEST(test_unit_control_object_rejects_reserved_bit_and_drives_runtime_demands);
   RUN_TEST(test_unit_alarm_group_and_alarm_status4_objects_follow_bound_port);

@@ -10,11 +10,19 @@
 
 #include "Ports/IOutputDriverPort.h"
 
+typedef enum
+{
+  MMU_CONTROL_ACTION_NORMAL = 0U,
+  MMU_CONTROL_ACTION_FLASH = 1U,
+  MMU_CONTROL_ACTION_DARK = 2U
+} MmuControlAction_t;
+
 typedef struct
 {
   void *ctx;
 
   uint8_t (*SetForceAllRed)(void *ctx, uint8_t forceAllRed);
+  uint8_t (*SetSafetyAction)(void *ctx, MmuControlAction_t action);
   uint8_t (*FilterOutputImage)(void *ctx,
                                const OutputDriverImage_t *requested,
                                OutputDriverImage_t *approved);
@@ -28,6 +36,17 @@ static inline uint8_t MmuSetForceAllRed(IMmuPort_t *p, uint8_t forceAllRed)
   }
 
   return p->SetForceAllRed(p->ctx, forceAllRed);
+}
+
+static inline uint8_t MmuSetSafetyAction(IMmuPort_t *p,
+                                         MmuControlAction_t action)
+{
+  if ((p == NULL) || (p->SetSafetyAction == NULL))
+  {
+    return 1U;
+  }
+
+  return p->SetSafetyAction(p->ctx, action);
 }
 
 static inline uint8_t MmuFilterOutputImage(IMmuPort_t *p,

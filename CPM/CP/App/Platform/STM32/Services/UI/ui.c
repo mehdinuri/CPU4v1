@@ -17,6 +17,7 @@
 #include "stm32h7xx_hal_def.h"
 #include "time.h"
 #include "usb.h"
+#include "DomainServices.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Definitions */
@@ -5326,7 +5327,7 @@ void UIPacketRespUsernames(void)
   while (bUserIndex < LCD_USERS_MAX)
   {
     /* add admin username to packet */
-    if (GetAdminValidity())
+    if (UserAuthServiceIsAdminValid(&g_userAuthService) != 0U)
     {
       /* if it is the first data don't add the separator */
       if (fFirstData == FALSE)
@@ -5339,9 +5340,8 @@ void UIPacketRespUsernames(void)
       }
 
       sprintf(strUsernameData,
-              "ADMIN,%04d,%04d",
-              GetAdminUsername(),
-              GetAdminPassword());
+              "ADMIN,%04d",
+              UserAuthServiceGetAdminUsername(&g_userAuthService));
       strcat(strUITx, strUsernameData);
     }
 
@@ -5358,9 +5358,8 @@ void UIPacketRespUsernames(void)
       }
 
       sprintf(strUsernameData,
-              "GUEST,%04d,%04d",
-              GetGuestUsername(),
-              GetGuestPassword());
+              "GUEST,%04d",
+              USER_AUTH_GUEST_USERNAME);
       strcat(strUITx, strUsernameData);
     }
 

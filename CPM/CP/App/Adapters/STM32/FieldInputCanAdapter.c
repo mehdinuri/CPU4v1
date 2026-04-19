@@ -9,25 +9,35 @@
 
 #include <string.h>
 
-#include "CanMsgParser.h"
+#include "cmsis_os2.h"
+#include "FieldCanQueueTx.h"
+#include "LegacyFieldCanIds.h"
 #include "stm32h7xx_hal.h"
 
 #define FIELD_INPUT_FEIG_NODE_COUNT 8U
 #define FIELD_INPUT_FEIG_LOOPS_PER_NODE 4U
 #define FIELD_INPUT_FEIG_TPDO1_BASE 0x180U
 #define FIELD_INPUT_FEIG_SDO_RESPONSE_BASE 0x580U
-#define FIELD_INPUT_FEIG_SDO_REQUEST_BASE CAN_MID_LOOP_DETECTOR_STATUS_REQUEST0
+#define FIELD_INPUT_FEIG_SDO_REQUEST_BASE LEGACY_FIELD_CAN_ID_LOOP_SDO_REQUEST_BASE
 #define FIELD_INPUT_FEIG_HEARTBEAT_BASE 0x700U
 #define FIELD_INPUT_FEIG_EMCY_BASE 0x300U
-#define FIELD_INPUT_PED_LEGACY_BASE CAN_MID_IO_INPUTS0
+#define FIELD_INPUT_PED_LEGACY_BASE LEGACY_FIELD_CAN_ID_IO_INPUTS0
 
 #define FIELD_INPUT_FEIG_TIMEOUT_MS 1500U
 #define FIELD_INPUT_PED_TIMEOUT_MS 500U
 #define FIELD_INPUT_FEIG_STARTUP_INTERVAL_MS 50U
 #define FIELD_INPUT_FEIG_HEALTH_POLL_INTERVAL_MS 100U
+#define FIELD_INPUT_RX_DEPTH 32U
 
 #define FIELD_INPUT_DETECTOR_ALARM_COMMUNICATIONS 0x08U
 #define FIELD_INPUT_REPORTED_ALARM_OTHER 0x01U
+
+typedef struct
+{
+  uint16_t standardId;
+  uint8_t length;
+  uint8_t data[8];
+} FieldInputQueuedFrame_t;
 
 static FieldInputCanAdapterCtx_t *s_registeredCtx = NULL;
 
@@ -39,6 +49,28 @@ static uint16_t ReadLe16(const uint8_t *data)
 static uint32_t CurrentTickMs(void)
 {
   return HAL_GetTick();
+}
+
+static void CreateOsObjects(FieldInputCanAdapterCtx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  if (ctx->rxPool == NULL)
+  {
+    ctx->rxPool = osMemoryPoolNew(FIELD_INPUT_RX_DEPTH,
+                                  sizeof(FieldInputQueuedFrame_t),
+                                  NULL);
+  }
+
+  if (ctx->rxQueue == NULL)
+  {
+    ctx->rxQueue = osMessageQueueNew(FIELD_INPUT_RX_DEPTH,
+                                     sizeof(FieldInputQueuedFrame_t *),
+                                     NULL);
+  }
 }
 
 static void SeedSnapshot(FieldInputCanAdapterCtx_t *ctx)
@@ -74,7 +106,7 @@ static void SendStandardCanFrame(uint16_t identifier,
 
   memset(payload, 0, sizeof(payload));
   memcpy(payload, data, length);
-  CANTxRequest(length, CAN_ID_TYPE_STD, identifier, payload);
+  (void) FieldCanQueueTxSendStandard(identifier, payload, length);
 }
 
 static void SendNmtCommand(uint8_t commandSpecifier, uint8_t nodeId)
@@ -83,7 +115,7 @@ static void SendNmtCommand(uint8_t commandSpecifier, uint8_t nodeId)
 
   payload[0] = commandSpecifier;
   payload[1] = nodeId;
-  SendStandardCanFrame(CAN_MID_LOOP_DEDECTOR_ENTER_OPERATIONAL_MODE,
+  SendStandardCanFrame(LEGACY_FIELD_CAN_ID_LOOP_NMT,
                        payload,
                        sizeof(payload));
 }
@@ -566,6 +598,48 @@ static void PollFeigDiagnostics(FieldInputCanAdapterCtx_t *ctx, uint32_t now)
   ctx->nextHealthPollTick = now + FIELD_INPUT_FEIG_HEALTH_POLL_INTERVAL_MS;
 }
 
+void FieldInputCanAdapterOnRxIsr(const FDCAN_RxHeaderTypeDef *header,
+                                 const uint8_t *data)
+{
+  FieldInputCanAdapterCtx_t *ctx = s_registeredCtx;
+  FieldInputQueuedFrame_t *queuedFrame;
+
+  if ((ctx == NULL) || (header == NULL) || (data == NULL)
+      || (header->IdType != FDCAN_STANDARD_ID)
+      || (header->RxFrameType != FDCAN_DATA_FRAME))
+  {
+    return;
+  }
+
+  if ((ctx->rxPool == NULL) || (ctx->rxQueue == NULL))
+  {
+    ctx->droppedFrames++;
+    return;
+  }
+
+  queuedFrame = (FieldInputQueuedFrame_t *) osMemoryPoolAlloc(ctx->rxPool, 0U);
+  if (queuedFrame == NULL)
+  {
+    ctx->droppedFrames++;
+    return;
+  }
+
+  queuedFrame->standardId = (uint16_t) header->Identifier;
+  queuedFrame->length = (uint8_t) header->DataLength;
+  if (queuedFrame->length > sizeof(queuedFrame->data))
+  {
+    queuedFrame->length = sizeof(queuedFrame->data);
+  }
+
+  (void) memcpy(&queuedFrame->data[0], data, queuedFrame->length);
+
+  if (osMessageQueuePut(ctx->rxQueue, &queuedFrame, 0U, 0U) != osOK)
+  {
+    (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
+    ctx->droppedFrames++;
+  }
+}
+
 void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
                               uint16_t configEpoch)
 {
@@ -575,6 +649,7 @@ void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
   }
 
   memset(ctx, 0, sizeof(*ctx));
+  CreateOsObjects(ctx);
   ctx->configEpoch = configEpoch;
   ctx->nextHealthPollSubindex = 4U;
   SeedSnapshot(ctx);
@@ -605,27 +680,26 @@ IModuleBusPort_t FieldInputCanAdapterCreatePort(FieldInputCanAdapterCtx_t *ctx)
   return port;
 }
 
-void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
-                                       const uint8_t *data)
+static void ProcessRxFrame(FieldInputCanAdapterCtx_t *ctx,
+                           uint16_t standardId,
+                           uint8_t length,
+                           const uint8_t *data)
 {
-  FieldInputCanAdapterCtx_t *ctx = s_registeredCtx;
   uint32_t now;
 
-  if ((ctx == NULL) || (header == NULL) || (data == NULL)
-      || (header->IdType != FDCAN_STANDARD_ID)
-      || (header->RxFrameType != FDCAN_DATA_FRAME))
+  if ((ctx == NULL) || (data == NULL))
   {
     return;
   }
 
   now = CurrentTickMs();
 
-  if ((header->Identifier == FIELD_INPUT_PED_LEGACY_BASE)
-      || (header->Identifier == (FIELD_INPUT_PED_LEGACY_BASE + 1U)))
+  if ((standardId == FIELD_INPUT_PED_LEGACY_BASE)
+      || (standardId == (FIELD_INPUT_PED_LEGACY_BASE + 1U)))
   {
-    uint8_t moduleIndex = (uint8_t) (header->Identifier - FIELD_INPUT_PED_LEGACY_BASE);
+    uint8_t moduleIndex = (uint8_t) (standardId - FIELD_INPUT_PED_LEGACY_BASE);
 
-    if (header->DataLength >= 2U)
+    if (length >= 2U)
     {
       ctx->pedLegacyActive[moduleIndex] = (uint16_t) (~ReadLe16(data));
       ctx->pedLegacyLastTick[moduleIndex] = now;
@@ -635,14 +709,14 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
     return;
   }
 
-  if ((header->Identifier >= FIELD_INPUT_FEIG_TPDO1_BASE + 1U)
-      && (header->Identifier <= FIELD_INPUT_FEIG_TPDO1_BASE
+  if ((standardId >= FIELD_INPUT_FEIG_TPDO1_BASE + 1U)
+      && (standardId <= FIELD_INPUT_FEIG_TPDO1_BASE
           + FIELD_INPUT_FEIG_NODE_COUNT))
   {
     uint8_t nodeIndex;
 
-    if ((header->DataLength >= 1U)
-        && (GetNodeIndexFromStandardId(header->Identifier,
+    if ((length >= 1U)
+        && (GetNodeIndexFromStandardId(standardId,
                                        FIELD_INPUT_FEIG_TPDO1_BASE,
                                        &nodeIndex) != 0U))
     {
@@ -656,20 +730,20 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
     return;
   }
 
-  if ((header->Identifier >= FIELD_INPUT_FEIG_SDO_RESPONSE_BASE + 1U)
-      && (header->Identifier <= FIELD_INPUT_FEIG_SDO_RESPONSE_BASE
+  if ((standardId >= FIELD_INPUT_FEIG_SDO_RESPONSE_BASE + 1U)
+      && (standardId <= FIELD_INPUT_FEIG_SDO_RESPONSE_BASE
           + FIELD_INPUT_FEIG_NODE_COUNT))
   {
     uint8_t nodeIndex;
 
-    if (GetNodeIndexFromStandardId(header->Identifier,
+    if (GetNodeIndexFromStandardId(standardId,
                                    FIELD_INPUT_FEIG_SDO_RESPONSE_BASE,
                                    &nodeIndex) == 0U)
     {
       return;
     }
 
-    if ((header->DataLength >= 5U)
+    if ((length >= 5U)
         && (ReadLe16(&data[1]) == 0x6000U)
         && (data[3] == 1U))
     {
@@ -679,7 +753,7 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
       return;
     }
 
-    if ((header->DataLength >= 5U)
+    if ((length >= 5U)
         && (ReadLe16(&data[1]) >= 0x2101U)
         && (ReadLe16(&data[1]) <= 0x2104U)
         && ((data[3] == 4U) || (data[3] == 5U)))
@@ -717,14 +791,14 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
     return;
   }
 
-  if ((header->Identifier >= FIELD_INPUT_FEIG_HEARTBEAT_BASE + 1U)
-      && (header->Identifier <= FIELD_INPUT_FEIG_HEARTBEAT_BASE
+  if ((standardId >= FIELD_INPUT_FEIG_HEARTBEAT_BASE + 1U)
+      && (standardId <= FIELD_INPUT_FEIG_HEARTBEAT_BASE
           + FIELD_INPUT_FEIG_NODE_COUNT))
   {
     uint8_t nodeIndex;
 
-    if ((header->DataLength >= 1U)
-        && (GetNodeIndexFromStandardId(header->Identifier,
+    if ((length >= 1U)
+        && (GetNodeIndexFromStandardId(standardId,
                                        FIELD_INPUT_FEIG_HEARTBEAT_BASE,
                                        &nodeIndex) != 0U))
     {
@@ -740,13 +814,13 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
     return;
   }
 
-  if ((header->Identifier >= FIELD_INPUT_FEIG_EMCY_BASE + 1U)
-      && (header->Identifier <= FIELD_INPUT_FEIG_EMCY_BASE
+  if ((standardId >= FIELD_INPUT_FEIG_EMCY_BASE + 1U)
+      && (standardId <= FIELD_INPUT_FEIG_EMCY_BASE
           + FIELD_INPUT_FEIG_NODE_COUNT))
   {
     uint8_t nodeIndex;
 
-    if (GetNodeIndexFromStandardId(header->Identifier,
+    if (GetNodeIndexFromStandardId(standardId,
                                    FIELD_INPUT_FEIG_EMCY_BASE,
                                    &nodeIndex) != 0U)
     {
@@ -759,12 +833,26 @@ void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
 void FieldInputCanAdapterStep(void)
 {
   FieldInputCanAdapterCtx_t *ctx = s_registeredCtx;
+  FieldInputQueuedFrame_t *queuedFrame = NULL;
   uint8_t nodeIndex;
   uint32_t now;
 
   if (ctx == NULL)
   {
     return;
+  }
+
+  while ((ctx->rxQueue != NULL)
+         && (osMessageQueueGet(ctx->rxQueue, &queuedFrame, NULL, 0U) == osOK))
+  {
+    if (queuedFrame != NULL)
+    {
+      ProcessRxFrame(ctx,
+                     queuedFrame->standardId,
+                     queuedFrame->length,
+                     &queuedFrame->data[0]);
+      (void) osMemoryPoolFree(ctx->rxPool, queuedFrame);
+    }
   }
 
   now = CurrentTickMs();

@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 
+#include "cmsis_os2.h"
 #include "fdcan.h"
 #include "Ports/IModuleBusPort.h"
 
@@ -30,6 +31,9 @@ typedef struct
   uint8_t activeSnapshotIndex;
   uint8_t hasSnapshot;
   uint16_t configEpoch;
+  osMemoryPoolId_t rxPool;
+  osMessageQueueId_t rxQueue;
+  uint32_t droppedFrames;
 } FieldInputCanAdapterCtx_t;
 
 void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
@@ -37,8 +41,8 @@ void FieldInputCanAdapterInit(FieldInputCanAdapterCtx_t *ctx,
 void FieldInputCanAdapterSetConfigEpoch(FieldInputCanAdapterCtx_t *ctx,
                                         uint16_t configEpoch);
 IModuleBusPort_t FieldInputCanAdapterCreatePort(FieldInputCanAdapterCtx_t *ctx);
-void FieldInputCanAdapterHandleRxFrame(const FDCAN_RxHeaderTypeDef *header,
-                                       const uint8_t *data);
+void FieldInputCanAdapterOnRxIsr(const FDCAN_RxHeaderTypeDef *header,
+                                 const uint8_t *data);
 void FieldInputCanAdapterStep(void);
 
 #endif /* FIELD_INPUT_CAN_ADAPTER_H */

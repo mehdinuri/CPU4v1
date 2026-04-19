@@ -24,6 +24,7 @@ target_sources(Platform_STM32 PRIVATE
     Core/TimerCapture.c
     Core/usb.c
     Core/lcdDrv.c
+    Tasks/LegacyCanIngress.c
     Tasks/CanMsgParser.c
     Tasks/IntersectionControlTask.c
     Tasks/Maintenance.c

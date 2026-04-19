@@ -6,6 +6,14 @@ add_library(Adapters_STM32 STATIC)
 
 target_sources(Adapters_STM32 PRIVATE
     SignalCardAdapter.c
+    ControlBusAdapter.c
+    FieldCanQueueTx.c
+    FieldOutputCanAdapter.c
+    MmiCanAdapter.c
+    MmiLegacyStatusAdapter.c
+    MmiMaintenanceAdapter.c
+    SystemResetAdapter.c
+    ShadowOutputDriverAdapter.c
     MmuAdapter.c
     FieldInputCanAdapter.c
     CompositeModuleBusPort.c
@@ -19,18 +27,25 @@ target_sources(Adapters_STM32 PRIVATE
     FlashStorageAdapter.c
     EepromStorageAdapter.c
     PersistenceAdapter.c
+    UserAuthStoreAdapter.c
     ConfigRepositoryAdapter.c
     LogRepositoryAdapter.c
     LCDAdapter.c
     KeypadAdapter.c
     UnitInputAdapter.c
+    AdminInfoAdapter.c
+    BrokenInputSettingsAdapter.c
+    GpsConfigAdapter.c
+    GpsTimeSyncAdapter.c
     HeaterAdapter.c
     PowerMonitorAdapter.c
     DoorSensorAdapter.c
     CommLEDAdapter.c
     RelayAdapter.c
     ModemAdapter.c
+    ModemConfigAdapter.c
     SerialAdapter.c
+    UserSettingsAdapter.c
     UBloxModemAdapter.c
     TelitModemAdapter.c
     QuectelModemAdapter.c

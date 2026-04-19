@@ -14,7 +14,9 @@ typedef struct
   uint8_t (*GetBaudRateIndex)(void *ctx);
   void (*SetBaudRateIndex)(void *ctx, uint8_t index);
   uint32_t (*IndexToBaudRate)(void *ctx, uint8_t index);
-  void (*SaveConfig)(void *ctx);
+  uint8_t (*SaveConfig)(void *ctx);
+  uint8_t (*IsValidPortType)(void *ctx, uint8_t type);
+  uint8_t (*IsValidBaudRateIndex)(void *ctx, uint8_t index);
 } IGpsPort_t;
 
 static inline uint8_t IGpsPort_GetPortType(IGpsPort_t *p)
@@ -42,9 +44,20 @@ static inline uint32_t IGpsPort_IndexToBaudRate(IGpsPort_t *p, uint8_t index)
   return p->IndexToBaudRate(p->ctx, index);
 }
 
-static inline void IGpsPort_SaveConfig(IGpsPort_t *p)
+static inline uint8_t IGpsPort_SaveConfig(IGpsPort_t *p)
 {
-  p->SaveConfig(p->ctx);
+  return p->SaveConfig(p->ctx);
+}
+
+static inline uint8_t IGpsPort_IsValidPortType(IGpsPort_t *p, uint8_t type)
+{
+  return p->IsValidPortType(p->ctx, type);
+}
+
+static inline uint8_t IGpsPort_IsValidBaudRateIndex(IGpsPort_t *p,
+                                                    uint8_t index)
+{
+  return p->IsValidBaudRateIndex(p->ctx, index);
 }
 
 #endif /* IGPS_PORT_H */

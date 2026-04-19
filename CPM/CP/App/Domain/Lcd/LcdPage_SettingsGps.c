@@ -24,7 +24,12 @@ static void OnEnter(void *ctx, LcdEngine_t *e)
 {
   GpsSettingsCtx_t *c = (GpsSettingsCtx_t *) ctx;
 
-  (void) e;
+  if (UserCanAccessConfiguration(c->services->user) == 0U)
+  {
+    LcdEngine_SwitchPage(e, c->pages->menu);
+    return;
+  }
+
   c->tempPort = IGpsPort_GetPortType(c->services->gps);
   c->tempBaudIdx = IGpsPort_GetBaudRateIndex(c->services->gps);
   c->activeField = 0;

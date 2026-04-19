@@ -34,7 +34,12 @@ static void OnEnter(void *ctx, LcdEngine_t *e)
 {
   DateTimeCtx_t *c = (DateTimeCtx_t *) ctx;
 
-  (void) e;
+  if (UserCanAccessConfiguration(c->services->user) == 0U)
+  {
+    LcdEngine_SwitchPage(e, c->pages->menu);
+    return;
+  }
+
   RealtimeClockReadSnapshot(c->services->rtc, &c->snapshot);
   c->activeField = FIELD_DAY;
   c->editMode = 0;

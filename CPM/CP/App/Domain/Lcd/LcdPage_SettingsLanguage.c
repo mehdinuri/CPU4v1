@@ -16,6 +16,16 @@ typedef struct
 
 static const char *const pStrLanguages[LANGUAGES_MAX] = { "TURKCE", "ENGLISH" };
 
+static void OnEnter(void *ctx, LcdEngine_t *e)
+{
+  LangCtx_t *c = (LangCtx_t *) ctx;
+
+  if (UserCanAccessConfiguration(c->services->user) == 0U)
+  {
+    LcdEngine_SwitchPage(e, c->pages->menu);
+  }
+}
+
 static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 {
   LangCtx_t *c = (LangCtx_t *) ctx;
@@ -63,7 +73,7 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
 static LangCtx_t s_langCtx;
 LcdPage_t LcdPage_SettingsLanguage = {
   .ctx = &s_langCtx,
-  .OnEnter = NULL,
+  .OnEnter = OnEnter,
   .OnUpdate = NULL,
   .OnInput = OnInput,
   .OnDraw = OnDraw,

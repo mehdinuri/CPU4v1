@@ -1,0 +1,1294 @@
+-- A.9 TMP Trap MIB Header
+-- Filename:     1103v0352-Traps.MIB
+-- Description:  This MIB defines various objects related to managing and 
+--               monitoring the TMP traps. 
+--               Specifically, these include objects related to: 
+--               (a) configuration of block and watch objects, 
+--               (b) configuration and monitoring of traps 
+--               This MIB replaces portions of TMIB-II.
+--
+-- MIB Revision History:
+-- 02/07/08   Original standard approved
+-- 11/07/16   Changed the name of this MIB only to reflect the version number.
+-- 12/03/16   Modified to correct issues found in compiling MIBs with SMICng v2.2.07
+--
+-- 
+--              DISTRIBUTION NOTICE
+--Copyright 2008 - 2016 by the American Association of State Highway and
+--Transportation Officials (AASHTO), the Institute of Transportation Engineers
+--(ITE), and the National Electrical Manufacturers Association (NEMA). All
+--intellectual property rights, including, but not limited to, the rights of
+--reproduction in whole or in part in any form, translation into other
+--languages and display are reserved by the copyright owners under the laws of
+--the United States of America, the Universal Copyright Convention, the Berne
+--Convention, and the International and Pan American Copyright Conventions.
+--Except for the MIB, Do not copy without written permission of either AASHTO,
+--ITE, or NEMA.
+--
+--                     Joint NEMA, AASHTO, and ITE
+--                  NTCIP Management Information Base
+--                        DISTRIBUTION NOTICE
+--
+--To the extent and in the limited event these materials are distributed by
+--AASHTO/ITE/NEMA in the form of a Management Information Base ("MIB"), 
+--AASHTO/ITE/NEMA extends the following permissions:
+--
+--(i) you may make and/or distribute unlimited copies (including derivative
+--works) of the MIB, including copies for commercial distribution, provided
+--that (a) each copy you make and/or distribute contains this Notice and (b)
+--each derivative work of the MIB uses the same module name followed by "-",
+--followed by your Internet Assigned Number Authority (IANA)-assigned 
+--enterprise number;
+--(ii) use of the MIB is restricted in that the syntax field may be modified
+--only to reflect a more restrictive sub-range or enumerated values;
+--(iii) the description field may be modified but only to the extent that:
+--(a) only those bit values or enumerated values that are supported are
+--listed; and (b) the more restrictive subrange is expressed.
+--
+--These materials are delivered "AS IS" without any warranties as to their use
+--or performance.
+--
+--AASHTO/ITE/NEMA AND THEIR SUPPLIERS DO NOT WARRANT THE PERFORMANCE OR
+--RESULTS YOU MAY OBTAIN BY USING THESE MATERIALS. AASHTO/ITE/NEMA AND THEIR
+--SUPPLIERS MAKE NO WARRANTIES, EXPRESS OR IMPLIED, AS TO NONINFRINGEMENT OF
+--THIRD PARTY RIGHTS, MERCHANTABILITY, OR FITNESS FOR ANY PARTICULAR PURPOSE.
+--IN NO EVENT WILL AASHTO, ITE OR NEMA OR THEIR SUPPLIERS BE LIABLE TO YOU OR
+--ANY THIRD PARTY FOR ANY CLAIM OR FOR ANY CONSEQUENTIAL, INCIDENTAL OR
+--SPECIAL DAMAGES, INCLUDING ANY LOST PROFITS OR LOST SAVINGS, ARISING FROM
+--YOUR REPRODUCTION OR USE OF THESE MATERIALS, EVEN IF AN AASHTO, ITE, OR NEMA
+--REPRESENTATIVE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. Some
+--states or jurisdictions do not allow the exclusion or limitation of
+--incidental, consequential or special damages, or the exclusion of implied
+--warranties, so the above limitations may not apply to you.
+--
+--Use of these materials does not constitute an endorsement or affiliation by
+--or between AASHTO, ITE, or NEMA and you, your company, or your products and
+--services.
+--
+--NTCIP is a trademark of AASHTO/ITE/NEMA.
+--****************************************************************************
+
+NTCIP1103v0352-Traps DEFINITIONS ::= BEGIN
+
+IMPORTS
+      TRAP-TYPE
+            FROM RFC-1215
+      Counter, NetworkAddress, null
+            FROM RFC1155-SMI
+      OBJECT-TYPE
+            FROM RFC-1212
+      DisplayString
+            FROM RFC1213-MIB
+      application, ntcipTraps, OerString, RowStatusStatic
+            FROM NTCIP8004-2008
+      eventConfigID
+            FROM NTCIP1103v0352-Report;
+	
+-- EXPORTS EVERYTHING
+
+-- A.9.1 Watch Blocks
+-- Watch Blocks are OER encoded configurable read only blocks
+-- intended to be utilized for device status monitoring in the
+-- eventConfigCompareOID in the eventConfigTable.
+-- The intent is to be able to configure events to monitor a collection
+-- of NTCIP objects at the same time, and trigger the logging and/or
+-- transmission of a trap message. 
+
+-- Note that when a watch block is used for the eventConfigCompareOID, 
+-- the eventConfigMode object is restricted to onChange (2)
+-- Any entry with an attempt to use any other mode shall be 
+-- ignored at run time. Because there is no restriction on the order
+-- in which the entries are created, specifying a watch block that 
+-- has not been configured does not generate an error. Likewise
+-- care should be taken to ensure that the configuration of the event 
+-- table and the watch blocks (as well as the report blocks) are 
+-- consistent and correct.
+
+watchBlocks OBJECT IDENTIFIER ::= { application 6 }
+--          <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6
+
+-- A.9.1.1 Maximum Watch Objects
+
+maxWatchObjects  OBJECT-TYPE
+   SYNTAX  INTEGER (150..8192)
+   ACCESS  read-only
+   STATUS  mandatory 
+   DESCRIPTION
+      "<Definition>The number of rows that exist in the
+        watchObjectDefinitionTable for this device.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.1
+      "
+::= { watchBlocks 1 }
+
+-- A.9.1.2 Maximum Watch Blocks
+maxWatchBlocks  OBJECT-TYPE
+SYNTAX  INTEGER (1..50)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The number of rows that exist in the
+        watchBlockTable for this device. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.2
+      "
+::= { watchBlocks 2 }
+
+-- A.9.1.3 Watch Object Definition Table
+watchObjectDefinitionTable  OBJECT-TYPE
+   SYNTAX  SEQUENCE OF WatchObjectDefinitionEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>A table containing Watch Object 
+        definition information. The number of rows in 
+        this table is equal to the maxWatchObjects object. 
+       <TableType> static 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3
+      "
+::= { watchBlocks 3 }
+
+watchObjectDefinitionEntry  OBJECT-TYPE
+   SYNTAX  WatchObjectDefinitionEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object defines an entry in the
+        Watch Object Definition table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3.1
+      "
+   INDEX { watchID }
+::= { watchObjectDefinitionTable 1 }
+
+WatchObjectDefinitionEntry ::= SEQUENCE {
+   watchID      INTEGER,
+   watchStatus  RowStatusStatic,
+   watchBlock   INTEGER,
+   watchOID     OBJECT IDENTIFIER }
+
+-- A.9.1.3.1 Watch Identification Parameter
+watchID  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the row number 
+        which is used to identify the object associated
+        with this row in the watchObjectDefinitionTable.
+        This value shall not exceed the value indicated
+        by the maxWatchObjects object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3.1.1
+      "
+::= { watchObjectDefinitionEntry 1 }
+
+-- A.9.1.3.2 Watch Status Parameter
+watchStatus  OBJECT-TYPE
+   SYNTAX  RowStatusStatic
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The value of this object indicates the
+        current status of the this row in the table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3.1.2
+      "
+   DEFVAL { invalid }
+::= { watchObjectDefinitionEntry 2 }
+
+-- A.9.1.3.3 Watch Block Parameter
+watchBlock  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the block number
+        to assign to the watch object associated with 
+        this row in the watch object definition table.
+        This value shall not exceed the value indicated by 
+        the maxWatchBlocks object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3.1.3
+      "
+   DEFVAL { 1 }
+::= { watchObjectDefinitionEntry 3 }
+
+-- A.9.1.3.4 Watch Object Identifier Parameter
+watchOID  OBJECT-TYPE
+   SYNTAX  OBJECT IDENTIFIER
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the object
+        identifier of the object to watch. 
+        The following objects shall NOT be assigned to any watchOID:
+        All objects under the security node (Annex B)
+          { nema transportation devices global security }
+        All objects under the dynObjMgmt node (Annex A)
+          {nema transportation protocols dynObjMgmt}
+        All objects under the chap node (Annex B of NTCIP 2301)
+          { nema transportation protocols layers chap }
+        Any objects so identified by various device standards 
+        Any objects whose SYNTAX does NOT resolve to a ranged or
+           unranged INTEGER.
+	  Any other report object or watch object
+
+        Any objects that the agent/device does not support. 
+        An agent should return a badValue error if it receives a
+           SET command for any of the above.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.3.1.4
+      "
+   DEFVAL { null }
+::= { watchObjectDefinitionEntry 4 }
+
+-- A.9.1.4 Watch Block Table
+watchBlockTable  OBJECT-TYPE
+   SYNTAX  SEQUENCE OF WatchBlockEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> A table containing the Watch Blocks
+        Defined in the Watch Object Definition table. The 
+        number of rows in this table is equal to the value
+        of the maxWatchBlocks object. 
+       <TableType> static
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4
+      "
+::= { watchBlocks 4 }
+
+watchBlockEntry  OBJECT-TYPE
+   SYNTAX  WatchBlockEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This defines a row in the 
+        watchBlockTable. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4.1
+      "
+   INDEX { watchBlockNumber }
+::= { watchBlockTable 1 }
+
+WatchBlockEntry ::= SEQUENCE {
+    watchBlockNumber         INTEGER,
+    watchBlockStatus         RowStatusStatic,
+    watchBlockDescription    OCTET STRING,
+    watchBlockValue          OerString }
+
+-- A.9.1.4.1 Watch Block Number
+watchBlockNumber  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The block number for this row in the table.
+        This value shall not exceed the value indicated by the
+        maxWatchBlocks object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4.1.1
+      "
+::= { watchBlockEntry 1 }
+
+-- A.9.1.4.2 Watch Block Status
+watchBlockStatus  OBJECT-TYPE
+   SYNTAX  RowStatusStatic
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The value of this object indicates the
+        current status of this row in the table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4.1.2
+      "
+   DEFVAL { invalid }
+::= { watchBlockEntry 2 }
+
+-- A.9.1.4.3 Watch Block Description
+watchBlockDescription OBJECT-TYPE
+   SYNTAX  OCTET STRING (SIZE(0..20))
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object may be used to define a 
+        description of this watch block. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4.1.3
+      "
+   DEFVAL { "" }
+::= { watchBlockEntry 3 }
+
+-- A.9.1.4.4 Watch Block Value
+watchBlockValue OBJECT-TYPE
+   SYNTAX  OerString
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> An OER encoded string of all object values 
+        defined in watchObjectDefinitionTable, pointed at by 
+        watchOID (in watchID order) where the watchBlock IS 
+        watchBlockNumber AND the watchStatus IS available. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.6.4.1.4
+      "
+   DEFVAL { "" }
+::= { watchBlockEntry 4 }
+
+-- A.9.2 Report Blocks
+-- Report blocks are OER encoded configurable read only blocks
+-- intended to be utilized for device status and other parameters as 
+-- the eventConfigLogOID in the eventConfigTable.
+-- Like the watch blocks, they can only be validated at run-time.
+-- Improperly configured report blocks shall be ignored.
+
+reportBlocks OBJECT IDENTIFIER ::= { application 7 }
+--           <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7
+
+-- A.9.2.1 Maximum Report Objects
+maxReportObjects  OBJECT-TYPE
+SYNTAX  INTEGER (150..8192)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The number of rows that exist in the
+        reportObjectDefinitionTable for this device.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.1
+      "
+::= { reportBlocks 1 }
+
+-- A.9.2.2 Maximum Report Blocks
+maxReportBlocks  OBJECT-TYPE
+SYNTAX  INTEGER (1..50)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The number of rows that exist in the
+        reportBlockTable for this device. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.2
+      "
+::= { reportBlocks 2 }
+
+-- A.9.2.3 Report Object Configuration Table
+reportObjectDefinitionTable  OBJECT-TYPE
+   SYNTAX  SEQUENCE OF ReportObjectDefinitionEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>A table containing Report Object 
+        definition information. The number of rows in 
+        this table is equal to the maxReportObjects object. 
+       <TableType> static
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3
+      "
+::= { reportBlocks 3 }
+
+reportObjectDefinitionEntry  OBJECT-TYPE
+   SYNTAX  ReportObjectDefinitionEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object defines an entry in the
+        Report Object Definition table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3.1
+      "
+   INDEX { reportID }
+::= { reportObjectDefinitionTable 1 }
+
+ReportObjectDefinitionEntry ::= SEQUENCE {
+   reportID      INTEGER,
+   reportStatus  RowStatusStatic,
+   reportBlock   INTEGER,
+   reportOID     OBJECT IDENTIFIER }
+
+-- A.9.2.3.1 Report Identification Parameter
+reportID  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the row number 
+        which is used to identify the objects associated
+        with this row in the reportObjectDefinitionTable.
+        This value shall not exceed the value indicated
+        by the maxReportObjects object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3.1.1
+      "
+::= { reportObjectDefinitionEntry 1 }
+
+-- A.9.2.3.2 Report Status Parameter
+reportStatus  OBJECT-TYPE
+   SYNTAX  RowStatusStatic
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The value of this object indicates the
+       current status of the this row in the table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3.1.2
+      "
+   DEFVAL { invalid }
+::= { reportObjectDefinitionEntry 2 }
+
+-- A.9.2.3.3 Report Block Parameter
+reportBlock  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the block number
+        to assign to the log object associated with 
+        this row in the reportObjectDefinitionTable.
+        This value shall not exceed the value indicated by 
+        the maxReportBlocks object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3.1.3
+      "
+   DEFVAL { 1 }
+::= { reportObjectDefinitionEntry 3 }
+
+-- A.9.2.3.4 Report Object Identifier Parameter
+reportOID  OBJECT-TYPE
+   SYNTAX  OBJECT IDENTIFIER
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the object
+        identifier of the object to log. 
+        The following objects shall NOT be assigned to any reportOID:
+        All objects under the security node (Annex B)
+          { nema transportation devices global security }
+        All objects under the dynObjMgmt node (Annex A)
+          {nema transportation protocols dynObjMgmt}
+        All objects under the chap node (Annex B of NTCIP 2301)
+          { nema transportation protocols layers chap }
+	  Any other report object or watch object
+        Any objects so identified by various device standards 
+        Any objects that the agent/device does not support. 
+        An agent should return a badValue error if it receives a
+           SET command for any of the above.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.3.1.4
+      "
+   DEFVAL { null }
+::= { reportObjectDefinitionEntry 4 }
+
+-- A.9.2.4 Report Block Table
+
+reportBlockTable  OBJECT-TYPE
+   SYNTAX  SEQUENCE OF ReportBlockEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> A table containing the Report blocks
+        Defined in the reportObjectDefinitionTable. The 
+        number of rows in this table is equal to the value
+        of the maxReportBlocks object. 
+       <TableType> static 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4
+       "
+::= { reportBlocks 4 }
+
+reportBlockEntry  OBJECT-TYPE
+   SYNTAX  ReportBlockEntry
+   ACCESS  not-accessible
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This defines a row in the 
+        reportBlockTable. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4.1
+      "
+   INDEX { reportBlockNumber }
+::= { reportBlockTable 1 }
+
+ReportBlockEntry ::= SEQUENCE {
+   reportBlockNumber       INTEGER,
+   reportBlockStatus       RowStatusStatic,
+   reportBlockDescription  OCTET STRING,
+   reportBlockValue        OerString }
+
+-- A.9.2.4.1 Report block Number
+reportBlockNumber  OBJECT-TYPE
+   SYNTAX  INTEGER (1..255)
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The block number for this row in the table.
+        This value shall not exceed the value indicated by the
+        maxReportBlocks object. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4.1.1
+      "
+::= { reportBlockEntry 1 }
+
+-- A.9.2.4.2 Report Block Status
+reportBlockStatus  OBJECT-TYPE
+   SYNTAX  RowStatusStatic
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>The value of this object indicates the
+        current status of this row in the table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4.1.2
+      "
+   DEFVAL { invalid }
+::= { reportBlockEntry 2 }
+
+-- A.9.2.4.3 Report Block Description
+reportBlockDescription OBJECT-TYPE
+   SYNTAX  OCTET STRING (SIZE(0..20))
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> This object may be used to define a 
+        description of this report block. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4.1.3
+      "
+   DEFVAL { "" }
+::= { reportBlockEntry 3 }
+
+-- A.9.2.4.4 Report Block Value
+reportBlockValue OBJECT-TYPE
+   SYNTAX  OerString
+   ACCESS  read-only
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition> An OER encoded string of all object values 
+        defined in reportObjectDefinitionTable, pointed at by 
+        reportOID (in reportID order) where the reportBlock IS 
+        reportBlockNumber AND the reportStatus Is available. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.7.4.1.4
+      "
+   DEFVAL { "" }
+::= { reportBlockEntry 4 }
+
+-- A.9.3 Trap Management
+trapMgmt  OBJECT IDENTIFIER ::= {ntcipTraps 1}
+--        <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1
+
+-- A.9.3.1 Trap Control
+trapControl OBJECT-TYPE
+     SYNTAX INTEGER (0..1)
+     ACCESS read-write
+     STATUS optional
+     DESCRIPTION
+     "<Definition> The possible values are:
+      0 - disable NTCIP traps
+      1 - enable NTCIP traps
+      The other values are reserved.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.1
+          "
+     DEFVAL {0}
+   ::= { trapMgmt 1 }
+
+-- A.9.3.2 Trap Data
+trapData   OBJECT-TYPE
+     SYNTAX   OerString
+     ACCESS   read-only
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> It contains an octet string (event notification) with
+      octet trap sequence number (trapMgmtSeqNum)and octet trap manager
+      index (trapMgmtManagerIndex), followed by one or more OER encoded
+      sequences of eventID (eventConfigID), eventTime (globalTime of
+      the occurrence of the event), eventLogTimeMilliseconds (fractional
+      second of the occurrence of the event), and reported data (as
+      pointed to by eventConfigLogOID).
+      For aggregated trap messages (ackTrapChain and noackTrapChain) the
+      trapData contains the octet trap sequence number (trapMgmtSeqNum)
+      and octet trap manager index (trapMgmtManagerIndex),
+      followed by from 1 to trapMaxAggregationSize triplets.
+      The sequence to which OER encoding is applied is formally defined by
+      the TrapDataStructure (see Section 6.4.1).
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.2
+     "
+   ::= { trapMgmt 2 }
+
+-- A.9.3.3 Trap Management Maximum Entries
+trapMgmtMaxEntries   OBJECT-TYPE
+     SYNTAX   INTEGER (1..255)
+     ACCESS   read-only
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> The maximum number of entries in the trapMgmtTable.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.3
+     "
+   ::= { trapMgmt 3 }
+
+-- A.9.3.4 Trap Maximum Aggregation Events
+trapMaxAggregationEvents   OBJECT-TYPE
+     SYNTAX INTEGER   (1..255)
+     ACCESS   read-only
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This object defines the maximum number of trap-events 
+      which can be aggregated.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.4
+     "
+   ::= { trapMgmt 4 }
+
+-- A.9.3.5 Trap Maximum Aggregation Size
+trapMaxAggregationSize   OBJECT-TYPE
+     SYNTAX INTEGER   (1..1023)
+     ACCESS   read-only
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This object defines the maximum size (in bytes) of the 
+      aggregation chains that can be created during the aggregation process.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.5
+     "
+   ::= { trapMgmt 5 }
+
+-- A.9.3.6 Trap Management Table
+trapMgmtTable   OBJECT-TYPE
+     SYNTAX   SEQUENCE OF TrapMgmtEntry
+     ACCESS   not-accessible
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> The table contains the list of management stations and 
+      their parameters where the agent traps are to be sent.
+     <TableType> static
+     <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6
+    "
+   ::= { trapMgmt 6 }
+
+trapMgmtEntry   OBJECT-TYPE
+     SYNTAX   TrapMgmtEntry
+     ACCESS   not-accessible
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This defines a row in the trapMgmtTable.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1
+     "
+     INDEX { trapMgmtManagerIndex }
+   ::= { trapMgmtTable 1 }
+
+TrapMgmtEntry ::=
+     SEQUENCE { 
+       trapMgmtManagerIndex           INTEGER,
+       trapMgmtManagerPointer         INTEGER,
+       trapMgmtCommunityNamePointer   INTEGER,
+       trapMgmtApplicationProtocol    INTEGER,
+       trapMgmtTransportProtocol      INTEGER,
+       trapMgmtPortNum                INTEGER,
+       trapMgmtMaxRetries             INTEGER,
+       trapMgmtRepeatInterval         INTEGER,
+       trapMgmtDelta                  INTEGER,
+       trapMgmtQueueDepth             INTEGER,
+       trapMgmtLinkStateStatus        INTEGER,
+       trapMgmtAntiStreamRate         INTEGER,
+       trapMgmtErrStatus              INTEGER,
+       trapMgmtLostTraps              Counter,
+       trapMgmtRowStatus              RowStatusStatic,
+       trapMgmtSeqNum                 INTEGER,
+       trapMgmtSeqNumAck              INTEGER
+            }
+
+-- A.9.3.6.1 Trap Manager Index
+trapMgmtManagerIndex   OBJECT-TYPE
+     SYNTAX   INTEGER (1..255)
+     ACCESS   read-only
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This object provides the index into the 
+       trapMgmtTable.
+      This value shall not exceed the trapMgmtMaxEntries
+      object value.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.1
+     "
+   ::= { trapMgmtEntry 1 }
+
+-- A.9.3.6.2 Trap Logical Name Translation Entry Pointer
+trapMgmtManagerPointer   OBJECT-TYPE
+     SYNTAX   INTEGER (1..255)
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> For UDP/IP stacks (trapMgmtTransportProtocol = 3), this 
+       value is equal to the logicalNameTranslationIndex for the logical name 
+       translation table entry where logicalNameTranslationName holds the 
+       logical name and logicalNameTranslationNetworkAddress holds the IP 
+       address of the destination management station for ntcip traps. 
+       Otherwise it is not used. 
+       This value shall not exceed the logicalNameTranslationTableMaxEntries 
+       object value.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.2
+     "
+     DEFVAL {1 }
+   ::= { trapMgmtEntry 2 }
+
+-- A.9.3.6.3 Trap Community Name Entry Pointer
+trapMgmtCommunityNamePointer   OBJECT-TYPE
+     SYNTAX   INTEGER (1..255)
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This value is equal to the communityNameIndex for the
+       community name table entry where communityNameUser holds the community
+       name for ntcip traps sent to the destination management station. 
+       This value shall not exceed communityNamesMax object value.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.3
+     "
+     DEFVAL { 1 }
+   ::= { trapMgmtEntry 3 }
+
+-- A.9.3.6.4 Trap Application Layer Protocol
+trapMgmtApplicationProtocol   OBJECT-TYPE
+     SYNTAX   INTEGER {
+                other (1),
+                snmp (2),
+                sfmp (3)
+                      }
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This object identifies the application layer protocol to
+      use for TMP (Transportation Management Protocol) traps. The possible 
+      values are:
+          1 - other : not defined in this standard
+          2 - snmp  : use SNMPv1 Trap
+          3 - sfmp  : use SFMP Trap
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.4
+     "
+     DEFVAL { snmp }
+   ::= { trapMgmtEntry 4 }
+
+-- A.9.3.6.5 Trap Transport Layer Protocol
+trapMgmtTransportProtocol   OBJECT-TYPE
+     SYNTAX   INTEGER {
+                other (1),
+                t2 (2),
+                udp (3)
+                      }
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> This object identifies the transport profile to use for 
+      TMP traps. The possible values are:
+            1 - other : not defined in standard
+            2 - t2    : use T2 encapsulation to omit the port number
+            3 - udp   : use UDP/IP stack
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.5"
+      DEFVAL { udp }
+   ::= { trapMgmtEntry 5 }
+
+-- A.9.3.6.6 Trap Port Number
+trapMgmtPortNum   OBJECT-TYPE
+     SYNTAX   INTEGER (0..65535)
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> Port of the destination management station 
+      (e.g. 162 - default SNMP Trap port).
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.6
+     "
+     DEFVAL {162}
+   ::= { trapMgmtEntry 6 }
+
+-- A.9.3.6.7 Trap Maximum Retransmission Retries
+trapMgmtMaxRetries   OBJECT-TYPE
+     SYNTAX   INTEGER (0..255)
+     ACCESS   read-write
+     STATUS   mandatory
+     DESCRIPTION
+     "<Definition> The maximum number of times an agent attempts to 
+      retransmit a trap before transitioning to the error state.
+      Note: A value of one indicates that the agent attempts a 
+      maximum of two transmissions.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.7
+     "
+     DEFVAL {0}
+   ::= { trapMgmtEntry 7 }
+
+-- A.9.3.6.8 Trap Repeat Interval
+trapMgmtRepeatInterval   OBJECT-TYPE
+      SYNTAX   INTEGER (0..255)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> The minimum number of seconds to wait before 
+       retransmitting a trap that has not been acknowledged. 
+       A value of zero (0) indicates an immediate retransmission of the 
+       trap.
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.8
+     "
+     DEFVAL {60}
+   ::= { trapMgmtEntry 8 }
+
+-- A.9.3.6.9 Trap Repeat Interval Timeout Delta
+trapMgmtDelta   OBJECT-TYPE
+      SYNTAX   INTEGER (0..255)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> A number of seconds to be added to the total timeout for
+       the next trap retransmission.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.9
+      "
+     DEFVAL {60}
+   ::= { trapMgmtEntry 9 }
+
+-- A.9.3.6.10 Trap Maximum Number of Queued Traps
+trapMgmtQueueDepth   OBJECT-TYPE
+      SYNTAX   INTEGER (0..50)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> The maximum number of traps that can be queued for the 
+       Management station. Setting this value to zero flushes and disables
+       the queue, and prevents any queueable traps from being sent.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.10
+      "
+     DEFVAL {1}
+   ::= { trapMgmtEntry 10 }
+
+-- A.9.3.6.11 Trap State of Communications Link
+trapMgmtLinkStateStatus   OBJECT-TYPE
+      SYNTAX   INTEGER {
+                other (1),
+                ready (2),
+                pending (3),
+                error (4)
+                      }
+      ACCESS   read-only
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> This object contains the current link state of the manager 
+                registered in this row. The states are defined as follows:
+                other   (1) – not defined in this standard;
+                ready   (2) - any trap can be sent to the manager (initial 
+                              condition after power-on); if an ACK trap
+                              appears in the queue the agent sends the trap 
+                              message to the manager, starts timer and 
+                              internal retry counter, and sets the state to 
+                              pending;
+                pending (3) - waiting for the manager to acknowledge the last 
+                              ACK trap; NOACK and forced mode traps can 
+                              be transmitted to the manager;  if after all 
+                              retries and timeouts the management station did 
+                              not acknowledge an ACK trap message the agent 
+                              sets the state to error
+                error   (4) – an ACK trap has not been acknowledged 
+                              within the specified number of retries for this 
+                              management station. Only force mode traps are 
+                              transmitted to the management station until
+                              the link state is reset to ready.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.11
+      "
+      REFERENCE
+        "NTCIP 1103 v03 Section 6.3"
+   ::= { trapMgmtEntry 11 }
+
+-- A.9.3.6.12 Trap Antistreaming Rate
+trapMgmtAntiStreamRate   OBJECT-TYPE
+      SYNTAX   INTEGER (1..255)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> The maximum number of traps that can be generated on
+       a specific link (trap channel) in one minute. The 
+       agent shall reset the anti-streaming counter at the start 
+       of each minute. If the anti-streaming rate is reached the 
+       agent shall set the 'Trap channel anti-streaming mode 
+       activated' bit in the trapMgmtErrStatus, send the current 
+       trap and cease sending any additional traps on this link (trap 
+       channel) until the start of the next minute.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.12
+     "
+      DEFVAL {10}
+   ::= { trapMgmtEntry 12 }
+
+-- A.9.3.6.13 Trap Error Status
+trapMgmtErrStatus   OBJECT-TYPE
+      SYNTAX   INTEGER (0..255)
+      ACCESS   read-only
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> Trap channel status mask. When a bit = 1 the 
+       error status is true. When a bit = 0 the error status is 
+       false.
+           Bit 7:  Reserved Bit
+           Bit 6:  Reserved Bit
+           Bit 5:  Reserved Bit
+           Bit 4:  Reserved Bit
+           Bit 3:  Reserved Bit
+           Bit 2:  Trap channel has trapMgmtLinkStateStatus = error
+           Bit 1:  Trap channel anti-streaming mode activated
+           Bit 0:  Trap channel queue full
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.13
+      "
+   ::= { trapMgmtEntry 13 }
+
+-- A.9.3.6.14 Trap Lost Trap Counter
+trapMgmtLostTraps   OBJECT-TYPE
+      SYNTAX   Counter
+      ACCESS   read-only
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> Counter for the number of traps that have been 
+       discarded due to the queue for this trap channel being full.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.14
+      "
+   ::= { trapMgmtEntry 14 }
+
+-- A.9.3.6.15 Trap Row Status
+trapMgmtRowStatus   OBJECT-TYPE
+      SYNTAX   RowStatusStatic 
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> This object allows for the management of rows 
+        within the table. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.15
+      "
+      DEFVAL { invalid }
+   ::= { trapMgmtEntry 15 }
+
+-- A.9.3.6.16 Trap Sequence Number
+trapMgmtSeqNum   OBJECT-TYPE
+      SYNTAX   INTEGER (1..255)
+      ACCESS   read-only
+      STATUS   mandatory
+      DESCRIPTION 
+      "<Definition> This object contains the sequence number of the
+        last new trap that has been sent on this link. It is included
+        in the trap message to assist a management station in 
+        identifying duplicate trap messages or detect when trap 
+        messages are missed. The agent shall increment this counter 
+        on each new trap message, but not retries, sent to the management
+        station. The first trap message sent after a power-on reset
+        or after trapMgmtRowStatus is successfully activated 
+        has trapMgmtSeqNum = 1. The sequence number is reset to 1 
+        after a trap is sent with trapMgmtSeqNum == 255. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.16
+      "
+      REFERENCE
+        "NTCIP 1103 v03 Section 6.2.6"
+   ::= { trapMgmtEntry 16 }
+
+-- A.9.3.6.17 Trap Acknowledge Sequence Number
+trapMgmtSeqNumAck   OBJECT-TYPE
+      SYNTAX   INTEGER (0..255)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION 
+      "<Definition> This object is set to the sequence number of the trap
+       that is being acknowledged by the management station. If the value set
+       equals either the current value of trapMgmtSeqNumAck or zero (0), then
+       the agent changes the trapMgmtLinkStateStatus from pending or error 
+       to ready and set this object to zero (0) indicating no ack traps are
+       awaiting acknowledgement. If this object is set to any other value, then 
+       the agent ignores the set and continue the normal acknowledge process 
+       including retries.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.6.1.17
+      "
+      REFERENCE
+        "NTCIP 1103 v03 Section 6.2.7"
+   ::= { trapMgmtEntry 17 }
+ 
+-- A.9.3.7 Trap Table
+trapTable   OBJECT-TYPE
+      SYNTAX   SEQUENCE OF TrapEntry
+      ACCESS   not-accessible
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> The table specifies the trap operational mode for each 
+        event registered in the eventLogConfigTable (NTCIP 1201) and 
+        necessary to run NTCIP Trap operations.
+        Each entry in the trapTable can be individually enabled and disabled 
+        and is assigned its own mode per trap channel. An event can be sent to 
+        multiple trap channels by creating multiple entries in the trapTable 
+        for the same event, each with a different trapMgmtManagerIndex. 
+      <TableType> static
+      <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7
+      "
+   ::= { trapMgmt 7 }
+
+trapEntry   OBJECT-TYPE
+      SYNTAX   TrapEntry
+      ACCESS   not-accessible
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> This defines a row in the trapTable.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7.1
+      "
+      INDEX { eventConfigID, trapMgmtManagerIndex }
+   ::= { trapTable 1 }
+            
+      TrapEntry ::=
+        SEQUENCE { 
+           trapDestEnable       INTEGER,
+           trapMode             INTEGER,
+           trapAggregationTime  INTEGER,
+           trapCounter          Counter
+                 }
+
+-- A.9.3.7.1 Trap Destination Enabled
+trapDestEnable   OBJECT-TYPE
+      SYNTAX   INTEGER (0..1)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> Setting this object to one (1) enables the trap 
+        (eventConfigID) for transmission through the trap channel 
+        (trapMgmtManagerIndex). 
+        A value of zero (0) disables events with 
+        eventConfigID from being acted on with respect to the transmission of
+        traps through the specific trap channel identified in the 
+        trapMgmtTable. 
+        Note: The transmission (or queuing) of the trap
+        also depends on entries in the eventLogConfigTable and
+        the trapMgmtTable. Entries in all three tables are required to be enabled for
+        the trap to be queued or transmitted.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7.1.1
+      "
+      DEFVAL {0}
+   ::= { trapEntry 1 }
+
+-- A.9.3.7.2 Trap Mode
+trapMode   OBJECT-TYPE
+      SYNTAX   INTEGER (0..255)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> This object defines a number of different methods for 
+        handling the trap data prior to or as it is transferred to the trap
+        channel. The trap modes are as follows:
+          1 - forced      : NOACK, the trap is sent (not queued) regardless 
+                            of the trapMgmtLinkStateStatus. 
+          2 - ack_noQ     : ACK, the trap is sent if the 
+                            trapMgmtLinkStateStatus is READY; otherwise the 
+                            trap is simply dropped (lost) – however, if the 
+                            trap is transmitted, it is acknowledged and 
+                            the retry mechanism is invoked.
+          3 - ack         : ACK, the trap is sent if the 
+                            trapMgmtLinkStateStatus is READY, otherwise the 
+                            trap message shall be queued.
+          4 - noack_noQ   : NOACK,  the trap is sent if the 
+                            trapMgmtLinkStateStatus is READY or PENDING; 
+                            otherwise the trap is simply dropped (lost).
+          5 - noack       : NOACK, the trap is sent if the 
+                            trapMgmtLinkStateStatus is READY or PENDING; it is 
+                            queued if the channel status is ERROR.
+          6 - ack_Aggr    : ACK, the trap data (eventConfigID, timestamp, and 
+                            reported data) are added to the ackTrapChain for
+                            transmission to the management station when a 
+                            chain termination condition occurs and the 
+                            trapMgmtLinkStateStatus is READY. ackTrapChains 
+                            are not queued and are transmitted prior to any 
+                            queued traps.
+           7 - noack_Aggr : NOACK, the trap data (eventConfigID, timestamp,
+                            and reported data) are added to the noackTrapChain
+                            for transmission to the management station when a 
+                            chain termination condition occurs and the
+                            trapMgmtLinkStateStatus is READY or PENDING; 
+                            otherwise the noackTrapChain grows accepting 
+                            new traps.
+          8-255           : reserved (not used in a proprietary manner)
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7.1.2
+      "
+      REFERENCE
+        "NTCIP 1103 v03, Sections 6.2.3 and 6.2.4"
+      DEFVAL {1}      -- forced
+   ::= { trapEntry 2 }
+
+-- A.9.3.7.3 Trap Maximum Aggregation Time
+trapAggregationTime   OBJECT-TYPE
+      SYNTAX   INTEGER (0..65535)
+      ACCESS   read-write
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> maximum time (in seconds) that this trap can wait for 
+        transmission while being aggregated within a trap chain (for 
+        noack_Aggr and ack_Aggr traps only). The value of zero (0) indicates 
+        immediate trap chain transmission. The first trap with a mode
+        specifying 'timed' aggregation starts this timer. The timer is 
+        reset when the trap chain is sent. The aggregation 
+        timers for each entry in the trap chain time concurrently and the
+        first one to expire causes the entire trap chain to be sent to the
+        management station. 
+        (Note that this is larger than 8 bits to allow aggregation times
+        to support 5 minutes and longer).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7.1.3
+      "
+      REFERENCE
+        "NTCIP 1103 v03 Section 6.2.4"
+      DEFVAL {0}
+   ::= { trapEntry 3 }
+
+-- A.9.3.7.4 Trap Counter
+trapCounter   OBJECT-TYPE
+      SYNTAX   Counter 
+      ACCESS   read-only
+      STATUS   mandatory
+      DESCRIPTION
+      "<Definition> this keeps track of the number of eventConfigID traps
+        sent to the trap channel identified by the trapMgmtManagerIndex since
+        the last (power-on) reset. It is incremented with the transmission 
+        or queuing (or addition to a trap chain) of each trap. By reading
+        this parameter, a management station can verify the number of traps 
+        triggered for transmission or queuing by this event for this trap
+        channel.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.1.7.1.4
+      "
+   ::= {trapEntry 4 }
+
+-- A.9.4 NTCIP Trap Data
+ntcipTrapData OBJECT IDENTIFIER ::= {ntcipTraps 2}
+--           <Object Identifier> 1.3.6.1.4.1.1206.4.1.4.2
+
+-- A.9.4.1 Event Trap
+trapEvent   TRAP-TYPE
+     ENTERPRISE   ntcipTrapData
+     VARIABLES   { trapData }
+     DESCRIPTION
+     "<Definition> Indicates that one of the user-defined event specified in
+      the eventLogConfigTable has occurred. The generation of the trap is
+      governed by the rules defined in SNMP, Section 6 above, and the 
+      trapMgmtTable.
+      The instances of the variables associates with this trap shall indicate 
+      those associated with the event notification being sent.
+     "
+   ::= 1
+
+-- A.9.5 Clear Event Data
+eventClearObjects OBJECT IDENTIFIER ::= { application 8 }
+-- <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8
+
+-- This node is an identifier used to group all objects for 
+-- support of clearing the report node (events) and report objects.
+
+-- A.9.5.1 Clear Event Class
+eventClearClasses  OBJECT-TYPE
+   SYNTAX  INTEGER (0..255)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object identifies the event class to be cleared from the
+        report node. A SET of n = 5..255, n <= maxEventClasses shall cause all
+        information related to that class to be cleared from the report node.
+        This includes clearing the event class table of eventClassNumber=n 
+        data, clearing all event configurations related to eventClassNumber=n,
+        and clearing all event log entries for class n. A SET of 0 shall clear
+        all classes as described. That is, completely clear the report node
+        with the exception that the preconfigured event classes, their
+        configurations, and their preconfigured event log entries are
+        not cleared. A GET shall always return zero (0).
+
+        If a device standard, Classes 1..4 are preconfigured and cannot be cleared. An attempt         to clear Classes 1..4 shall return badValue. A value of n > maxEventClasses
+        or > 255 if maxEventClasses is not configured, shall also return
+        badValue. 
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.1
+      "
+::= { eventClearObjects 1 }
+
+-- A.9.5.2 Clear Event Configuration
+eventClearConfiguration  OBJECT-TYPE
+   SYNTAX  INTEGER (0..65535)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object contains the event configuration(s) to clear
+        from the report node. A SET of n = 1..65535, n <= maxEventLogConfigs
+        shall cause all information related to that configuration to be cleared
+        from the report node. This includes clearing the event configuration
+        table for all eventConfigID = n data, and clearing all event log
+        entries for eventConfigID = n. A SET of 0 shall clear all
+        configurations within the device as described (i.e. completely
+        clear the report node with the exception that the eventClassTable is
+        and preconfigured event configuration are not altered). A GET shall
+        always return zero (0).
+
+        Note: This object cannot be included in a block object. The device
+        shall respond with badValue if the eventLogConfig = n does not exist.
+        The device shall respond with badValue if an attempt to clear a
+        preconfigured event log entries is made.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.2
+      "
+::= { eventClearObjects 2 }
+
+-- A.9.5.3 Clear Event Log Table
+eventClearLog  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to clear the eventLogTable.
+        A SET of zero has no effect on the eventLogTable. A SET = 1 shall cause
+        all event log entries to be deleted from the eventLogTable.
+        Upon performing the action requested, the device shall
+        SET this object to zero (0). A GET shall always return zero (0).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.3
+      "
+::= { eventClearObjects 3 }
+
+-- A.9.5.4 Clear Report Objects
+clearReportObjects  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to effectively clear the 
+        report object and report block tables. A SET of zero has no effect on
+        the tables. A SET = 1 shall set the row status object of all rows
+        within both reportObjectDefinitionTable and reportBlockTable
+        to “invalid” effectively clearing the tables in one action. Upon
+        performing the action requested, the device shall SET this object to
+        zero (0). A GET shall always return zero (0).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.4
+      "
+::= { eventClearObjects 4 }
+
+-- A.9.5.5 Clear Report Block Table
+clearReportBlockTable  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to effectively clear the 
+        report block table. A SET of zero (0) has no effect on the tables. A
+        SET of one (1) shall set the row status object of all rows within
+        reportBlockTable to “invalid” effectively clearing the table in one
+        action. Upon performing the action requested, the device shall SET
+        this object to zero (0). A GET shall always return zero (0).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.5
+      "
+::= { eventClearObjects 5 }
+
+-- A.9.5.6 Clear Watch Objects
+clearWatchObjects  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to effectively clear the 
+        watch object and watch block tables. A SET of zero has no effect on
+        the tables. A SET = 1 shall set the row status object of all rows
+        within both watchObjectDefinitionTable and watchBlockTable
+        to “invalid” effectively clearing the tables in one action. Upon
+        performing the action requested, the device shall SET this object to
+        zero (0). A GET shall always return zero (0).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.6
+      "
+::= { eventClearObjects 6 }
+
+-- A.9.5.7 Clear Watch Block Table
+clearWatchBlockTable  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to effectively clear the 
+        watch block table. A SET of zero (0) has no effect on the tables. A
+        SET of one (1) shall set the row status object of all rows within
+        watchBlockTable to “invalid” effectively clearing the table in one
+        action. Upon performing the action requested, the device shall SET
+        this object to zero (0). A GET shall always return zero (0).
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.7
+      "
+::= { eventClearObjects 7 }
+
+-- A.9.5.8 Clear Trap Management Table
+clearTrapMgmtTable  OBJECT-TYPE
+   SYNTAX  INTEGER (0..1)
+   ACCESS  read-write
+   STATUS  mandatory
+   DESCRIPTION
+      "<Definition>This object commands the device to effectively clear the 
+        trap management table and, as a consequence, the trap table. A SET
+        of zero (0) has no effect on the tables. A SET of one (1) shall set
+        the row status object of all rows within trapMgmtTable to “invalid”
+        effectively clearing the table in one action. Upon performing the
+        action requested, the device shall SET this object to zero (0). A
+        GET shall always return zero (0). Note: Because the trapMgmtIndex
+        is also an index of trapTable, this action also effectively
+        removes all rows of the trapTable.
+       <Object Identifier> 1.3.6.1.4.1.1206.4.1.1.7.8.8
+      "
+::= { eventClearObjects 8 }
+
+END  -- NTCIP1103v0352-Traps

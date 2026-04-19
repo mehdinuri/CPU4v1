@@ -113,7 +113,10 @@ static const PersistenceLayout_t saLayout[] = {
     EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL, 64U },
   { PERSIST_OBJECT_SNMPV3_STATE, MSM_REQ_EEPROM_READ,
     MSM_REQ_EEPROM_WRITE, MSM_REQ_NONE,
-    EEPROM_STORAGE_ADDR_SNMPV3_STATE, sizeof(uint32_t) }
+    EEPROM_STORAGE_ADDR_SNMPV3_STATE, sizeof(uint32_t) },
+  { PERSIST_OBJECT_AUTH_STATE, MSM_REQ_EEPROM_READ,
+    MSM_REQ_EEPROM_WRITE, MSM_REQ_NONE,
+    EEPROM_STORAGE_ADDR_AUTH_STATE, sizeof(uint32_t) * 4U }
 };
 
 static const PersistenceLayout_t *LayoutGet(PersistenceObjectId_t objectId)
