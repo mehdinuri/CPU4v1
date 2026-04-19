@@ -3,8 +3,10 @@
 
 /* /////////////////////////// */
 /*  includes */
-#include "MCSAsynch.h"
 #include "Ports/UserInputTypes.h"
+
+typedef struct _tSMCSLCDStream tSMCSLCDStream;
+typedef tSMCSLCDStream *tpSMCSLCDStream;
 
 /* /////////////////////////////////////////// */
 /*  Public Methods */

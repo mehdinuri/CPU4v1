@@ -31,7 +31,6 @@
 #include "lcd.h"
 #include "lwip.h"
 #include "lwip/apps/snmp.h"
-#include "mmi.h"
 #include "netif/ppp/ppp.h"
 #include "program.h"
 #include "rng.h"
@@ -1096,14 +1095,12 @@ static void MCSUpdateRuntimeFromInfo(void)
   if (s_modemInfo.strIMEI[0] != '\0')
   {
     MCSSetGprsModemIMEI(s_modemInfo.strIMEI);
-    StreamGPRSImei();
     memset(s_modemInfo.strIMEI, 0, sizeof(s_modemInfo.strIMEI));
   }
 
   if (s_modemInfo.strOperator[0] != '\0')
   {
     MCSSetGprsGsmOperator(s_modemInfo.strOperator);
-    StreamGsmOperator();
     memset(s_modemInfo.strOperator, 0, sizeof(s_modemInfo.strOperator));
   }
 
@@ -1137,7 +1134,6 @@ static void MCSUpdateRuntimeFromInfo(void)
     memset(SMCSRuntime.strMAC, 0, sizeof(SMCSRuntime.strMAC));
     (void) strncpy(SMCSRuntime.strMAC, s_modemInfo.strMAC,
                    sizeof(SMCSRuntime.strMAC) - 1U);
-    StreamEthernetMAC();
     memset(s_modemInfo.strMAC, 0, sizeof(s_modemInfo.strMAC));
   }
 

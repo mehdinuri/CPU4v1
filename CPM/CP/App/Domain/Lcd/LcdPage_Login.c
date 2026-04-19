@@ -11,7 +11,6 @@
 #include "Ports/IRealtimeClockPort.h"
 #include "Ports/IGpsPort.h"
 #include "Ports/ILogRepositoryPort.h"
-#include "Ports/IIntersectionStatusPort.h"
 #include "Ports/UserInputTypes.h"
 #include <stdio.h>
 #include <string.h>
@@ -102,7 +101,7 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
       if (UserLogin(c->services->user, c->username, c->password)
           != USER_ROLE_NONE)
       {
-        LcdEngine_SwitchPage(e, c->pages->menu);
+        LcdEngine_SwitchPage(e, c->pages->home);
       }
       else
       {

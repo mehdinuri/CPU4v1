@@ -18,7 +18,6 @@
 #include "data.h"
 #include "iwdg.h"
 #include "main.h"
-#include "mmi.h"
 #include "program.h"
 #include "time.h"
 #include "gpio.h"
@@ -436,8 +435,6 @@ void TransmitCANPackets(void)
   bStreamCounter++;
   if (bStreamCounter == CAN_MMI_SIGNALS_STREAM_PERIOD)
   {
-    StreamSignals();
-    StreamSOTest();
     bStreamCounter = 0;
   }
 

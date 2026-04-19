@@ -21,6 +21,7 @@ typedef struct
   LcdPage_t *settingsDateTime;
   LcdPage_t *settingsGps;
   LcdPage_t *settingsLanguage;
+  LcdPage_t *outputTest;
 } LcdPageRegistry_t;
 
 #endif /* LCD_PAGE_REGISTRY_H */

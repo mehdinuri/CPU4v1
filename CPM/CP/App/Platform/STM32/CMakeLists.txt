@@ -17,7 +17,6 @@ target_sources(Platform_STM32 PRIVATE
     Services/Comms/PPPOSAsynch.c
     Services/Comms/cpmpcomm.c
     Services/UI/lcd.c
-    Services/UI/mmi.c
     Services/UI/ui.c
     Core/DWT.c
     Core/FaultHandler.c

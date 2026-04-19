@@ -112,7 +112,6 @@ static uint8_t AdapterHandleResponse(void        *ctx,
 static uint8_t AdapterOnConnect(void *ctx)
 {
   (void) ctx;
-  StreamUSRMAC();
   if (!MCSAsynchConnectedGet())
   {
     if (!MCSAsynchStart(MODEM_GREETING_USR_MAC))

@@ -13,7 +13,6 @@
 #include "fdcan.h"
 #include "main.h"
 #include "signalCardDrv.h"
-#include "mmi.h"
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  members */
 tSCanPSMVoltMeas SCanPSMVoltMeas[SIG_DEV_PSM_MAX]; /* psm measurements states */

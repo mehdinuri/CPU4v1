@@ -5,14 +5,6 @@
 
 #include "data.h"
 
-enum
-{
-  CONTROLLER_MODE_REQUEST_ALL_RED = 1U,
-  CONTROLLER_MODE_REQUEST_DARK = 2U,
-  CONTROLLER_MODE_REQUEST_FLASH = 3U,
-  CONTROLLER_MODE_REQUEST_PLAN_RETURN = 4U
-};
-
 static uint8_t RequestModeControl(void *ctx, uint8_t requestedControl)
 {
   (void) ctx;

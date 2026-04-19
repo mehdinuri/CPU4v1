@@ -11,7 +11,6 @@
 #include "Ports/IRealtimeClockPort.h"
 #include "Ports/IGpsPort.h"
 #include "Ports/ILogRepositoryPort.h"
-#include "Ports/IIntersectionStatusPort.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -24,16 +23,16 @@ typedef struct
 } MenuCtx_t;
 
 static const char *const pStrMenuEntries[LANGUAGES_MAX][6] = {
-  { "YARDIM", "CiHAZ LOG", "BAgLANTI LOG", "TEST", "LOKAL/SUNUCU iP",
-    "AYARLAR" },
-  { "HELP", "DEVICE LOG", "CONNECTION LOG", "TEST", "LOCAL/SERVER IP",
-    "SETTINGS" }
+  { "GUVENLIK", "CiHAZ LOG", "BAgLANTI LOG", "LOKAL/SUNUCU iP", "AYARLAR",
+    "TEST" },
+  { "SAFETY", "DEVICE LOG", "CONNECTION LOG", "LOCAL/SERVER IP", "SETTINGS",
+    "TEST" }
 };
 
 static uint8_t MenuEntryCount(const MenuCtx_t *ctx)
 {
   return (uint8_t) ((UserGetActiveRole(ctx->services->user) == USER_ROLE_ADMIN)
-                    ? 6U : 5U);
+                    ? 6U : 4U);
 }
 
 static void OnEnter(void *ctx, LcdEngine_t *e)
@@ -128,13 +127,17 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
     {
       LcdEngine_SwitchPage(e, c->pages->connectionLogs);
     }
-    else if (c->selectedIndex == 4)
+    else if (c->selectedIndex == 3)
     {
       LcdEngine_SwitchPage(e, c->pages->network);
     }
-    else if (c->selectedIndex == 5)
+    else if (c->selectedIndex == 4)
     {
       LcdEngine_SwitchPage(e, c->pages->settings);
+    }
+    else if (c->selectedIndex == 5)
+    {
+      LcdEngine_SwitchPage(e, c->pages->outputTest);
     }
   }
   else if (key == KEY_CLEAR)

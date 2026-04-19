@@ -12,7 +12,6 @@
 #include "iwdg.h"
 #include "lcd.h"
 #include "lcdDrv.h"
-#include "mmi.h"
 #include "rng.h"
 #include "signalCardDrv.h"
 #include "snmp_client.h"
@@ -8542,8 +8541,6 @@ void SetGateState(uint8_t bState)
         LCDSoftwareClose();
         LCDClose();
       }
-
-      CloseMMI();
     }
     else
     {
@@ -8552,8 +8549,6 @@ void SetGateState(uint8_t bState)
         OpenLCD();
         LCDSoftwareOpen();
       }
-
-      OpenMMI();
     }
   }
 } /* SetGateState */

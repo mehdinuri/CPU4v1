@@ -45,6 +45,7 @@ target_sources(Domain PRIVATE
     Lcd/LcdPage_SettingsLanguage.c
     Lcd/LcdPage_SettingsDateTime.c
     Lcd/LcdPage_SettingsGps.c
+    Lcd/LcdPage_OutputTest.c
     NTCIP/Core/NtcipTypes.c
     NTCIP/Core/NtcipObjectDirectory.c
     NTCIP/Core/NtcipDbTransactionService.c

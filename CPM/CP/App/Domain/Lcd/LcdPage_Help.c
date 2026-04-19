@@ -1,76 +1,94 @@
-/* App/Domain/Lcd/LcdPage_Help.c
- */
+/* App/Domain/Lcd/LcdPage_Help.c */
 #include "LcdPage.h"
 #include "LcdEngine.h"
 #include "LcdLanguage.h"
 #include "LcdPageRegistry.h"
 #include "LcdServiceRegistry.h"
-#include "Ports/ISystemPort.h"
+
 #include <stdio.h>
 #include <string.h>
 
-/* Dependencies */
-#include "Ports/IIntersectionStatusPort.h"
 #include "Ports/UserInputTypes.h"
 
 typedef struct
 {
   const LcdServiceRegistry_t *services;
-  const LcdPageRegistry_t    *pages;
+  const LcdPageRegistry_t *pages;
 } HelpCtx_t;
+
+static const char *SafetyActionToText(uint8_t lang, uint8_t safetyAction)
+{
+  switch ((CpMpSafetyAction_t) safetyAction)
+  {
+      case CPMP_SAFETY_ACTION_FLASH:
+      {
+        return "FLASH";
+      }
+
+      case CPMP_SAFETY_ACTION_DARK:
+      {
+        return (lang == LANGUAGE_TURKISH) ? "KARANLIK" : "DARK";
+      }
+
+      case CPMP_SAFETY_ACTION_NORMAL:
+      default:
+      {
+        return (lang == LANGUAGE_TURKISH) ? "NORMAL" : "NORMAL";
+      }
+  }
+}
 
 static void OnDraw(void *ctx, LcdEngine_t *e, IDisplayPort_t *display)
 {
   HelpCtx_t *c = (HelpCtx_t *) ctx;
   char buf[21];
-  uint8_t bSetNo;
-  uint8_t bSetTotal = IntersectionStatusGetSetTotal(c->services->intersection);
-  uint8_t fShowHelpMessage = 0U;
-  LcdSetRuntime_t SSetRuntime;
-  uint8_t bEmergencySet = 0;
   uint8_t lang = ISystemPort_GetLanguage(c->services->system);
+  MmiRuntimeSafetySummaryV2_t summary;
+  MmiRuntimeRelaySummaryV2_t relay;
+  MmiRuntimeDoorSummaryV2_t door;
 
   (void) e;
-
-  for (bSetNo = 0; bSetNo < bSetTotal; bSetNo++)
-  {
-    if (IntersectionStatusIsSetEmergent(c->services->intersection, bSetNo))
-    {
-      fShowHelpMessage = 1U;
-      IntersectionStatusGetSetRuntime(c->services->intersection,
-                                      bSetNo,
-                                      &SSetRuntime);
-      bEmergencySet = bSetNo;
-      break;
-    }
-  }
+  (void) memset(&summary, 0, sizeof(summary));
+  (void) memset(&relay, 0, sizeof(relay));
+  (void) memset(&door, 0, sizeof(door));
 
   DisplayClear(display);
-
-  if (fShowHelpMessage != 0U)
+  if (c->services->runtimeCache != NULL)
   {
-    /* Line 1: HELP - SET X */
-    sprintf(buf, "%s %d", Lcd_GetHelpStr(lang), bEmergencySet + 1);
-    DisplayWrite(display, 0, 0, buf, (uint8_t) strlen(buf));
-
-    /* Line 2: Event Name */
-    const char *eventStr = Lcd_GetEventStr(SSetRuntime.bSigModeSource, lang, 1);
-
-    DisplayWrite(display, 1, 0, eventStr, (uint8_t) strlen(eventStr));
-
-    /* Line 3: Parameter */
-    sprintf(buf, "%s %d",
-            Lcd_GetSignalSourceParamStr(SSetRuntime.bSigModeSource,
-                                        lang), (int) SSetRuntime.bParam1);
-    DisplayWrite(display, 2, 0, buf, (uint8_t) strlen(buf));
+    (void) MmiSnapshotCacheGetSafetySummary(c->services->runtimeCache, &summary);
+    (void) MmiSnapshotCacheGetRelaySummary(c->services->runtimeCache, &relay);
+    (void) MmiSnapshotCacheGetDoorSummary(c->services->runtimeCache, &door);
   }
-  else
-  {
-    const char *noEmerg = Lcd_GetNoEmergencyStr(lang);
 
-    DisplayWrite(display, 0, 0, noEmerg, (uint8_t) strlen(noEmerg));
-  }
-} /* OnDraw */
+  DisplayWrite(display,
+               0U,
+               0U,
+               (lang == LANGUAGE_TURKISH) ? "GUVENLIK DURUMU" : "SAFETY STATUS",
+               20U);
+
+  (void) snprintf(buf,
+                  sizeof(buf),
+                  "ACT:%-8s R:%02u",
+                  SafetyActionToText(lang, summary.safetyAction),
+                  summary.safetyReasonCode);
+  DisplayWrite(display, 1U, 0U, &buf[0], (uint8_t) strlen(buf));
+
+  (void) snprintf(buf,
+                  sizeof(buf),
+                  "P:%u A:%u F:%04lX",
+                  summary.peerHealthy,
+                  summary.authorityReady,
+                  (unsigned long) (summary.globalFaultFlags & 0xFFFFUL));
+  DisplayWrite(display, 2U, 0U, &buf[0], (uint8_t) strlen(buf));
+
+  (void) snprintf(buf,
+                  sizeof(buf),
+                  "REL:%u USR:%u D:%c",
+                  relay.permitOutputPower,
+                  relay.userOutputPowerEnabled,
+                  (door.open != 0U) ? 'O' : 'C');
+  DisplayWrite(display, 3U, 0U, &buf[0], (uint8_t) strlen(buf));
+}
 
 static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
 {

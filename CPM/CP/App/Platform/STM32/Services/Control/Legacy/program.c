@@ -12,7 +12,6 @@
 #include "cpmpcomm.h"
 #include "lcd.h"
 #include "main.h"
-#include "mmi.h"
 #include "signalCardDrv.h"
 #include "ui.h"
 #include "i2c.h"
@@ -1590,14 +1589,6 @@ void ProgramTaskFunc(void *argument)
       /* init all runtime data */
       StateCurrentInit();
     }
-
-    StreamDateTime();
-    StreamOperationRuntime();
-    StreamPSMMeasurements();
-    StreamModuleRuntime();
-    StreamErrorRuntime();
-    StreamInputs();
-    StreamGPRSState();
 
     SignalMaintenanceTask(EVENT_FLAGS_MAINTENANCE_PROGRAM_TASK_ACTIVE);
   }

@@ -275,9 +275,5 @@ extern uint8_t MCSUDPProbeStart(void);
 extern void MCSUDPConnectionMaintain(void);
 extern uint8_t MCSTCPClientConnect(void);
 extern void MCSTryConnect(void);
-extern void StreamGPRSImei(void);
-extern void StreamGsmOperator(void);
-extern void StreamUSRMAC(void);
-extern void StreamEthernetMAC(void);
 
 #endif /* ifndef __MCS_H__ */

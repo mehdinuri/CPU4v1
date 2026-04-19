@@ -13,11 +13,11 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "cmsis_os2.h"
 #include "HardwarePorts.h"
-#include "program.h"
+#include "PersistencePorts.h"
 #include "usart.h"
 #include "usb.h"
-#include "MSM.h"
 #include "gps.h"
 #include "Domain/Lcd/LcdEngine.h"
 #include "Domain/Lcd/LcdLanguage.h"
@@ -27,7 +27,6 @@
 #include "Ports/ICommsStatusPort.h"
 #include "Ports/IUserPort.h"
 #include "Ports/ILogRepositoryPort.h"
-#include "Ports/IIntersectionStatusPort.h"
 #include "Ports/IGpsPort.h"
 #include "DomainServices.h"
 
@@ -45,6 +44,7 @@ extern LcdPage_t LcdPage_Settings;
 extern LcdPage_t LcdPage_SettingsDateTime;
 extern LcdPage_t LcdPage_SettingsGps;
 extern LcdPage_t LcdPage_SettingsLanguage;
+extern LcdPage_t LcdPage_OutputTest;
 
 /* Registry instances */
 static LcdServiceRegistry_t g_lcdServices;
@@ -85,9 +85,12 @@ extern void LcdPage_SettingsGps_Init(void *ctx,
 extern void LcdPage_SettingsLanguage_Init(void *ctx,
                                           const LcdServiceRegistry_t *s,
                                           const LcdPageRegistry_t *p);
+extern void LcdPage_OutputTest_Init(void *ctx,
+                                    const LcdServiceRegistry_t *s,
+                                    const LcdPageRegistry_t *p);
 
 uint8_t bLanguage = LANGUAGE_TURKISH;
-static uint8_t fLCDPowered = TRUE;
+static uint8_t fLCDPowered = 1U;
 
 /* ------------------------------------------------------------------
  * Legacy LCD compatibility helpers.
@@ -96,7 +99,7 @@ static void HardwareSetupLCD(void)
 {
   DisplayPowerOn(&g_lcdPort);
   DisplayClear(&g_lcdPort);
-  fLCDPowered = TRUE;
+  fLCDPowered = 1U;
 }
 
 uint8_t LCDLanguageGet(void)
@@ -111,20 +114,30 @@ void LCDLanguageSet(uint8_t bLang)
 
 uint8_t LCDLanguageWrite(void)
 {
-  return TRUE;
+  return 1U;
 }
 
 uint8_t LCDLanguageRead(void)
 {
-  return TRUE;
+  return 1U;
 }
 
 void LCDSoftwareClose(void)
-{                             /* Legacy stub */
+{
+  if (fLCDPowered != 0U)
+  {
+    DisplayPowerOff(&g_lcdPort);
+    fLCDPowered = 0U;
+  }
 }
 
 void LCDSoftwareOpen(void)
-{                            /* Legacy stub */
+{
+  if (fLCDPowered == 0U)
+  {
+    DisplayPowerOn(&g_lcdPort);
+    fLCDPowered = 1U;
+  }
 }
 
 void LCDSOMeasurements(uint8_t bSSMNo, tpSMCSLCDStream pSScreen)
@@ -181,17 +194,55 @@ static ISystemPort_t s_lcdSystemPort;
 static ICommsStatusPort_t s_lcdCommsPort;
 static IUserPort_t s_lcdUserPort;
 static ILogRepositoryPort_t s_lcdLogPort;
-static IIntersectionStatusPort_t s_lcdIntersectionStatusPort;
 static IGpsPort_t s_lcdGpsPort;
 
 static uint16_t LcdGetMainVoltage(void *ctx)
 {
-  (void) ctx; return (uint16_t) (GetPowerSupplyNet(0) * 0.73029);
+  uint16_t lineVoltageTenthsVrms = 0U;
+
+  (void) ctx;
+  if (UiPowerServiceGetLineVoltageTenthsVrms(&g_uiPowerService,
+                                             1U,
+                                             &lineVoltageTenthsVrms) == 0U)
+  {
+    return 0U;
+  }
+
+  return (uint16_t) ((lineVoltageTenthsVrms + 5U) / 10U);
 }
 
 static uint8_t LcdGetTimeSource(void *ctx)
 {
-  (void) ctx; return TimeSourceGet();
+  uint8_t currentSource = 0U;
+
+  (void) ctx;
+  if (UnitClockPortGetCurrentSource(&g_unitClockPort, &currentSource) == 0U)
+  {
+    return 0U;
+  }
+
+  switch (currentSource)
+  {
+      case UNIT_CLOCK_SOURCE_GNSS:
+      {
+        return 3U;
+      }
+
+      case UNIT_CLOCK_SOURCE_RTC_SQWR:
+      {
+        return 2U;
+      }
+
+      case UNIT_CLOCK_SOURCE_LINE_SYNC:
+      {
+        return 4U;
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
 }
 
 static uint8_t LcdGetLanguage(void *ctx)
@@ -241,117 +292,28 @@ static uint8_t LcdLogRead(void *ctx,
                           uint32_t recordSize)
 {
   (void) ctx;
-  (void) recordSize;
-
-  return LogRequest(LOG_REQ_READ_FROM, (tSLogRecord *) record, 0, 0, 0, 0,
-                    index);
+  return LogRepositoryRead(&g_logRepositoryPort, index, record, recordSize);
 }
 
 static uint8_t LcdLogExists(void *ctx)
 {
-  (void) ctx; return LogExists();
+  (void) ctx;
+  return LogRepositoryExists(&g_logRepositoryPort);
 }
 
 static uint8_t LcdLogIsIndexValid(void *ctx, uint16_t index)
 {
-  (void) ctx; return LogIndexIsValid(index);
+  (void) ctx;
+  return LogRepositoryIsIndexValid(&g_logRepositoryPort, index);
 }
 
 static uint16_t LcdLogGetWriteIndex(void *ctx)
 {
-  (void) ctx; return LogEventNew(LOG_GET_WRITE_INDEX_VALUE);
-}
+  uint16_t latestIndex = 0xFFFFU;
 
-static uint8_t LcdGetSetTotal(void *ctx)
-{
-  (void) ctx; return SetTotalGet();
-}
-
-static uint8_t LcdIsSetEmergent(void *ctx, uint8_t setNo)
-{
-  (void) ctx; return SetSigModeIsEmergent(setNo);
-}
-
-static uint8_t LcdGetSetRuntime(void *ctx,
-                                uint8_t setNo,
-                                LcdSetRuntime_t *runtime)
-{
   (void) ctx;
-  tSSetRuntime SSetRuntime;
-
-  SetRuntimeGet(setNo, &SSetRuntime);
-  runtime->bSigModeSource = SSetRuntime.bSigModeSource;
-  runtime->bParam1 = SSetRuntime.bParam1;
-
-  return TRUE;
-}
-
-static void CopyAscii(char *target, uint32_t targetLength, const char *source)
-{
-  uint32_t index;
-
-  if ((target == NULL) || (targetLength == 0U))
-  {
-    return;
-  }
-
-  (void) memset(target, 0, targetLength);
-  if (source == NULL)
-  {
-    return;
-  }
-
-  for (index = 0U; index < (targetLength - 1U); index++)
-  {
-    if (source[index] == '\0')
-    {
-      break;
-    }
-
-    target[index] = source[index];
-  }
-}
-
-static void PopulateCommsSnapshot(CommsStatusSnapshot_t *snapshot)
-{
-  char jobBuffer[UI_COMMS_JOB_TEXT_MAX_LEN + 1U];
-  uint8_t jobIndex;
-
-  if (snapshot == NULL)
-  {
-    return;
-  }
-
-  (void) memset(snapshot, 0, sizeof(*snapshot));
-  snapshot->modemType = MCSGetModemType();
-  snapshot->gprsState = MCSGetGPRSState();
-  snapshot->signalQuality = MCSGetGprsSignalQuality();
-  snapshot->connected = MCSGetConnected();
-  snapshot->modemAlive = MCSGetModemAlive();
-  snapshot->simReady = MCSSimStatusGet();
-  CopyAscii(&snapshot->imei[0], sizeof(snapshot->imei), MCSGetGprsModemIMEI());
-  CopyAscii(&snapshot->usrMac[0], sizeof(snapshot->usrMac), MCSGetUSRModuleMAC());
-  CopyAscii(&snapshot->ethernetMac[0],
-            sizeof(snapshot->ethernetMac),
-            MCSGetRuntimeEthernetMAC());
-  CopyAscii(&snapshot->operatorName[0],
-            sizeof(snapshot->operatorName),
-            MCSGetGprsGsmOperator());
-  CopyAscii(&snapshot->localIp[0], sizeof(snapshot->localIp), MCSGetRuntimeLocalIPv4());
-  CopyAscii(&snapshot->remoteIp[0],
-            sizeof(snapshot->remoteIp),
-            MCSGetRuntimeRemoteIPv4());
-
-  for (jobIndex = 0U; jobIndex < UI_COMMS_JOB_COUNT; jobIndex++)
-  {
-    (void) memset(&jobBuffer[0], 0, sizeof(jobBuffer));
-    if (MCSJobCurrentGet(&jobBuffer[0], jobIndex) != 0U)
-    {
-      CopyAscii(&snapshot->jobCurrent[jobIndex][0],
-                sizeof(snapshot->jobCurrent[jobIndex]),
-                &jobBuffer[0]);
-    }
-  }
+  (void) MmiEventLogServiceGetLatestIndex(&g_mmiEventLogService, &latestIndex);
+  return latestIndex;
 }
 
 static uint8_t LcdReadCommsSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
@@ -368,8 +330,8 @@ static uint8_t LcdReadCommsSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
     return 1U;
   }
 
-  PopulateCommsSnapshot(snapshot);
-  return 1U;
+  (void) memset(snapshot, 0, sizeof(*snapshot));
+  return 0U;
 }
 
 static uint8_t LcdGpsGetPortType(void *ctx)
@@ -429,9 +391,10 @@ void InitLCDTask(void)
   g_lcdServices.comms = &s_lcdCommsPort;
   g_lcdServices.user = &s_lcdUserPort;
   g_lcdServices.logs = &s_lcdLogPort;
-  g_lcdServices.intersection = &s_lcdIntersectionStatusPort;
   g_lcdServices.rtc = &g_rtcPort;
   g_lcdServices.gps = &s_lcdGpsPort;
+  g_lcdServices.maintenance = &g_mmiMaintenanceService;
+  g_lcdServices.runtimeCache = &g_mmiSnapshotCache;
 
   s_lcdSystemPort.ctx = NULL;
   s_lcdSystemPort.GetMainVoltage = LcdGetMainVoltage;
@@ -453,11 +416,6 @@ void InitLCDTask(void)
   s_lcdLogPort.Exists = LcdLogExists;
   s_lcdLogPort.IsIndexValid = LcdLogIsIndexValid;
   s_lcdLogPort.GetWriteIndex = LcdLogGetWriteIndex;
-
-  s_lcdIntersectionStatusPort.ctx = NULL;
-  s_lcdIntersectionStatusPort.GetSetTotal = LcdGetSetTotal;
-  s_lcdIntersectionStatusPort.IsSetEmergent = LcdIsSetEmergent;
-  s_lcdIntersectionStatusPort.GetSetRuntime = LcdGetSetRuntime;
 
   s_lcdGpsPort.ctx = NULL;
   s_lcdGpsPort.GetPortType = LcdGpsGetPortType;
@@ -481,6 +439,7 @@ void InitLCDTask(void)
   g_lcdPages.settingsDateTime = &LcdPage_SettingsDateTime;
   g_lcdPages.settingsGps = &LcdPage_SettingsGps;
   g_lcdPages.settingsLanguage = &LcdPage_SettingsLanguage;
+  g_lcdPages.outputTest = &LcdPage_OutputTest;
 
   /* Initialize All Pages (Contexts are managed internally by pages for now) */
   LcdPage_Home_Init(LcdPage_Home.ctx,
@@ -504,6 +463,9 @@ void InitLCDTask(void)
   LcdPage_SettingsLanguage_Init(LcdPage_SettingsLanguage.ctx,
                                 &g_lcdServices,
                                 &g_lcdPages);
+  LcdPage_OutputTest_Init(LcdPage_OutputTest.ctx,
+                          &g_lcdServices,
+                          &g_lcdPages);
 
   LcdEngine_Init(&g_lcdEngine, &g_lcdPort, &g_keypadPort);
   LcdEngine_SwitchPage(&g_lcdEngine, &LcdPage_Home);
@@ -511,12 +473,23 @@ void InitLCDTask(void)
 
 void LCDTaskFunc(void *argument)
 {
+  uint32_t lastDoorChangeSequence;
+
   UNUSED(argument);
   InitLCDTask();
+  lastDoorChangeSequence = UiDoorServiceGetChangeSequence(&g_uiDoorService);
 
-  while (FOREVER)
+  for (;;)
   {
     LcdEngine_Tick(&g_lcdEngine, osKernelGetTickCount());
+    if (UiDoorServiceGetChangeSequence(&g_uiDoorService) != lastDoorChangeSequence)
+    {
+      lastDoorChangeSequence = UiDoorServiceGetChangeSequence(&g_uiDoorService);
+      if (UiDoorServiceIsOpen(&g_uiDoorService) != 0U)
+      {
+        LCDSoftwareOpen();
+      }
+    }
     osDelay(LCD_KEY_SCAN_TIME);
   }
 }

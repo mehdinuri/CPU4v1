@@ -19,7 +19,6 @@
 #include "defs.h"
 #include "lcd.h"
 #include "main.h"
-#include "mmi.h"
 #include "PersistencePorts.h"
 #include "time.h"
 #include "ui.h"
@@ -795,13 +794,11 @@ static void LogAppendSideEffects(uint16_t sWrittenIndex,
   {
     SetGateOpenLogRecordIndex(sWrittenIndex);
     SetGateState(FALSE);
-    StreamGateStateChanged(FALSE, pSLogRecord);
   }
   else if (pSLogRecord->SEvent.bEvent == EVENT_DOOR_CLOSED)
   {
     SetGateClosedLogRecordIndex(sWrittenIndex);
     SetGateState(TRUE);
-    StreamGateStateChanged(TRUE, pSLogRecord);
   }
 }
 

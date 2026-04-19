@@ -5,6 +5,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum
+{
+  CONTROLLER_MODE_REQUEST_ALL_RED = 1U,
+  CONTROLLER_MODE_REQUEST_DARK = 2U,
+  CONTROLLER_MODE_REQUEST_FLASH = 3U,
+  CONTROLLER_MODE_REQUEST_PLAN_RETURN = 4U
+} ControllerModeRequest_t;
+
 typedef struct
 {
   void *ctx;
