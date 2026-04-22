@@ -3,7 +3,7 @@
  * @file    Domain/VoltageCurrentFrame.h
  * @brief   Byte-explicit encoder for the SSM → supervisor voltage/current
  *          telemetry frame (CAN IDs 0x050..0x057). Replaces a memcpy of the
- *          legacy `__packed` tSVoltageCurrent_t struct, whose layout depended
+ *          legacy `__packed` VoltageCurrent_t struct, whose layout depended
  *          on compiler-specific handling of nested `__packed` unions.
  *
  *          Bytes 0..6 stay bit-for-bit compatible with the legacy format.
@@ -35,8 +35,8 @@
 #define DOMAIN_VOLTAGE_CURRENT_FRAME_H
 
 #include <stdint.h>
-#include "Ports/ISignalOutputPort.h"        /* tSSignalOutputImage */
-#include "Domain/CurrentMeasurement.h"      /* tSCurrentMeasurementWire */
+#include "Ports/ISignalOutputPort.h"        /* SignalOutputImage_t */
+#include "Domain/CurrentMeasurement.h"      /* CurrentMeasurementWire_t */
 
 #define VOLTAGE_CURRENT_FRAME_BYTES 8U
 #define VOLTAGE_CURRENT_STATUS_MEASUREMENT_FAULT   0x01U
@@ -50,17 +50,17 @@
 
 typedef struct
 {
-  tSSignalOutputImage SVoltageImage;           /* 12 observed channel states */
-  tSCurrentMeasurementWire SCurrentWire;       /* 4 × 10-bit currents */
-  uint8_t bStatus;                             /* VOLTAGE_CURRENT_STATUS_* */
-} tSVoltageCurrentFrameInputs;
+  SignalOutputImage_t voltageImage;           /* 12 observed channel states */
+  CurrentMeasurementWire_t currentWire;       /* 4 × 10-bit currents */
+  uint8_t status;                             /* VOLTAGE_CURRENT_STATUS_* */
+} VoltageCurrentFrameInputs_t;
 
 /**
  * @brief Encode the telemetry frame as VOLTAGE_CURRENT_FRAME_BYTES bytes.
  *        Output bytes match the legacy __packed struct layout byte-for-byte.
  */
-void VoltageCurrentFrame_Encode(const tSVoltageCurrentFrameInputs *pIn,
-                                uint8_t pOutBytes[VOLTAGE_CURRENT_FRAME_BYTES]);
+void VoltageCurrentFrame_Encode(const VoltageCurrentFrameInputs_t *in,
+                                uint8_t outBytes[VOLTAGE_CURRENT_FRAME_BYTES]);
 
 #endif /* DOMAIN_VOLTAGE_CURRENT_FRAME_H */
 

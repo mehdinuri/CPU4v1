@@ -4,8 +4,10 @@
 #include <string.h>
 
 #include "DomainServices.h"
+#include "Lcd/LcdLanguage.h"
+#include "LrlfDetectTimeStore.h"
+#include "MCS.h"
 #include "PersistencePorts.h"
-#include "data.h"
 
 static uint8_t EraseConfigObject(ConfigRepositoryObjectId_t objectId)
 {
@@ -31,6 +33,7 @@ static uint8_t RequestFactoryReset(void *ctx)
 {
   const IntersectionConfig_t *config;
   uint16_t setId;
+  uint8_t lrlfDetectTime;
 
   (void) ctx;
 
@@ -53,8 +56,13 @@ static uint8_t RequestFactoryReset(void *ctx)
   (void) UiLanguageServiceSet(&g_uiLanguageService, LANGUAGE_TURKISH);
   (void) UiLanguageServiceSave(&g_uiLanguageService);
 
-  LRLFDetectTimeSet(LRLF_DETECT_TIME_800_MS);
-  (void) LRLFDetectTimeWrite();
+  lrlfDetectTime = LRLF_DETECT_TIME_800_MS;
+  (void) PersistenceWrite(&g_persistencePort,
+                          PERSIST_OBJECT_LRLF_DETECT_TIME,
+                          0U,
+                          &lrlfDetectTime,
+                          sizeof(lrlfDetectTime));
+  (void) MCSRestoreSnmpBootstrap();
 
   SystemResetPortRequest(&g_systemResetPort);
 

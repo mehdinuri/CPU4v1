@@ -30,6 +30,12 @@ void FaultMonitorServiceRead(FaultMonitorService_t *service,
                              FaultMonitorStatus_t *outStatus);
 void FaultMonitorServiceReadAndAck(FaultMonitorService_t *service,
                                    FaultMonitorStatus_t *outStatus);
+uint32_t FaultMonitorServiceGetTotalFaults(
+  const FaultMonitorService_t *service);
+uint8_t FaultMonitorServiceGetEventBySequence(
+  const FaultMonitorService_t *service,
+  uint32_t sequence,
+  FaultEvent_t *outEvent);
 const FaultMonitorTrace_t *FaultMonitorServiceGetTrace(
   const FaultMonitorService_t *service);
 

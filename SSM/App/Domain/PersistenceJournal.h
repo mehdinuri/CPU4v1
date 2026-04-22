@@ -14,29 +14,29 @@
 
 typedef struct
 {
-  uint32_t lMagic;
-  uint32_t lSequence;
-  uint16_t sPayloadSize;
-  uint8_t bVersion;
-  uint8_t bCommit;
-  uint8_t abPayload[PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE];
-  uint32_t lCrc32;
-} tSPersistenceJournalRecord;
+  uint32_t magic;
+  uint32_t sequence;
+  uint16_t payloadSize;
+  uint8_t version;
+  uint8_t commit;
+  uint8_t payload[PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE];
+  uint32_t crc32;
+} PersistenceJournalRecord_t;
 
-uint8_t PersistenceJournal_RecordBuild(tSPersistenceJournalRecord *pRecord,
-                                       uint32_t lSequence,
-                                       const void *pPayload,
-                                       uint16_t sPayloadSize);
+uint8_t PersistenceJournal_RecordBuild(PersistenceJournalRecord_t *record,
+                                       uint32_t sequence,
+                                       const void *payload,
+                                       uint16_t payloadSize);
 uint8_t PersistenceJournal_RecordIsValid(
-  const tSPersistenceJournalRecord *pRecord,
-  uint16_t sMaxPayloadSize);
-const tSPersistenceJournalRecord *PersistenceJournal_SelectLatest(
-  const tSPersistenceJournalRecord *pA,
+  const PersistenceJournalRecord_t *record,
+  uint16_t maxPayloadSize);
+const PersistenceJournalRecord_t *PersistenceJournal_SelectLatest(
+  const PersistenceJournalRecord_t *pA,
   const
-  tSPersistenceJournalRecord
+  PersistenceJournalRecord_t
   *pB,
   uint16_t
-  sMaxPayloadSize);
+  maxPayloadSize);
 
 #endif /* DOMAIN_PERSISTENCE_JOURNAL_H */
 

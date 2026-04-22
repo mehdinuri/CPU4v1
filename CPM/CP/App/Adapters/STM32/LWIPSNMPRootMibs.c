@@ -31,10 +31,10 @@ static snmp_err_t DelegatingLeafGetInstance(const u32_t *rootOid,
   return SNMP_ERR_NOERROR;
 }
 
-static snmp_err_t DelegatingLeafGetNextInstance(
-  const u32_t *rootOid,
-  u8_t rootOidLen,
-  struct snmp_node_instance *instance)
+static snmp_err_t DelegatingLeafGetNextInstance(const u32_t *rootOid,
+                                                u8_t rootOidLen,
+                                                struct snmp_node_instance *
+                                                instance)
 {
   struct snmp_obj_id startOid;
   struct snmp_obj_id nextOid;
@@ -71,11 +71,11 @@ static snmp_err_t DelegatingLeafGetNextInstance(
 }
 
 #define LWIP_SNMP_CREATE_DELEGATING_LEAF(oid)                                 \
-  {                                                                           \
-    { SNMP_NODE_SCALAR, (oid) },                                              \
-    DelegatingLeafGetInstance,                                                \
-    DelegatingLeafGetNextInstance                                             \
-  }
+        {                                                                           \
+          { SNMP_NODE_SCALAR, (oid) },                                              \
+          DelegatingLeafGetInstance,                                                \
+          DelegatingLeafGetNextInstance                                             \
+        }
 
 static const struct snmp_leaf_node kNtcip1201Subtree1 =
   LWIP_SNMP_CREATE_DELEGATING_LEAF(1U);
@@ -83,6 +83,10 @@ static const struct snmp_leaf_node kNtcip1201Subtree2 =
   LWIP_SNMP_CREATE_DELEGATING_LEAF(2U);
 static const struct snmp_leaf_node kNtcip1201Subtree3 =
   LWIP_SNMP_CREATE_DELEGATING_LEAF(3U);
+static const struct snmp_leaf_node kNtcip1201Subtree4 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(4U);
+static const struct snmp_leaf_node kNtcip1201Subtree5 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(5U);
 static const struct snmp_leaf_node kNtcip1201Subtree7 =
   LWIP_SNMP_CREATE_DELEGATING_LEAF(7U);
 
@@ -91,6 +95,8 @@ static const struct snmp_node *const kNtcip1201Nodes[] =
   &kNtcip1201Subtree1.node,
   &kNtcip1201Subtree2.node,
   &kNtcip1201Subtree3.node,
+  &kNtcip1201Subtree4.node,
+  &kNtcip1201Subtree5.node,
   &kNtcip1201Subtree7.node
 };
 static const struct snmp_tree_node kNtcip1201Root =
@@ -148,17 +154,74 @@ static const u32_t kNtcip1202BaseOid[] =
 const struct snmp_mib ntcip1202mib =
   SNMP_MIB_CREATE(kNtcip1202BaseOid, &kNtcip1202Root.node);
 
-static const struct snmp_leaf_node kTeknotelSubtree1 =
+static const struct snmp_leaf_node kNtcip1103ApplicationSubtree4 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(4U);
+static const struct snmp_leaf_node kNtcip1103ApplicationSubtree6 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(6U);
+static const struct snmp_leaf_node kNtcip1103ApplicationSubtree7 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(7U);
+static const struct snmp_leaf_node kNtcip1103ApplicationSubtree8 =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(8U);
+
+static const struct snmp_node *const kNtcip1103ApplicationNodes[] =
+{
+  &kNtcip1103ApplicationSubtree4.node,
+  &kNtcip1103ApplicationSubtree6.node,
+  &kNtcip1103ApplicationSubtree7.node,
+  &kNtcip1103ApplicationSubtree8.node
+};
+static const struct snmp_tree_node kNtcip1103ApplicationRoot =
+  SNMP_CREATE_TREE_NODE(0U, kNtcip1103ApplicationNodes);
+static const u32_t kNtcip1103ApplicationBaseOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 1U, 1U, 7U
+};
+const struct snmp_mib ntcip1103applicationmib =
+  SNMP_MIB_CREATE(kNtcip1103ApplicationBaseOid, &kNtcip1103ApplicationRoot.node);
+
+static const struct snmp_leaf_node kNtcip1103TrapSubtree1 =
   LWIP_SNMP_CREATE_DELEGATING_LEAF(1U);
+
+static const struct snmp_node *const kNtcip1103TrapNodes[] =
+{
+  &kNtcip1103TrapSubtree1.node
+};
+static const struct snmp_tree_node kNtcip1103TrapRoot =
+  SNMP_CREATE_TREE_NODE(0U, kNtcip1103TrapNodes);
+static const u32_t kNtcip1103TrapBaseOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 1U, 4U
+};
+const struct snmp_mib ntcip1103trapmib =
+  SNMP_MIB_CREATE(kNtcip1103TrapBaseOid, &kNtcip1103TrapRoot.node);
+
+/* TEKNOTEL-CPU4-MIB: .59748.4.2.1 (cpu4). Subtree numbers mirror NTCIP
+ * 1202 groupings -- unit(3), channel(8) -- with vendor extensions at
+ * 20 (cpMpLink) and 21 (driverModule) placed outside the NTCIP range. */
+static const struct snmp_leaf_node kTeknotelUnitSubtree =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(3U);
+static const struct snmp_leaf_node kTeknotelChannelSubtree =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(8U);
+static const struct snmp_leaf_node kTeknotelCpMpLinkSubtree =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(20U);
+static const struct snmp_leaf_node kTeknotelDriverModuleSubtree =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(21U);
+static const struct snmp_leaf_node kTeknotelEventSourceSubtree =
+  LWIP_SNMP_CREATE_DELEGATING_LEAF(22U);
+
 static const struct snmp_node *const kTeknotelNodes[] =
 {
-  &kTeknotelSubtree1.node
+  &kTeknotelUnitSubtree.node,
+  &kTeknotelChannelSubtree.node,
+  &kTeknotelCpMpLinkSubtree.node,
+  &kTeknotelDriverModuleSubtree.node,
+  &kTeknotelEventSourceSubtree.node
 };
 static const struct snmp_tree_node kTeknotelRoot =
   SNMP_CREATE_TREE_NODE(0U, kTeknotelNodes);
 static const u32_t kTeknotelBaseOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U
 };
 const struct snmp_mib teknotelmib =
   SNMP_MIB_CREATE(kTeknotelBaseOid, &kTeknotelRoot.node);

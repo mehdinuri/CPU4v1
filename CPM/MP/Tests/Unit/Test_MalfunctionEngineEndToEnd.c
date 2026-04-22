@@ -3,8 +3,7 @@
  * Integration-style smoke test for the MP Domain: stands up the
  * MalfunctionEngine against mocked ports, feeds a conflict scenario
  * through the field bus, and asserts the safety relay drops, the
- * FaultMonitorStatus lights up, the UnitAlarm bits flip, and the
- * event log records the fault.
+ * FaultMonitorStatus lights up, and the UnitAlarm bits flip.
  */
 
 #include <stdint.h>
@@ -12,9 +11,9 @@
 
 #include "unity.h"
 
-#include "Adapters/Mock/MockEventLogAdapter.h"
 #include "Adapters/Mock/MockFieldBusAdapter.h"
 #include "Adapters/Mock/MockSafetyRelayAdapter.h"
+#include "Adapters/Mock/MockSystemMonitorAdapter.h"
 #include "Adapters/Mock/MockUnitAlarmAdapter.h"
 #include "Alarm/UnitAlarmService.h"
 #include "FaultMonitor/FaultMonitorService.h"
@@ -24,12 +23,12 @@
 
 static MockFieldBusAdapterCtx_t g_fieldBus;
 static MockSafetyRelayAdapterCtx_t g_relay;
-static MockEventLogAdapterCtx_t g_eventLog;
+static MockSystemMonitorAdapterCtx_t g_systemMonitor;
 static MockUnitAlarmAdapterCtx_t g_alarm;
 
 static IFieldBusPort_t g_fieldBusPort;
 static ISafetyRelayPort_t g_relayPort;
-static IEventLogPort_t g_eventLogPort;
+static ISystemMonitorPort_t g_systemMonitorPort;
 static IUnitAlarmPort_t g_alarmPort;
 
 static ConfigurationService_t g_config;
@@ -118,16 +117,38 @@ static void SeedSnapshotGreenGreen(FieldBusSnapshot_t *snapshot)
   }
 }
 
+static uint32_t CountEventsInRange(FaultMonitorService_t *service,
+                                   uint32_t firstSequence,
+                                   uint32_t lastSequence,
+                                   FaultCode_t code,
+                                   uint32_t expectedParam)
+{
+  FaultEvent_t event;
+  uint32_t count = 0U;
+  uint32_t sequence;
+
+  for (sequence = firstSequence; sequence <= lastSequence; sequence++)
+  {
+    if ((FaultMonitorServiceGetEventBySequence(service, sequence, &event) != 0U)
+        && (event.code == code) && (event.param == expectedParam))
+    {
+      count++;
+    }
+  }
+
+  return count;
+}
+
 void setUp(void)
 {
   MockFieldBusAdapterInit(&g_fieldBus);
   MockSafetyRelayAdapterInit(&g_relay);
-  MockEventLogAdapterInit(&g_eventLog);
+  MockSystemMonitorAdapterInit(&g_systemMonitor);
   MockUnitAlarmAdapterInit(&g_alarm);
 
   g_fieldBusPort = MockFieldBusAdapterCreatePort(&g_fieldBus);
   g_relayPort = MockSafetyRelayAdapterCreatePort(&g_relay);
-  g_eventLogPort = MockEventLogAdapterCreatePort(&g_eventLog);
+  g_systemMonitorPort = MockSystemMonitorAdapterCreatePort(&g_systemMonitor);
   g_alarmPort = MockUnitAlarmAdapterCreatePort(&g_alarm);
 
   ConfigurationServiceInit(&g_config, NULL);
@@ -138,7 +159,7 @@ void setUp(void)
   MalfunctionEngineInit(&g_engine,
                         &g_config,
                         &g_fieldBusPort,
-                        &g_eventLogPort,
+                        &g_systemMonitorPort,
                         &g_safety,
                         &g_faultMonitor,
                         &g_unitAlarm);
@@ -202,16 +223,13 @@ void test_conflict_drops_safety_relay(void)
                                                            &alarm2));
   TEST_ASSERT_TRUE((alarm2 & UNIT_ALARM_STATUS2_CONFLICT) != 0U);
 
-  uint32_t logCount = 0U;
-
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogCount(&g_eventLogPort, &logCount));
-  TEST_ASSERT_GREATER_THAN_UINT32(0U, logCount);
 }
 
 void test_module_missing_flags_alarm(void)
 {
   FieldBusSnapshot_t snapshot;
   uint32_t i;
+  SafetyRelayState_t relayState;
 
   SeedConflictConfig();
   SeedSnapshotGreenGreen(&snapshot);
@@ -231,6 +249,89 @@ void test_module_missing_flags_alarm(void)
                           UnitAlarmPortGetUnitAlarmStatus1(&g_alarmPort,
                                                            &alarm1));
   TEST_ASSERT_TRUE((alarm1 & UNIT_ALARM_STATUS1_MODULE_MISSING) != 0U);
+  TEST_ASSERT_EQUAL(SAFETY_ACTION_DARK,
+                    SafetyDecisionServiceGetLatchedAction(&g_safety));
+  TEST_ASSERT_EQUAL_UINT8(1U, SafetyRelayGetActualState(&g_relayPort, &relayState));
+  TEST_ASSERT_EQUAL(SAFETY_RELAY_STATE_OPEN, relayState);
+}
+
+void test_battery_low_emits_fault_after_three_samples(void)
+{
+  FieldBusSnapshot_t snapshot;
+  uint8_t alarm1 = 0U;
+  uint32_t totalFaultsBefore;
+  uint32_t totalFaultsAfter;
+  uint32_t i;
+
+  SeedConflictConfig();
+  SeedSnapshotGreenGreen(&snapshot);
+  MockFieldBusAdapterSetSnapshot(&g_fieldBus, &snapshot);
+  g_systemMonitor.batteryVoltageMilliVolts = 2700U;
+  totalFaultsBefore = FaultMonitorServiceGetTotalFaults(&g_faultMonitor);
+
+  for (i = 0U; i < 300U; i++)
+  {
+    MalfunctionEngineTick(&g_engine);
+  }
+
+  totalFaultsAfter = FaultMonitorServiceGetTotalFaults(&g_faultMonitor);
+  TEST_ASSERT_TRUE(totalFaultsAfter > totalFaultsBefore);
+  TEST_ASSERT_GREATER_THAN_UINT32(0U,
+                                  CountEventsInRange(&g_faultMonitor,
+                                                     totalFaultsBefore + 1U,
+                                                     totalFaultsAfter,
+                                                     FAULT_CODE_MP_BATTERY_LOW,
+                                                     2700U));
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          UnitAlarmPortGetUnitAlarmStatus1(&g_alarmPort,
+                                                           &alarm1));
+  TEST_ASSERT_TRUE((alarm1 & UNIT_ALARM_STATUS1_BATTERY_LOW) != 0U);
+}
+
+void test_temperature_high_rearms_after_recovery(void)
+{
+  FieldBusSnapshot_t snapshot;
+  uint32_t totalFaultsBefore;
+  uint32_t totalFaultsAfter;
+  uint32_t i;
+
+  SeedConflictConfig();
+  SeedSnapshotGreenGreen(&snapshot);
+  MockFieldBusAdapterSetSnapshot(&g_fieldBus, &snapshot);
+  g_systemMonitor.thermistorDegC = 41;
+  totalFaultsBefore = FaultMonitorServiceGetTotalFaults(&g_faultMonitor);
+
+  for (i = 0U; i < 300U; i++)
+  {
+    MalfunctionEngineTick(&g_engine);
+  }
+
+  g_systemMonitor.thermistorDegC = 37;
+  for (i = 0U; i < 300U; i++)
+  {
+    MalfunctionEngineTick(&g_engine);
+  }
+
+  g_systemMonitor.thermistorDegC = 42;
+  for (i = 0U; i < 300U; i++)
+  {
+    MalfunctionEngineTick(&g_engine);
+  }
+
+  totalFaultsAfter = FaultMonitorServiceGetTotalFaults(&g_faultMonitor);
+  TEST_ASSERT_TRUE(totalFaultsAfter > (totalFaultsBefore + 1U));
+  TEST_ASSERT_EQUAL_UINT32(1U,
+                           CountEventsInRange(&g_faultMonitor,
+                                              totalFaultsBefore + 1U,
+                                              totalFaultsAfter,
+                                              FAULT_CODE_MP_TEMPERATURE_HIGH,
+                                              41U));
+  TEST_ASSERT_EQUAL_UINT32(1U,
+                           CountEventsInRange(&g_faultMonitor,
+                                              totalFaultsBefore + 1U,
+                                              totalFaultsAfter,
+                                              FAULT_CODE_MP_TEMPERATURE_HIGH,
+                                              42U));
 }
 
 void test_read_and_ack_clears_deltas(void)
@@ -266,6 +367,8 @@ int main(void)
   RUN_TEST(test_engine_idles_when_no_config);
   RUN_TEST(test_conflict_drops_safety_relay);
   RUN_TEST(test_module_missing_flags_alarm);
+  RUN_TEST(test_battery_low_emits_fault_after_three_samples);
+  RUN_TEST(test_temperature_high_rearms_after_recovery);
   RUN_TEST(test_read_and_ack_clears_deltas);
 
   return UNITY_END();

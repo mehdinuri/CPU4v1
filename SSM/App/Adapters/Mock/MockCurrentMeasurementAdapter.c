@@ -7,36 +7,35 @@
 #include <string.h>
 #include "Adapters/Mock/MockCurrentMeasurementAdapter.h"
 
-static void MockGetLatest(void *pCtx, tSCurrentMeasurementSnapshot *pOut)
+static void MockGetLatest(void *ctx, CurrentMeasurementSnapshot_t *out)
 {
-  tSMockCurrentMeasurementAdapterCtx *pC =
-    (tSMockCurrentMeasurementAdapterCtx *) pCtx;
+  MockCurrentMeasurementAdapterCtx_t *pC =
+    (MockCurrentMeasurementAdapterCtx_t *) ctx;
 
-  *pOut = pC->SStored;
-  pC->lGetLatestCount++;
+  *out = pC->stored;
+  pC->getLatestCount++;
 }
 
-void MockCurrentMeasurementAdapter_Init(
-  tSMockCurrentMeasurementAdapterCtx *pCtx)
+void MockCurrentMeasurementAdapter_Init(MockCurrentMeasurementAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
 void MockCurrentMeasurementAdapter_SetSnapshot(
-  tSMockCurrentMeasurementAdapterCtx *pCtx,
+  MockCurrentMeasurementAdapterCtx_t *ctx,
   const
-  tSCurrentMeasurementSnapshot *
-  pSnap)
+  CurrentMeasurementSnapshot_t *
+  snap)
 {
-  pCtx->SStored = *pSnap;
+  ctx->stored = *snap;
 }
 
 ICurrentMeasurementPort_t MockCurrentMeasurementAdapter_CreatePort(
-  tSMockCurrentMeasurementAdapterCtx *pCtx)
+  MockCurrentMeasurementAdapterCtx_t *ctx)
 {
   ICurrentMeasurementPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.GetLatest = MockGetLatest;
 
   return port;

@@ -21,68 +21,69 @@
 #include "Domain/SignalCardIdentity.h"
 
 /* Adapter contexts — static storage duration, one instance per port.
- * g_AdcCurrentCtx is non-static: the ADC ISR in Core/Src/adc.c publishes
+ * g_adcCurrentCtx is non-static: the ADC ISR in Core/Src/adc.c publishes
  * into it directly (see HardwarePorts.h).
  */
-static tSGpioOutputAdapterCtx SGpioOutputCtx;
-static tSGpioInputAdapterCtx SGpioInputCtx;
-static tSIwdgWatchdogAdapterCtx SIwdgWatchdogCtx;
-static tSHalTickAdapterCtx SHalTickCtx;
-static tSFlashPersistenceAdapterCtx SFlashPersistenceCtx;
-static tSCanBusAdapterCtx SCanBusCtx;
-static tSTimerAdapterCtx STimerCtx;
-tSAdcCurrentAdapterCtx g_AdcCurrentCtx;
+static GpioOutputAdapterCtx_t gpioOutputCtx;
+static GpioInputAdapterCtx_t gpioInputCtx;
+static IwdgWatchdogAdapterCtx_t iwdgWatchdogCtx;
+static HalTickAdapterCtx_t halTickCtx;
+static FlashPersistenceAdapterCtx_t flashPersistenceCtx;
+static CanBusAdapterCtx_t canBusCtx;
+static TimerAdapterCtx_t timerCtx;
+AdcCurrentAdapterCtx_t g_adcCurrentCtx;
 
 /* Flash-sync deadman instance — plain domain struct, no adapter wrapper. */
-tSFlashSyncWatchdog g_FlashSyncWatchdog;
+FlashSyncWatchdog_t g_flashSyncWatchdog;
 
 /* Global port instances consumed by Tasks/Services. */
-ISignalOutputPort_t g_SignalOutputPort;
-ISignalInputPort_t g_SignalInputPort;
-IWatchdogPort_t g_WatchdogPort;
-ITickPort_t g_TickPort;
-IPersistencePort_t g_PersistencePort;
-ICurrentMeasurementPort_t g_CurrentMeasurementPort;
-ICanBusPort_t g_CanBusPort;
-ITimerPort_t g_TimerPort;
-uint8_t g_bCardId;
+ISignalOutputPort_t g_signalOutputPort;
+ISignalInputPort_t g_signalInputPort;
+IWatchdogPort_t g_watchdogPort;
+ITickPort_t g_tickPort;
+IPersistencePort_t g_persistencePort;
+ICurrentMeasurementPort_t g_currentMeasurementPort;
+ICanBusPort_t g_canBusPort;
+ITimerPort_t g_timerPort;
+uint8_t g_cardId;
 
 void MainApplication_Init(void)
 {
-  tSSignalInputSnapshot SInputSnapshot;
+  SignalInputSnapshot_t inputSnapshot;
 
-  GpioOutputAdapter_Init(&SGpioOutputCtx);
-  g_SignalOutputPort = GpioOutputAdapter_CreatePort(&SGpioOutputCtx);
+  GpioOutputAdapter_Init(&gpioOutputCtx);
+  g_signalOutputPort = GpioOutputAdapter_CreatePort(&gpioOutputCtx);
 
-  GpioInputAdapter_Init(&SGpioInputCtx);
-  g_SignalInputPort = GpioInputAdapter_CreatePort(&SGpioInputCtx);
-  SignalInput_Sample(&g_SignalInputPort, &SInputSnapshot);
-  if (SignalCardIdentity_IsValid(SInputSnapshot.bCardId) == 0U)
+  GpioInputAdapter_Init(&gpioInputCtx);
+  g_signalInputPort = GpioInputAdapter_CreatePort(&gpioInputCtx);
+  SignalInput_Sample(&g_signalInputPort, &inputSnapshot);
+  if (SignalCardIdentity_IsValid(inputSnapshot.cardId) == 0U)
   {
     Error_Handler();
   }
 
-  g_bCardId = SInputSnapshot.bCardId;
+  g_cardId = inputSnapshot.cardId;
 
-  IwdgWatchdogAdapter_Init(&SIwdgWatchdogCtx);
-  g_WatchdogPort = IwdgWatchdogAdapter_CreatePort(&SIwdgWatchdogCtx);
+  IwdgWatchdogAdapter_Init(&iwdgWatchdogCtx);
+  g_watchdogPort = IwdgWatchdogAdapter_CreatePort(&iwdgWatchdogCtx);
 
-  HalTickAdapter_Init(&SHalTickCtx);
-  g_TickPort = HalTickAdapter_CreatePort(&SHalTickCtx);
+  HalTickAdapter_Init(&halTickCtx);
+  g_tickPort = HalTickAdapter_CreatePort(&halTickCtx);
 
-  FlashPersistenceAdapter_Init(&SFlashPersistenceCtx);
-  g_PersistencePort = FlashPersistenceAdapter_CreatePort(&SFlashPersistenceCtx);
+  FlashPersistenceAdapter_Init(&flashPersistenceCtx);
+  g_persistencePort =
+    FlashPersistenceAdapter_CreatePort(&flashPersistenceCtx);
 
-  AdcCurrentAdapter_Init(&g_AdcCurrentCtx);
-  g_CurrentMeasurementPort = AdcCurrentAdapter_CreatePort(&g_AdcCurrentCtx);
+  AdcCurrentAdapter_Init(&g_adcCurrentCtx);
+  g_currentMeasurementPort = AdcCurrentAdapter_CreatePort(&g_adcCurrentCtx);
 
-  CanBusAdapter_Init(&SCanBusCtx);
-  g_CanBusPort = CanBusAdapter_CreatePort(&SCanBusCtx);
+  CanBusAdapter_Init(&canBusCtx);
+  g_canBusPort = CanBusAdapter_CreatePort(&canBusCtx);
 
-  TimerAdapter_Init(&STimerCtx);
-  g_TimerPort = TimerAdapter_CreatePort(&STimerCtx);
+  TimerAdapter_Init(&timerCtx);
+  g_timerPort = TimerAdapter_CreatePort(&timerCtx);
 
-  FlashSyncWatchdog_Reset(&g_FlashSyncWatchdog);
+  FlashSyncWatchdog_Reset(&g_flashSyncWatchdog);
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

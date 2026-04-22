@@ -18,6 +18,7 @@ typedef struct
   uint8_t Hours;
   uint8_t Minutes;
   uint8_t Seconds;
+  uint16_t Milliseconds;
 } RtcSnapshot_t;
 
 typedef enum

@@ -23,6 +23,7 @@ target_sources(Mock_Adapters PRIVATE
     MockRelayAdapter.c
     MockSerialAdapter.c
     MockModemAdapter.c
+    MockSnmpSecurityAdapter.c
 )
 
 target_include_directories(Mock_Adapters

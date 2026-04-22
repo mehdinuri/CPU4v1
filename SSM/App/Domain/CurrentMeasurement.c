@@ -8,28 +8,28 @@
 
 #define CURRENT_MAX_10BIT  0x03FFU
 
-void CurrentMeasurement_Pack(const tSCurrentMeasurementSnapshot *pSnap,
-                             tSCurrentMeasurementWire *pOut)
+void CurrentMeasurement_Pack(const CurrentMeasurementSnapshot_t *snap,
+                             CurrentMeasurementWire_t *out)
 {
   uint8_t i;
-  uint8_t bHighPacked = 0U;
+  uint8_t highPacked = 0U;
 
   for (i = 0U; i < CURRENT_CHANNEL_COUNT; i++)
   {
-    uint16_t sValue = pSnap->aCurrents_mA[i];
+    uint16_t value = snap->currentsMa[i];
 
-    if (sValue > CURRENT_MAX_10BIT)
+    if (value > CURRENT_MAX_10BIT)
     {
-      sValue = CURRENT_MAX_10BIT;
+      value = CURRENT_MAX_10BIT;
     }
 
-    pOut->aCurLow[i] = (uint8_t) (sValue & 0xFFU);
-    uint8_t bHigh2 = (uint8_t) ((sValue >> 8) & 0x03U);
+    out->curLow[i] = (uint8_t) (value & 0xFFU);
+    uint8_t high2 = (uint8_t) ((value >> 8) & 0x03U);
 
-    bHighPacked = (uint8_t) (bHighPacked | (uint8_t) (bHigh2 << (2U * i)));
+    highPacked = (uint8_t) (highPacked | (uint8_t) (high2 << (2U * i)));
   }
 
-  pOut->bCurHighBitsPacked = bHighPacked;
+  out->curHighBitsPacked = highPacked;
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

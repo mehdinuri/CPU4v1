@@ -21,10 +21,13 @@ Add_Unity_Test(Test_MmiService Test_MmiService.c)
 Add_Unity_Test(Test_MmiSnapshotCache Test_MmiSnapshotCache.c)
 Add_Unity_Test(Test_MmiLocalSettingsService Test_MmiLocalSettingsService.c)
 Add_Unity_Test(Test_MmiEventLogService Test_MmiEventLogService.c)
+Add_Unity_Test(Test_EventReportService Test_EventReportService.c)
 Add_Unity_Test(Test_MmiMaintenanceService Test_MmiMaintenanceService.c)
 Add_Unity_Test(Test_UiDoorService Test_UiDoorService.c)
+Add_Unity_Test(Test_RelayControlService Test_RelayControlService.c)
 Add_Unity_Test(Test_UserAuthService Test_UserAuthService.c)
 Add_Unity_Test(Test_LcdEventText Test_LcdEventText.c)
+Add_Unity_Test(Test_LcdPage_Logs Test_LcdPage_Logs.c)
 Add_Unity_Test(Test_CabinetEnvironmentObjects Test_CabinetEnvironmentObjects.c)
 Add_Unity_Test(Test_AscIoInputMappingObjects Test_AscIoInputMappingObjects.c)
 Add_Unity_Test(Test_AscIoOutputMappingObjects Test_AscIoOutputMappingObjects.c)
@@ -44,6 +47,7 @@ Add_Unity_Test(Test_PhaseObjects Test_PhaseObjects.c)
 Add_Unity_Test(Test_ClockObjects Test_ClockObjects.c)
 Add_Unity_Test(Test_NtcipDbTransactionService Test_NtcipDbTransactionService.c)
 Add_Unity_Test(Test_NtcipObjectDirectory Test_NtcipObjectDirectory.c)
+Add_Unity_Test(Test_SnmpSecurityObjects Test_SnmpSecurityObjects.c)
 Add_Unity_Test(Test_LWIPSNMPAdapter
                Test_LWIPSNMPAdapter.c
                ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/LWIPSNMPAdapter.c)
@@ -51,6 +55,14 @@ target_include_directories(Test_LWIPSNMPAdapter PRIVATE
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32
     ${CMAKE_SOURCE_DIR}/App/Domain
     ${CMAKE_SOURCE_DIR}/App/Domain/Intersection
+)
+Add_Unity_Test(Test_FieldBusTxAdapter
+               Test_FieldBusTxAdapter.c
+               ${CMAKE_SOURCE_DIR}/App/Adapters/STM32/FieldBusTxAdapter.c)
+target_include_directories(Test_FieldBusTxAdapter PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/Adapters/STM32
+    ${CMAKE_SOURCE_DIR}/App/Domain
+    ${CMAKE_SOURCE_DIR}/App/Ports
 )
 Add_Unity_Test(Test_PersistencePort  Test_PersistencePort.c)
 Add_Unity_Test(Test_LogRepository    Test_LogRepository.c)

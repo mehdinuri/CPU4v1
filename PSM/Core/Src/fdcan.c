@@ -34,7 +34,7 @@ void MX_FDCAN1_Init(void)
 {
 
   /* USER CODE BEGIN FDCAN1_Init 0 */
-	FDCAN_FilterTypeDef SFilterConfig;
+	FDCAN_FilterTypeDef filterConfig;
   /* USER CODE END FDCAN1_Init 0 */
 
   /* USER CODE BEGIN FDCAN1_Init 1 */
@@ -63,13 +63,13 @@ void MX_FDCAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN1_Init 2 */
-	SFilterConfig.IdType = FDCAN_STANDARD_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = FDCAN_CP_FLASH_SIGNALS_1_STD_ID;
-  SFilterConfig.FilterID2 = FDCAN_CP_OFFSET_2_STD_ID;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+	filterConfig.IdType = FDCAN_STANDARD_ID;
+  filterConfig.FilterIndex = 0;
+  filterConfig.FilterType = FDCAN_FILTER_RANGE;
+  filterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  filterConfig.FilterID1 = FDCAN_CP_FLASH_SIGNALS_1_STD_ID;
+  filterConfig.FilterID2 = FDCAN_CP_OFFSET_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -88,7 +88,7 @@ void MX_FDCAN2_Init(void)
 {
 
   /* USER CODE BEGIN FDCAN2_Init 0 */
-	FDCAN_FilterTypeDef SFilterConfig;
+	FDCAN_FilterTypeDef filterConfig;
   /* USER CODE END FDCAN2_Init 0 */
 
   /* USER CODE BEGIN FDCAN2_Init 1 */
@@ -117,24 +117,24 @@ void MX_FDCAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN2_Init 2 */
-	SFilterConfig.IdType = FDCAN_STANDARD_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = 0x000;
-  SFilterConfig.FilterID2 = 0x7FF;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+	filterConfig.IdType = FDCAN_STANDARD_ID;
+  filterConfig.FilterIndex = 0;
+  filterConfig.FilterType = FDCAN_FILTER_RANGE;
+  filterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  filterConfig.FilterID1 = 0x000;
+  filterConfig.FilterID2 = 0x7FF;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
 	
-	SFilterConfig.IdType = FDCAN_EXTENDED_ID;
-  SFilterConfig.FilterIndex = 1;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = 0x00000000;
-  SFilterConfig.FilterID2 = 0x1FFFFFFF;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &SFilterConfig) != HAL_OK)
+	filterConfig.IdType = FDCAN_EXTENDED_ID;
+  filterConfig.FilterIndex = 1;
+  filterConfig.FilterType = FDCAN_FILTER_RANGE;
+  filterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  filterConfig.FilterID1 = 0x00000000;
+  filterConfig.FilterID2 = 0x1FFFFFFF;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -290,44 +290,44 @@ void HAL_FDCAN_MspDeInit(FDCAN_HandleTypeDef* fdcanHandle)
 }
 
 /* USER CODE BEGIN 1 */
-uint8_t CANGetRxDataLength(uint32_t lCode)
+uint8_t CANGetRxDataLength(uint32_t code)
 {
-	if (lCode <= FDCAN_DLC_BYTES_8)
+	if (code <= FDCAN_DLC_BYTES_8)
 	{
-		return (FDCAN_DLC_BYTES_0 | lCode);
+		return (FDCAN_DLC_BYTES_0 | code);
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_12)
+	if (code <= FDCAN_DLC_BYTES_12)
 	{
 		return 12;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_16)
+	if (code <= FDCAN_DLC_BYTES_16)
 	{
 		return 16;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_20)
+	if (code <= FDCAN_DLC_BYTES_20)
 	{
 		return 20;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_24)
+	if (code <= FDCAN_DLC_BYTES_24)
 	{
 		return 24;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_32)
+	if (code <= FDCAN_DLC_BYTES_32)
 	{
 		return 32;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_48)
+	if (code <= FDCAN_DLC_BYTES_48)
 	{
 		return 48;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_64)
+	if (code <= FDCAN_DLC_BYTES_64)
 	{
 		return 64;
 	}
@@ -335,44 +335,44 @@ uint8_t CANGetRxDataLength(uint32_t lCode)
 	return FDCAN_DLC_BYTES_0;
 }
 
-uint32_t CANGetTxDataLengthCode(uint8_t bLen)
+uint32_t CANGetTxDataLengthCode(uint8_t len)
 {
-	if (bLen <= 8)
+	if (len <= 8)
 	{
-		return (FDCAN_DLC_BYTES_0 | bLen);
+		return (FDCAN_DLC_BYTES_0 | len);
 	}
 
-	if (bLen <= 12)
+	if (len <= 12)
 	{
 		return FDCAN_DLC_BYTES_12;
 	}
 
-	if (bLen <= 16)
+	if (len <= 16)
 	{
 		return FDCAN_DLC_BYTES_16;
 	}
 
-	if (bLen <= 20)
+	if (len <= 20)
 	{
 		return FDCAN_DLC_BYTES_20;
 	}
 
-	if (bLen <= 24)
+	if (len <= 24)
 	{
 		return FDCAN_DLC_BYTES_24;
 	}
 
-	if (bLen <= 32)
+	if (len <= 32)
 	{
 		return FDCAN_DLC_BYTES_32;
 	}
 
-	if (bLen <= 48)
+	if (len <= 48)
 	{
 		return FDCAN_DLC_BYTES_48;
 	}
 
-	if (bLen <= 64)
+	if (len <= 64)
 	{
 		return FDCAN_DLC_BYTES_64;
 	}
@@ -406,11 +406,11 @@ void CANDeInit(FDCAN_HandleTypeDef* hfdcan)
   HAL_FDCAN_DeInit(hfdcan);
 }
 
-void CANSendMessage(tpSFDCANTxMsg pSMsg)
+void CANSendMessage(FdcanTxMsg_t * msg)
 {
-  if (HAL_FDCAN_AddMessageToTxFifoQ(pSMsg->hfdcan,
-                                    &pSMsg->STxHeader,
-                                    pSMsg->baData) != HAL_OK)
+  if (HAL_FDCAN_AddMessageToTxFifoQ(msg->hfdcan,
+                                    &msg->txHeader,
+                                    msg->data) != HAL_OK)
   {
     Error_Handler();
   }
@@ -418,8 +418,18 @@ void CANSendMessage(tpSFDCANTxMsg pSMsg)
 
 void CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan)
 {
-  while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) == 0)
+  /* Bound the wait so a saturated bus (bus-off, missing ACKs) can no longer
+   * hang CANMsgSenderTask indefinitely.  On timeout the drain simply stops
+   * blocking — the frame stays in the TX FIFO for HAL to retry on its own,
+   * and the task loop goes back to servicing MaintenanceTaskSignal so the
+   * watchdog still sees it as alive. */
+  const uint32_t maxWaitMs = 20U;
+  for (uint32_t i = 0U; i < maxWaitMs; i++)
   {
+    if (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) != 0U)
+    {
+      return;
+    }
     osDelay(1);
   }
 }
@@ -430,25 +440,30 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 
   if (hfdcan->Instance == FDCAN1)
   {
-    FDCAN_RxHeaderTypeDef SRxHeader;
-    uint8_t               baRawData[CANRX_MAX_DATA_LEN];
+    FDCAN_RxHeaderTypeDef rxHeader;
+    uint8_t               rawData[CANRX_MAX_DATA_LEN];
 
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &SRxHeader, baRawData) != HAL_OK)
+    /* Transient FIFO fetch errors (e.g. concurrent overrun) should not brick
+     * the chip — drop this frame, count it via the Tx overflow path on the
+     * next measurement tick if needed, and let the next RX interrupt try
+     * again.  Hard-failing an ISR with __disable_irq + while(1) was the
+     * previous behaviour and blocked all further CAN/timer activity. */
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rxHeader, rawData) != HAL_OK)
     {
-      Error_Handler();
+      return;
     }
 
-    tSCANRxFrame SFrame;
-    SFrame.lId         = SRxHeader.Identifier;
-    SFrame.fExtendedId = (SRxHeader.IdType == FDCAN_EXTENDED_ID) ? 1U : 0U;
-    SFrame.bDataLen    = CANGetRxDataLength(SRxHeader.DataLength);
+    CanRxFrame_t frame;
+    frame.id         = rxHeader.Identifier;
+    frame.extendedId = (rxHeader.IdType == FDCAN_EXTENDED_ID) ? 1U : 0U;
+    frame.dataLen    = CANGetRxDataLength(rxHeader.DataLength);
 
-    uint8_t bCopy = (SFrame.bDataLen > CANRX_MAX_DATA_LEN)
+    uint8_t copy = (frame.dataLen > CANRX_MAX_DATA_LEN)
                   ? CANRX_MAX_DATA_LEN
-                  : SFrame.bDataLen;
-    memcpy(SFrame.baData, baRawData, bCopy);
+                  : frame.dataLen;
+    memcpy(frame.data, rawData, copy);
 
-    CanRx_SubmitFrame(&g_canRxPort, &SFrame);
+    CanRx_SubmitFrame(&g_canRxPort, &frame);
   }
 }
 /* USER CODE END 1 */

@@ -3,7 +3,7 @@
  * @file    Domain/SignalFlashConfig.h
  * @brief   Persisted per-channel flash-assignment bitmap for signal outputs.
  *          Owns the "is-written" marker check and the on-wire layout;
- *          callers think in terms of a clean tSSignalFlashConfig struct.
+ *          callers think in terms of a clean SignalFlashConfig_t struct.
  ******************************************************************************
  */
 
@@ -27,21 +27,21 @@
 
 typedef struct
 {
-  uint8_t aIsFlashing[SIGNAL_FLASH_CONFIG_CHANNEL_COUNT];      /* 1 = flashing, 0 = steady */
-} tSSignalFlashConfig;
+  uint8_t isFlashing[SIGNAL_FLASH_CONFIG_CHANNEL_COUNT];      /* 1 = flashing, 0 = steady */
+} SignalFlashConfig_t;
 
 /**
  * @brief Load the persisted flash-config. Returns 1 on success, 0 if no valid
  *        record was found (out is left untouched on failure).
  */
-uint8_t SignalFlashConfig_Load(IPersistencePort_t *pPort,
-                               tSSignalFlashConfig *pOut);
+uint8_t SignalFlashConfig_Load(IPersistencePort_t *port,
+                               SignalFlashConfig_t *out);
 
 /**
  * @brief Save the flash-config. Returns 1 on success.
  */
-uint8_t SignalFlashConfig_Save(IPersistencePort_t *pPort,
-                               const tSSignalFlashConfig *pIn);
+uint8_t SignalFlashConfig_Save(IPersistencePort_t *port,
+                               const SignalFlashConfig_t *in);
 
 #endif /* DOMAIN_SIGNAL_FLASH_CONFIG_H */
 

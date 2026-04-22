@@ -19,26 +19,26 @@
  */
 typedef struct
 {
-  uint8_t aChannels[SIGNAL_OUTPUT_CHANNEL_COUNT];    /* 1 = energised, 0 = off */
-} tSSignalOutputImage;
+  uint8_t channels[SIGNAL_OUTPUT_CHANNEL_COUNT];    /* 1 = energised, 0 = off */
+} SignalOutputImage_t;
 
 typedef struct ISignalOutputPort
 {
-  void *pCtx;
+  void *ctx;
 
-  void (*Apply)(void *pCtx, const tSSignalOutputImage *pImage);
-  void (*AllOff)(void *pCtx);
+  void (*Apply)(void *ctx, const SignalOutputImage_t *image);
+  void (*AllOff)(void *ctx);
 } ISignalOutputPort_t;
 
-static inline void SignalOutput_Apply(ISignalOutputPort_t *pPort,
-                                      const tSSignalOutputImage *pImage)
+static inline void SignalOutput_Apply(ISignalOutputPort_t *port,
+                                      const SignalOutputImage_t *image)
 {
-  pPort->Apply(pPort->pCtx, pImage);
+  port->Apply(port->ctx, image);
 }
 
-static inline void SignalOutput_AllOff(ISignalOutputPort_t *pPort)
+static inline void SignalOutput_AllOff(ISignalOutputPort_t *port)
 {
-  pPort->AllOff(pPort->pCtx);
+  port->AllOff(port->ctx);
 }
 
 #endif /* PORTS_ISIGNAL_OUTPUT_PORT_H */

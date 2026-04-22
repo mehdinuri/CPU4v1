@@ -3,38 +3,19 @@
 #include <string.h>
 
 #include "Adapters/Mock/MockDoorSensorAdapter.h"
-#include "Adapters/Mock/MockLogRepositoryAdapter.h"
+#include "Domain/Services/EventReportService.h"
 #include "Domain/Services/MmiEventLogService.h"
 #include "Domain/Services/UiDoorService.h"
 
 typedef struct
 {
-  uint8_t bSeconds;
-  uint8_t bMinutes;
-  uint8_t bHours;
-  uint8_t bMonthDay;
-  uint8_t bMonth;
-  uint16_t sYear;
-
-  struct
-  {
-    uint8_t bEvent;
-    uint8_t bParam;
-    uint16_t sParam;
-    uint32_t lParam;
-  } SEvent;
-} __attribute__((packed)) TestUiDoorLogStorageRecord_t;
-
-typedef struct
-{
-  ILogRepositoryPort_t *logPort;
+  EventReportService_t *eventReportService;
   uint8_t appendCount;
 } TestUiDoorEventLoggerCtx_t;
 
 static MockDoorSensorAdapterCtx_t s_doorCtx;
 static IDoorSensorPort_t s_doorPort;
-static MockLogRepositoryAdapterCtx_t s_logCtx;
-static ILogRepositoryPort_t s_logPort;
+static EventReportService_t s_eventReportService;
 static MmiEventLogService_t s_eventLogService;
 static UiDoorService_t s_service;
 static TestUiDoorEventLoggerCtx_t s_eventLoggerCtx;
@@ -48,20 +29,48 @@ static uint8_t AppendEvent(void *ctx,
 {
   TestUiDoorEventLoggerCtx_t *eventLoggerCtx =
     (TestUiDoorEventLoggerCtx_t *) ctx;
-  TestUiDoorLogStorageRecord_t record;
+  EventReportLogRecord_t *record;
+  uint16_t eventId;
+  uint16_t index;
 
-  (void) memset(&record, 0, sizeof(record));
-  record.SEvent.bEvent = eventCode;
-  record.SEvent.bParam = eventParam;
-  record.SEvent.sParam = eventShortParam;
-  record.SEvent.lParam = eventLongParam;
-
-  if (LogRepositoryAppend(eventLoggerCtx->logPort,
-                          &record,
-                          sizeof(record),
-                          NULL) == 0U)
+  if ((eventLoggerCtx == NULL) || (eventLoggerCtx->eventReportService == NULL))
   {
     return 0U;
+  }
+
+  switch (eventCode)
+  {
+    case 64U:
+      eventId = EVENT_REPORT_EVENT_ID_DOOR_OPEN;
+      break;
+
+    case 65U:
+      eventId = EVENT_REPORT_EVENT_ID_DOOR_CLOSED;
+      break;
+
+    default:
+      return 0U;
+  }
+
+  (void) eventParam;
+  (void) eventShortParam;
+  (void) eventLongParam;
+
+  index = eventLoggerCtx->eventReportService->writeIndex;
+  record = &eventLoggerCtx->eventReportService->logRecords[index];
+  (void) memset(record, 0, sizeof(*record));
+  record->eventLogClass = 2U;
+  record->eventLogID = eventId;
+
+  eventLoggerCtx->eventReportService->writeIndex++;
+  if (eventLoggerCtx->eventReportService->writeIndex
+      >= EVENT_REPORT_MAX_EVENT_LOG_SIZE)
+  {
+    eventLoggerCtx->eventReportService->writeIndex = 0U;
+  }
+  if (eventLoggerCtx->eventReportService->count < EVENT_REPORT_MAX_EVENT_LOG_SIZE)
+  {
+    eventLoggerCtx->eventReportService->count++;
   }
 
   eventLoggerCtx->appendCount++;
@@ -82,12 +91,11 @@ void setUp(void)
   MockDoorSensorAdapterInit(&s_doorCtx);
   s_doorPort = MockDoorSensorAdapterCreatePort(&s_doorCtx);
 
-  MockLogRepositoryAdapterInit(&s_logCtx);
-  s_logPort = MockLogRepositoryAdapterCreatePort(&s_logCtx);
+  EventReportServiceInit(&s_eventReportService);
   MmiEventLogServiceInit(&s_eventLogService);
-  MmiEventLogServiceBind(&s_eventLogService, &s_logPort);
+  MmiEventLogServiceBind(&s_eventLogService, &s_eventReportService);
 
-  s_eventLoggerCtx.logPort = &s_logPort;
+  s_eventLoggerCtx.eventReportService = &s_eventReportService;
   s_eventLoggerCtx.appendCount = 0U;
   s_eventPort = CreateEventPort(&s_eventLoggerCtx);
 

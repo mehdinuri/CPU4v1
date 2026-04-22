@@ -14,11 +14,11 @@
 
 typedef struct
 {
-  uint8_t  aBuf[MOCK_EEPROM_SIZE]; /* backing store                         */
-  uint32_t lReadCount;             /* total Read calls                      */
-  uint32_t lWriteCount;            /* total Write calls                     */
-  uint8_t  bReadResult;            /* return value for Read  (default: 1)   */
-  uint8_t  bWriteResult;           /* return value for Write (default: 1)   */
+  uint8_t  buf[MOCK_EEPROM_SIZE]; /* backing store                         */
+  uint32_t readCount;             /* total Read calls                      */
+  uint32_t writeCount;            /* total Write calls                     */
+  uint8_t  readResult;            /* return value for Read  (default: 1)   */
+  uint8_t  writeResult;           /* return value for Write (default: 1)   */
 } MockEepromAdapterCtx_t;
 
 void          MockEepromAdapterInit(MockEepromAdapterCtx_t *ctx);

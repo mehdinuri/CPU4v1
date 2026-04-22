@@ -34,9 +34,9 @@
 #define ADC2_REG_VOUT_SCALING     2.05f     /* 5V divider */
 #define ADC3_REG_VIN_SCALING      11.29f    /* 24V divider */
 
-uint16_t saADC1ConvVals[ADC1_BUF_LEN];
-volatile uint16_t sADC2ConvVal = 0;
-volatile uint16_t sADC3ConvVal = 0;
+uint16_t adc1ConvVals[ADC1_BUF_LEN];
+volatile uint16_t adc2ConvVal = 0;
+volatile uint16_t adc3ConvVal = 0;
 
 /* USER CODE END 0 */
 
@@ -479,7 +479,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 /* USER CODE BEGIN 1 */
 void ADC1StartDMA(void)
 {
-	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)saADC1ConvVals, ADC1_BUF_LEN) != HAL_OK)
+	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1ConvVals, ADC1_BUF_LEN) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -487,7 +487,7 @@ void ADC1StartDMA(void)
 
 void ADC2StartDMA(void)
 {
-	if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&sADC2ConvVal, 1) != HAL_OK)
+	if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)&adc2ConvVal, 1) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -495,7 +495,7 @@ void ADC2StartDMA(void)
 
 void ADC3StartDMA(void)
 {
-	if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)&sADC3ConvVal, 1) != HAL_OK)
+	if (HAL_ADC_Start_DMA(&hadc3, (uint32_t *)&adc3ConvVal, 1) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -503,33 +503,26 @@ void ADC3StartDMA(void)
 
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
 {
-  if(hadc->Instance == ADC1)
-	{
-		Error_Handler();
-	}
-	else if (hadc->Instance == ADC2)
-	{
-		Error_Handler();
-	}
-	else if(hadc->Instance == ADC3)
-	{
-		Error_Handler();
-	}
+	/* Transient ADC DMA errors (overrun, underrun) must not halt the chip.
+	 * The measurement pipeline will converge on the next DMA window.  If a
+	 * hard failure is wanted in Debug builds, gate it on a #ifdef so Release
+	 * remains resilient. */
+	(void) hadc;
 }
 
-static void ADCCalculate(uint16_t *saConvVals, uint8_t bLen)
+static void ADCCalculate(uint16_t *convVals, uint8_t len)
 {
-	float fGridRMS = VoltageRMS_ComputeAC(saConvVals, (size_t) bLen,
+	float gridRms = VoltageRMS_ComputeAC(convVals, (size_t) len,
 	                                       V_REF, ADC_MAX_VAL,
 	                                       ADC1_GRID_SCALING_FACTOR);
-	float fVOut = VoltageRMS_ConvertDC(sADC2ConvVal, V_REF, ADC_MAX_VAL,
+	float vOut = VoltageRMS_ConvertDC(adc2ConvVal, V_REF, ADC_MAX_VAL,
 	                                    ADC2_REG_VOUT_SCALING);
-	float fVIn  = VoltageRMS_ConvertDC(sADC3ConvVal, V_REF, ADC_MAX_VAL,
+	float vIn  = VoltageRMS_ConvertDC(adc3ConvVal, V_REF, ADC_MAX_VAL,
 	                                    ADC3_REG_VIN_SCALING);
 
-	MeasurementNetVoltageSet(fGridRMS);
-	MeasurementRegVOutSet(fVOut);
-	MeasurementRegVInSet(fVIn);
+	MeasurementNetVoltageSet(gridRms);
+	MeasurementRegVOutSet(vOut);
+	MeasurementRegVInSet(vIn);
 
 	MeasurementThreadFlagSet();
 }
@@ -538,7 +531,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	if (hadc->Instance == ADC1)
 	{
-		ADCCalculate(&saADC1ConvVals[0], ADC1_SAMPLES_PER_CYCLE);
+		ADCCalculate(&adc1ConvVals[0], ADC1_SAMPLES_PER_CYCLE);
 	}
 }
 
@@ -546,7 +539,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
 	if(hadc->Instance == ADC1)
 	{
-		ADCCalculate(&saADC1ConvVals[ADC1_SAMPLES_PER_CYCLE], ADC1_SAMPLES_PER_CYCLE);
+		ADCCalculate(&adc1ConvVals[ADC1_SAMPLES_PER_CYCLE], ADC1_SAMPLES_PER_CYCLE);
 	}
 }
 /* USER CODE END 1 */

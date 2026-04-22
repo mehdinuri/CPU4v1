@@ -534,6 +534,25 @@ static uint8_t DecodeNtcipValue(const MmiProtocolObjectPrefixV2_t *prefix,
                           == NTCIP_ERROR_OK);
       }
 
+      case NTCIP_VALUE_TYPE_OPAQUE:
+      {
+        return (uint8_t) (NtcipValueSetOpaque(value,
+                                              encodedValue,
+                                              prefix->valueLength)
+                          == NTCIP_ERROR_OK);
+      }
+
+      case NTCIP_VALUE_TYPE_IP_ADDRESS:
+      {
+        if (prefix->valueLength != 4U)
+        {
+          return 0U;
+        }
+
+        return (uint8_t) (NtcipValueSetIpAddress(value, encodedValue)
+                          == NTCIP_ERROR_OK);
+      }
+
       default:
       {
         return 0U;
@@ -617,6 +636,40 @@ static uint8_t EncodeNtcipValue(const NtcipValue_t *value,
         }
 
         *encodedLength = value->data.octetString.length;
+        return 1U;
+      }
+
+      case NTCIP_VALUE_TYPE_OPAQUE:
+      {
+        if ((encodedValue == NULL)
+            || (value->data.opaque.length
+                > MMI_CAN_ADAPTER_TRANSFER_BUFFER_BYTES))
+        {
+          return 0U;
+        }
+
+        if (value->data.opaque.length > 0U)
+        {
+          (void) memcpy(encodedValue,
+                        &value->data.opaque.bytes[0],
+                        value->data.opaque.length);
+        }
+
+        *encodedLength = value->data.opaque.length;
+        return 1U;
+      }
+
+      case NTCIP_VALUE_TYPE_IP_ADDRESS:
+      {
+        if (encodedValue == NULL)
+        {
+          return 0U;
+        }
+
+        (void) memcpy(encodedValue,
+                      &value->data.ipAddress.bytes[0],
+                      sizeof(value->data.ipAddress.bytes));
+        *encodedLength = (uint16_t) sizeof(value->data.ipAddress.bytes);
         return 1U;
       }
 
@@ -739,6 +792,8 @@ static void BuildRequestContext(MmiCanAdapterCtx_t *ctx,
   LWIPSNMPAdapterBuildRequestContext(&ctx->ntcipAdapter,
                                      ctx->sessionId,
                                      requestContext);
+  requestContext->authModel = (uint8_t) NTCIP_AUTH_MODEL_LOCAL;
+  requestContext->securityLevel = (uint8_t) NTCIP_SECURITY_LEVEL_NONE;
 
   if (transactionId != 0U)
   {

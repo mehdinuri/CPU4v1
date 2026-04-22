@@ -16,9 +16,11 @@
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
 #include "Domain/NTCIP/Core/NtcipObjectDirectory.h"
 #include "Domain/NTCIP/NtcipContext.h"
+#include "Domain/Services/EventReportService.h"
 #include "Ports/IDoorSensorPort.h"
 #include "Ports/IHeaterPort.h"
 #include "Ports/IPowerMonitorPort.h"
+#include "Ports/ISnmpSecurityPort.h"
 #include "Ports/IUnitAlarmPort.h"
 #include "Ports/IUnitClockPort.h"
 
@@ -48,6 +50,7 @@ typedef struct
   IntersectionController_t *intersectionController;
   DetectorReportService_t *detectorReportService;
   GlobalTimeManagementService_t *globalTimeManagementService;
+  EventReportService_t *eventReportService;
   IDoorSensorPort_t *doorSensorPort;
   IHeaterPort_t *heaterPort;
   IPowerMonitorPort_t *powerMonitorPort;
@@ -70,6 +73,11 @@ void LWIPSNMPAdapterBindDetectorReportService(
 void LWIPSNMPAdapterBindGlobalTimeManagementService(
   LWIPSNMPAdapterCtx_t *ctx,
   GlobalTimeManagementService_t *globalTimeManagementService);
+void LWIPSNMPAdapterBindEventReportService(
+  LWIPSNMPAdapterCtx_t *ctx,
+  EventReportService_t *eventReportService);
+void LWIPSNMPAdapterBindSnmpSecurityPort(LWIPSNMPAdapterCtx_t *ctx,
+                                         ISnmpSecurityPort_t *snmpSecurityPort);
 void LWIPSNMPAdapterBindActivationService(
   LWIPSNMPAdapterCtx_t *ctx,
   IntersectionActivationService_t *activationService);

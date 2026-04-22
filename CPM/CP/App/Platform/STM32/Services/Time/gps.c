@@ -8,11 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "DomainServices.h"
 #include "MSM.h"
 #include "cmsis_os.h"
-#include "data.h"
 #include "defs.h"
+#include "maintenance.h"
 #include "time.h"
+#include "TimeSourceState.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Members */
@@ -147,20 +149,36 @@ static void GpsOnRx(void *arg, const uint8_t *data, uint16_t len)
   GpsRequest((uint8_t *) data, len);
 }
 
+static int8_t GpsStandardTimeZoneHoursGet(void)
+{
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+
+  if (ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+        &g_configurationService,
+        &globalTimeManagement) == FALSE)
+  {
+    return 0;
+  }
+
+  return (int8_t) (globalTimeManagement.controllerStandardTimeZoneSeconds
+                   / 3600);
+}
+
 void GpsTimeAdjust(tpSTime pTime)
 {
+  int8_t timeZoneHours = GpsStandardTimeZoneHoursGet();
   uint8_t bIndex = 0;
 
-  if (GetDeviceTimeZone() > 0)
+  if (timeZoneHours > 0)
   {
-    for (bIndex = 0; bIndex < GetDeviceTimeZone(); bIndex++)
+    for (bIndex = 0; bIndex < (uint8_t) timeZoneHours; bIndex++)
     {
       TimeHourInc(pTime);
     }
   }
   else
   {
-    for (bIndex = 0; bIndex < (-1) * GetDeviceTimeZone(); bIndex++)
+    for (bIndex = 0; bIndex < (uint8_t) (-1 * timeZoneHours); bIndex++)
     {
       TimeHourDec(pTime);
     }
@@ -334,7 +352,7 @@ void GpsInit(ISerialPort_t *internalPort, ISerialPort_t *externalPort)
   {
     switch (bPort)
     {
-        case COM_PORT_ASSIGNMENT_INTERNAL:
+        case GPS_PORT_TYPE_INTERNAL:
         {
           s_port = internalPort;
           (void) SerialSetBaudRate(s_port, GpsIndexToBaudRate(bIndex));
@@ -343,7 +361,7 @@ void GpsInit(ISerialPort_t *internalPort, ISerialPort_t *externalPort)
           return;
         }
 
-        case COM_PORT_ASSIGNMENT_EXTERNAL:
+        case GPS_PORT_TYPE_EXTERNAL:
         {
           s_port = externalPort;
           (void) SerialSetBaudRate(s_port, GpsIndexToBaudRate(bIndex));

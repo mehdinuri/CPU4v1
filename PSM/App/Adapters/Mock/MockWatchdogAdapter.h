@@ -12,7 +12,7 @@
 
 typedef struct
 {
-  uint32_t lRefreshCount;
+  uint32_t refreshCount;
 } MockWatchdogAdapterCtx_t;
 
 void            MockWatchdogAdapterInit(MockWatchdogAdapterCtx_t *ctx);

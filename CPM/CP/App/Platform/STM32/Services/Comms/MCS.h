@@ -15,7 +15,12 @@
 #include "Ports/ISerialPort.h"
 #include "Ports/IModemPort.h"
 
+#include <stddef.h>
 #include <stdint.h>
+
+#ifndef CP_SNMP_STRICT_RELEASE
+#define CP_SNMP_STRICT_RELEASE 0
+#endif
 
 #define MCS_DATA_PACKET_MAX_LEN 1024U
 #define MCS_DATA_PACKET_MAX_SIZE 255U
@@ -47,6 +52,8 @@ typedef enum
 #define SNMPV3_PASSWORD_MAX_SIZE 20U
 #define SNMPV3_PASSWORD_MIN_SIZE 8U
 #define SNMP_TRAP_DESTINATION_MAX_SIZE 64U
+#define MCS_RELEASE_SNMP_COMMUNITY_LENGTH 16U
+#define MCS_RELEASE_SNMPV3_PASSWORD_LENGTH 20U
 
 #define MCS_DEFAULT_ETH_MAC_ADDRESS_0 ((uint8_t) 0x02U)
 #define MCS_DEFAULT_ETH_MAC_ADDRESS_5 ((uint8_t) 0xFEU)
@@ -81,10 +88,10 @@ typedef enum
 
 #define MCS_DEFAULT_SNMP_READ_COMMUNITY_NAME "public"
 #define MCS_DEFAULT_SNMP_WRITE_COMMUNITY_NAME "private"
-#define MCS_DEFAULT_SNMP_TRAP_COMMUNITY_NAME "public"
+#define MCS_DEFAULT_SNMP_TRAP_COMMUNITY_NAME "reports"
 
-#define MCS_DEFAULT_SNMPV3_USERNAME "lwip-agent"
-#define MCS_DEFAULT_SNMPV3_PASSWORD "agent@maestro"
+#define MCS_DEFAULT_SNMPV3_USERNAME "maester"
+#define MCS_DEFAULT_SNMPV3_PASSWORD "maester-debug-key"
 
 #define MCS_FNV_OFFSET_BASIS ((uint32_t) 2166136261UL)
 #define MCS_FNV_PRIME ((uint32_t) 16777619UL)
@@ -159,6 +166,14 @@ typedef struct _tSMCSSNMPv3State
   uint8_t baPrivKey[SNMPV3_PASSWORD_MAX_SIZE];
 } __attribute__((packed)) tSMCSSNMPv3State, *tpSMCSSNMPv3State;
 
+typedef struct _tSMCSSNMPBootstrapInfo
+{
+  char strReadCommunityName[MCS_SNMP_MAX_COMMUNITY_STR_LEN + 1U];
+  char strWriteCommunityName[MCS_SNMP_MAX_COMMUNITY_STR_LEN + 1U];
+  char strTrapCommunityName[MCS_SNMP_MAX_COMMUNITY_STR_LEN + 1U];
+  char strV3Username[SNMPV3_USERNAME_MAX_SIZE + 1U];
+} __attribute__((packed)) tSMCSSNMPBootstrapInfo, *tpSMCSSNMPBootstrapInfo;
+
 typedef struct _tSMCSConInfo
 {
   uint8_t bInitialized;
@@ -205,10 +220,15 @@ extern uint8_t MCSWriteConInfo(void);
 extern uint8_t MCSReadConInfo(void);
 extern uint8_t MCSWriteSNMPv3State(void);
 extern uint8_t MCSReadSNMPv3State(void);
+extern uint8_t MCSWriteSNMPBootstrapInfo(void);
+extern uint8_t MCSReadSNMPBootstrapInfo(void);
+extern uint8_t MCSWriteSNMPv3BootstrapState(void);
+extern uint8_t MCSReadSNMPv3BootstrapState(void);
 extern void MCSSetConInfo(tpSMCSConInfo pSInfo);
 extern void MCSGetConInfo(tpSMCSConInfo pSInfo);
 extern tpSMCSConInfo MCSGetConInfoPtr(void);
 extern const tSMCSSNMPv3State *MCSGetSNMPv3State(void);
+extern const tSMCSSNMPBootstrapInfo *MCSGetSNMPBootstrapInfo(void);
 extern tpSMCSMACAddress MCSGetEthernetMACAddress(void);
 extern tpSMCSIPv4 MCSGetLocalIPv4(void);
 extern tpSMCSIPv4 MCSGetSubnetMask(void);
@@ -224,10 +244,15 @@ extern char *MCSGetSNMPTrapCommunityName(void);
 extern char *MCSGetSNMPv3EngineID(void);
 extern char *MCSGetSNMPv3Username(void);
 extern char *MCSGetSNMPTrapDestination(void);
+extern uint8_t MCSSetSNMPCommunities(const char *readCommunity,
+                                     const char *writeCommunity,
+                                     const char *trapCommunity);
 extern uint8_t MCSSetSNMPv3Username(const char *username);
 extern uint8_t MCSSetSNMPv3Credentials(const char *username,
                                        const char *authPassphrase,
                                        const char *privPassphrase);
+extern uint8_t MCSRestoreSnmpBootstrap(void);
+extern uint8_t MCSCurrentSnmpProfileValid(void);
 extern void MCSInitConInfo(void);
 extern void MCSInitSNMPv3State(void);
 extern uint8_t MCSIsConInitialized(void);

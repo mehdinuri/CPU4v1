@@ -19,13 +19,13 @@ typedef enum
   OFFSET_OPERATION_NONE     = 0,
   OFFSET_OPERATION_SUM      = 1,
   OFFSET_OPERATION_SUBTRACT = 2
-} tEOffsetOperation;
+} OffsetOperation_e;
 
 typedef struct
 {
-  uint8_t eOperation;   /* tEOffsetOperation value */
-  uint8_t bValue;       /* raw offset magnitude    */
-} tSMeasurementOffset;
+  uint8_t operation;   /* OffsetOperation_e value */
+  uint8_t value;       /* raw offset magnitude    */
+} MeasurementOffset_t;
 
 /* ---------------------------------------------------------------------------
  * Scaling coefficients (also used in Tasks layer)
@@ -47,16 +47,16 @@ typedef struct
 
 /* ---------------------------------------------------------------------------
  * OK-range thresholds (scaled integer units)
- *   sRegVIn  : value = Voltage_V * CP_REG_VIN_COEFFICIENT
- *   sRegVOut : value = Voltage_V * CP_REG_VOUT_COEFFICIENT
- *   sNetVolt : value = Voltage_V / CP_NET_VOLTAGE_COEFFICIENT
+ *   regVIn  : value = Voltage_V * CP_REG_VIN_COEFFICIENT
+ *   regVOut : value = Voltage_V * CP_REG_VOUT_COEFFICIENT
+ *   netVolt : value = Voltage_V / CP_NET_VOLTAGE_COEFFICIENT
  * ---------------------------------------------------------------------------*/
-#define MEASUREMENT_REG_VIN_OK_MIN   (220U) /* 22.0 V */
-#define MEASUREMENT_REG_VIN_OK_MAX   (260U) /* 26.0 V */
-#define MEASUREMENT_REG_VOUT_OK_MIN  (47U)  /*  4.7 V */
-#define MEASUREMENT_REG_VOUT_OK_MAX  (67U)  /*  6.7 V */
-#define MEASUREMENT_NET_LEVEL_OK_MIN (226U) /* 165 V  */
-#define MEASUREMENT_NET_LEVEL_OK_MAX (363U) /* 265 V  */
+#define MEASUREMENT_REG_VIN_OK_MIN   (220U) /* = 22.0 V × 10   */
+#define MEASUREMENT_REG_VIN_OK_MAX   (260U) /* = 26.0 V × 10   */
+#define MEASUREMENT_REG_VOUT_OK_MIN  (47U)  /* =  4.7 V × 10   */
+#define MEASUREMENT_REG_VOUT_OK_MAX  (67U)  /* =  6.7 V × 10   */
+#define MEASUREMENT_NET_LEVEL_OK_MIN (226U) /* = 165 V / 0.73029 */
+#define MEASUREMENT_NET_LEVEL_OK_MAX (363U) /* = 265 V / 0.73029 */
 
 /* ---------------------------------------------------------------------------
  * Pure-computation API
@@ -66,38 +66,38 @@ typedef struct
  * @brief Apply calibration offset to a raw net voltage then scale to the
  *        control-panel integer representation.
  *
- * @param fNetVoltage  Raw measured net voltage (float, engineering units)
- * @param pOffset      Offset descriptor (operation + magnitude); must not be NULL
- * @return             Scaled integer: (fNetVoltage ± offset) / CP_NET_VOLTAGE_COEFFICIENT
+ * @param netVoltage  Raw measured net voltage (float, engineering units)
+ * @param offset      Offset descriptor (operation + magnitude); must not be NULL
+ * @return             Scaled integer: (netVoltage ± offset) / CP_NET_VOLTAGE_COEFFICIENT
  */
-uint16_t Measurement_ScaleNetVoltage(float fNetVoltage,
-                                     const tSMeasurementOffset *pOffset);
+uint16_t Measurement_ScaleNetVoltage(float netVoltage,
+                                     const MeasurementOffset_t *offset);
 
 /**
  * @brief Scale a DC voltage reading to the control-panel integer representation.
  *
- * @param fVoltage      Raw measured voltage (float, engineering units)
- * @param fCoefficient  Multiplicative scaling factor (e.g. 10.0 for ×10)
- * @return              (uint16_t)(fVoltage * fCoefficient)
+ * @param voltage      Raw measured voltage (float, engineering units)
+ * @param coefficient  Multiplicative scaling factor (e.g. 10.0 for ×10)
+ * @return              (uint16_t)(voltage * coefficient)
  */
-uint16_t Measurement_ScaleRegVoltage(float fVoltage, float fCoefficient);
+uint16_t Measurement_ScaleRegVoltage(float voltage, float coefficient);
 
 /**
  * @brief Check whether both DC regulator voltages are within acceptable range.
  *
- * @param sRegVIn   Scaled Vin  (from Measurement_ScaleRegVoltage)
- * @param sRegVOut  Scaled Vout (from Measurement_ScaleRegVoltage)
+ * @param regVIn   Scaled Vin  (from Measurement_ScaleRegVoltage)
+ * @param regVOut  Scaled Vout (from Measurement_ScaleRegVoltage)
  * @return 1 if both in range, 0 otherwise
  */
-uint8_t Measurement_DCIsOK(uint16_t sRegVIn, uint16_t sRegVOut);
+uint8_t Measurement_DCIsOK(uint16_t regVIn, uint16_t regVOut);
 
 /**
  * @brief Check whether the AC grid voltage is within acceptable range.
  *
- * @param sNetVoltage  Scaled net voltage (from Measurement_ScaleNetVoltage)
+ * @param netVoltage  Scaled net voltage (from Measurement_ScaleNetVoltage)
  * @return 1 if in range, 0 otherwise
  */
-uint8_t Measurement_ACIsOK(uint16_t sNetVoltage);
+uint8_t Measurement_ACIsOK(uint16_t netVoltage);
 
 #endif /* DOMAIN_MEASUREMENT_H */
 

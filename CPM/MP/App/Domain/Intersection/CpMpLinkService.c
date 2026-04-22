@@ -31,7 +31,7 @@ static void WriteUint32Le(uint8_t *bytes, uint32_t value)
   bytes[3] = (uint8_t) ((value >> 24U) & 0xFFU);
 }
 
-static uint8_t BuildIntersectionConfig(const CpMpMmuConfigImageV1_t *image,
+static uint8_t BuildIntersectionConfig(const CpMpMmuConfigImage_t *image,
                                        IntersectionConfig_t *config,
                                        ChannelOutputMapping_t *mapping)
 {
@@ -59,6 +59,7 @@ static uint8_t BuildIntersectionConfig(const CpMpMmuConfigImageV1_t *image,
   config->ringCount = image->ringCount;
   config->unit.startUpFlashSeconds = image->startupFlashSeconds;
   config->unit.startUpFlashMode = image->startupFlashMode;
+  config->unit.failureFlashPeriodDs = image->failureFlashPeriodDs;
 
   for (phaseIndex = 0U; phaseIndex < image->phaseCount; ++phaseIndex)
   {
@@ -101,8 +102,19 @@ static uint8_t BuildIntersectionConfig(const CpMpMmuConfigImageV1_t *image,
       return 0U;
     }
 
+    if (((controlType == INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP)
+         || (controlType == INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP)
+         || (controlType == INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP))
+        && ((controlSource == 0U)
+            || (controlSource > INTERSECTION_OVERLAP_COUNT_MAX)))
+    {
+      return 0U;
+    }
+
     config->channels[channelIndex].controlType = controlType;
     config->channels[channelIndex].controlSource = controlSource;
+    config->channels[channelIndex].flashMask =
+      image->channelFlashMask[channelIndex];
   }
 
   for (outputIndex = 0U; outputIndex < image->outputMapCount; ++outputIndex)
@@ -149,6 +161,11 @@ static uint8_t ApplyConfigImage(CpMpLinkService_t *service)
 
   if ((ConfigurationServiceSetConfig(service->configurationService, &config) == 0U)
       || (ConfigurationServiceSetOutputMapping(service->configurationService, &mapping) == 0U)
+      || (ConfigurationServiceSetMonitoringProfile(
+            service->configurationService,
+            &service->configImage.channelConflictMask[0],
+            &service->configImage.channelMinYellowDs[0],
+            &service->configImage.channelRedClearDs[0]) == 0U)
       || (ConfigurationServiceValidate(service->configurationService) == 0U))
   {
     service->configState = CPMP_CONFIG_STATE_INVALID;
@@ -202,6 +219,18 @@ static uint32_t CurrentReportedGeneration(const CpMpLinkService_t *service)
   return service->expectedGeneration;
 }
 
+static uint8_t CurrentConfigReady(const CpMpLinkService_t *service)
+{
+  if (service == NULL)
+  {
+    return 0U;
+  }
+
+  return (uint8_t) ((service->configState == CPMP_CONFIG_STATE_APPLIED)
+                    && (service->appliedSetId == service->expectedSetId)
+                    && (service->appliedGeneration == service->expectedGeneration));
+}
+
 static CpMpSafetyAction_t CurrentSafetyAction(const CpMpLinkService_t *service)
 {
   SafetyAction_t latchedAction;
@@ -223,9 +252,7 @@ static CpMpSafetyAction_t CurrentSafetyAction(const CpMpLinkService_t *service)
   }
 
   if (((service->tickCount - service->lastCpHeartbeatTick) > CPMP_PEER_TIMEOUT_TICKS)
-      || (service->configState != CPMP_CONFIG_STATE_APPLIED)
-      || (service->appliedSetId != service->expectedSetId)
-      || (service->appliedGeneration != service->expectedGeneration))
+      || (CurrentConfigReady(service) == 0U))
   {
     return CPMP_SAFETY_ACTION_FLASH;
   }
@@ -245,9 +272,7 @@ static uint8_t CurrentSafetyReasonCode(const CpMpLinkService_t *service)
     return (uint8_t) FAULT_CODE_MODULE_CP_MISSING;
   }
 
-  if ((service->configState != CPMP_CONFIG_STATE_APPLIED)
-      || (service->appliedSetId != service->expectedSetId)
-      || (service->appliedGeneration != service->expectedGeneration))
+  if (CurrentConfigReady(service) == 0U)
   {
     return (uint8_t) FAULT_CODE_MP_CONFIG_INVALID;
   }
@@ -406,7 +431,7 @@ static uint32_t BuildGlobalFaultFlags(const CpMpLinkService_t *service,
 }
 
 static void BuildFaultStatusImage(const CpMpLinkService_t *service,
-                                  CpMpFaultStatusImageV1_t *image)
+                                  CpMpFaultStatusImage_t *image)
 {
   FaultMonitorStatus_t status;
   uint8_t channelIndex;
@@ -474,6 +499,7 @@ static void SendHeartbeat(CpMpLinkService_t *service)
   uint8_t payload[10];
   uint16_t setId;
   uint32_t generation;
+  uint8_t localPermitOutputPower = 0U;
 
   if (service == NULL)
   {
@@ -482,11 +508,17 @@ static void SendHeartbeat(CpMpLinkService_t *service)
 
   setId = CurrentReportedSetId(service);
   generation = CurrentReportedGeneration(service);
+  if (service->safetyDecisionService != NULL)
+  {
+    localPermitOutputPower = SafetyDecisionServiceGetLocalPermitOutputPower(
+      service->safetyDecisionService);
+  }
 
   (void) memset(payload, 0, sizeof(payload));
   payload[0] = CPMP_PROTOCOL_VERSION;
   payload[1] = (uint8_t) service->configState;
   payload[2] = (uint8_t) CurrentSafetyAction(service);
+  payload[3] = localPermitOutputPower;
   payload[4] = (uint8_t) (setId & 0xFFU);
   payload[5] = (uint8_t) ((setId >> 8U) & 0xFFU);
   payload[6] = (uint8_t) (generation & 0xFFU);
@@ -541,9 +573,9 @@ static void SendSafetyStatus(CpMpLinkService_t *service)
 
 static void SendFaultStatus(CpMpLinkService_t *service)
 {
-  CpMpFaultStatusImageV1_t image;
-  uint8_t payload[44];
-  uint8_t channelIndex;
+  CpMpFaultStatusImage_t image;
+  uint8_t payload[48];
+  uint32_t flagMask;
 
   if (service == NULL)
   {
@@ -556,19 +588,268 @@ static void SendFaultStatus(CpMpLinkService_t *service)
   payload[0] = CPMP_PROTOCOL_VERSION;
   WriteUint32Le(&payload[1], image.sequence);
   WriteUint32Le(&payload[5], image.globalFlags);
-  for (channelIndex = 0U;
-       channelIndex < (uint8_t) (sizeof(image.channelFlags)
-                                 / sizeof(image.channelFlags[0]));
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
        channelIndex++)
   {
-    WriteUint16Le(&payload[9U + (uint8_t) (channelIndex * 2U)],
-                  image.channelFlags[channelIndex]);
+    if ((image.channelFlags[channelIndex] & CPMP_FAULT_CHANNEL_FLAG_CONFLICT)
+        != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
   }
-  payload[41] = image.safetyAction;
-  payload[42] = image.safetyReasonCode;
-  payload[43] = image.configState;
+  WriteUint32Le(&payload[9], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex]
+         & CPMP_FAULT_CHANNEL_FLAG_DUAL_INDICATION) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[13], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex] & CPMP_FAULT_CHANNEL_FLAG_RED_FAIL)
+        != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[17], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex] & CPMP_FAULT_CHANNEL_FLAG_DARK) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[21], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex]
+         & CPMP_FAULT_CHANNEL_FLAG_MIN_YELLOW_SHORT) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[25], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex]
+         & CPMP_FAULT_CHANNEL_FLAG_CLEARANCE_SHORT) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[29], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex]
+         & CPMP_FAULT_CHANNEL_FLAG_SIGNAL_SEQUENCE) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[33], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex] & CPMP_FAULT_CHANNEL_FLAG_LAMP_OPEN)
+        != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[37], flagMask);
+
+  flagMask = 0U;
+  for (uint8_t channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((image.channelFlags[channelIndex]
+         & CPMP_FAULT_CHANNEL_FLAG_LAMP_EXTERNALLY_DRIVEN) != 0U)
+    {
+      flagMask |= (uint32_t) (1UL << channelIndex);
+    }
+  }
+  WriteUint32Le(&payload[41], flagMask);
+
+  payload[45] = image.safetyAction;
+  payload[46] = image.safetyReasonCode;
+  payload[47] = image.configState;
 
   (void) SendFrame(service, CPMP_FRAME_ID_MP_FAULTS, payload, sizeof(payload));
+}
+
+static void ClearReceivedChunks(CpMpLinkService_t *service)
+{
+  if (service == NULL)
+  {
+    return;
+  }
+
+  (void) memset(&service->receivedChunks[0], 0, sizeof(service->receivedChunks));
+}
+
+static void MarkChunkReceived(CpMpLinkService_t *service, uint8_t chunkIndex)
+{
+  if ((service == NULL) || (chunkIndex >= CPMP_CONFIG_CHUNK_MAX_COUNT))
+  {
+    return;
+  }
+
+  service->receivedChunks[chunkIndex / 8U] |=
+    (uint8_t) (1U << (chunkIndex % 8U));
+}
+
+static uint8_t HaveReceivedAllChunks(const CpMpLinkService_t *service)
+{
+  uint8_t chunkIndex;
+
+  if (service == NULL)
+  {
+    return 0U;
+  }
+
+  for (chunkIndex = 0U; chunkIndex < service->totalChunks; chunkIndex++)
+  {
+    if ((service->receivedChunks[chunkIndex / 8U]
+         & (uint8_t) (1U << (chunkIndex % 8U))) == 0U)
+    {
+      return 0U;
+    }
+  }
+
+  return 1U;
+}
+
+static uint8_t EnqueueFaultEvent(CpMpLinkService_t *service,
+                                 uint32_t sequence,
+                                 const FaultEvent_t *event)
+{
+  CpMpFaultEventV1_t *queuedEvent;
+
+  if ((service == NULL) || (event == NULL)
+      || (service->eventQueueCount >= FAULT_MONITOR_TRACE_CAPACITY))
+  {
+    return 0U;
+  }
+
+  queuedEvent = &service->eventQueue[service->eventQueueTail];
+  queuedEvent->sequence = sequence;
+  queuedEvent->timestampTicks = event->timestampTicks;
+  queuedEvent->param = event->param;
+  queuedEvent->source = event->source;
+  queuedEvent->code = (uint8_t) event->code;
+  queuedEvent->severity = (uint8_t) event->severity;
+
+  service->eventQueueTail =
+    (uint8_t) ((service->eventQueueTail + 1U) % FAULT_MONITOR_TRACE_CAPACITY);
+  service->eventQueueCount++;
+
+  return 1U;
+}
+
+static void LoadNextPendingEvent(CpMpLinkService_t *service)
+{
+  if ((service == NULL) || (service->pendingEventValid != 0U)
+      || (service->eventQueueCount == 0U))
+  {
+    return;
+  }
+
+  service->pendingEvent = service->eventQueue[service->eventQueueHead];
+  service->eventQueueHead =
+    (uint8_t) ((service->eventQueueHead + 1U) % FAULT_MONITOR_TRACE_CAPACITY);
+  service->eventQueueCount--;
+  service->pendingEventValid = 1U;
+}
+
+static void CaptureFaultEvents(CpMpLinkService_t *service)
+{
+  uint32_t totalFaults;
+
+  if ((service == NULL) || (service->faultMonitorService == NULL))
+  {
+    return;
+  }
+
+  totalFaults = FaultMonitorServiceGetTotalFaults(service->faultMonitorService);
+  if (service->nextEventSequenceToQueue == 0U)
+  {
+    service->nextEventSequenceToQueue = 1U;
+  }
+
+  while (service->nextEventSequenceToQueue <= totalFaults)
+  {
+    FaultEvent_t event;
+
+    if (service->eventQueueCount >= FAULT_MONITOR_TRACE_CAPACITY)
+    {
+      break;
+    }
+
+    if (FaultMonitorServiceGetEventBySequence(service->faultMonitorService,
+                                              service->nextEventSequenceToQueue,
+                                              &event) == 0U)
+    {
+      service->nextEventSequenceToQueue = totalFaults + 1U;
+      break;
+    }
+
+    if (EnqueueFaultEvent(service, service->nextEventSequenceToQueue, &event)
+        == 0U)
+    {
+      break;
+    }
+
+    service->nextEventSequenceToQueue++;
+  }
+
+  LoadNextPendingEvent(service);
+}
+
+static void SendPendingEvent(CpMpLinkService_t *service)
+{
+  uint8_t payload[17];
+
+  if ((service == NULL) || (service->pendingEventValid == 0U))
+  {
+    return;
+  }
+
+  (void) memset(payload, 0, sizeof(payload));
+  payload[0] = CPMP_PROTOCOL_VERSION;
+  WriteUint32Le(&payload[1], service->pendingEvent.sequence);
+  WriteUint32Le(&payload[5], service->pendingEvent.timestampTicks);
+  WriteUint32Le(&payload[9], service->pendingEvent.param);
+  WriteUint16Le(&payload[13], service->pendingEvent.source);
+  payload[15] = service->pendingEvent.code;
+  payload[16] = service->pendingEvent.severity;
+
+  (void) SendFrame(service, CPMP_FRAME_ID_MP_EVENT, payload, sizeof(payload));
 }
 
 static void ResetLoadingState(CpMpLinkService_t *service)
@@ -581,7 +862,7 @@ static void ResetLoadingState(CpMpLinkService_t *service)
   (void) memset(&service->configImage, 0, sizeof(service->configImage));
   service->expectedImageBytes = 0U;
   service->totalChunks = 0U;
-  service->receivedChunkMask = 0U;
+  ClearReceivedChunks(service);
   service->loadingSetId = 0U;
   service->loadingGeneration = 0U;
 }
@@ -609,6 +890,10 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
             | ((uint32_t) frame->data[9] << 8U)
             | ((uint32_t) frame->data[10] << 16U)
             | ((uint32_t) frame->data[11] << 24U);
+          if (frame->length >= 13U)
+          {
+            service->lastCpPermitOutputPower = (uint8_t) (frame->data[12] != 0U);
+          }
           service->lastCpHeartbeatTick = service->tickCount;
         }
         break;
@@ -616,7 +901,8 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
 
       case CPMP_FRAME_ID_CP_CFG_BEGIN:
       {
-        if ((frame->length < 10U) || (frame->data[1] == 0U) || (frame->data[1] > 8U))
+        if ((frame->length < 10U) || (frame->data[1] == 0U)
+            || (frame->data[1] > CPMP_CONFIG_CHUNK_MAX_COUNT))
         {
           service->configState = CPMP_CONFIG_STATE_INVALID;
           ResetLoadingState(service);
@@ -673,14 +959,12 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
         (void) memcpy(&((uint8_t *) &service->configImage)[offset],
                       &frame->data[4],
                       chunkLength);
-        service->receivedChunkMask |= (uint8_t) (1U << chunkIndex);
+        MarkChunkReceived(service, chunkIndex);
         break;
       }
 
       case CPMP_FRAME_ID_CP_CFG_COMMIT:
       {
-        uint8_t requiredMask;
-
         if ((service->configState != CPMP_CONFIG_STATE_LOADING)
             || (frame->length < 8U))
         {
@@ -705,10 +989,7 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
           break;
         }
 
-        requiredMask = (service->totalChunks >= 8U)
-                       ? 0xFFU
-                       : (uint8_t) ((1U << service->totalChunks) - 1U);
-        if (service->receivedChunkMask != requiredMask)
+        if (HaveReceivedAllChunks(service) == 0U)
         {
           service->configState = CPMP_CONFIG_STATE_INVALID;
           ResetLoadingState(service);
@@ -717,6 +998,28 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
 
         (void) ApplyConfigImage(service);
         ResetLoadingState(service);
+        break;
+      }
+
+      case CPMP_FRAME_ID_CP_EVENT_ACK:
+      {
+        uint32_t ackSequence;
+
+        if (frame->length < 5U)
+        {
+          break;
+        }
+
+        ackSequence = (uint32_t) frame->data[1]
+                      | ((uint32_t) frame->data[2] << 8U)
+                      | ((uint32_t) frame->data[3] << 16U)
+                      | ((uint32_t) frame->data[4] << 24U);
+        if ((service->pendingEventValid != 0U)
+            && (ackSequence == service->pendingEvent.sequence))
+        {
+          service->pendingEventValid = 0U;
+          LoadNextPendingEvent(service);
+        }
         break;
       }
 
@@ -744,6 +1047,8 @@ void CpMpLinkServiceInit(CpMpLinkService_t *service,
   service->safetyDecisionService = safetyDecisionService;
   service->faultMonitorService = faultMonitorService;
   service->configState = CPMP_CONFIG_STATE_EMPTY;
+  service->nextEventSequenceToQueue = 1U;
+  ClearReceivedChunks(service);
 
   if ((controlBusPort != NULL)
       && (ControlBusRegisterRxCallback(controlBusPort, OnRxFrame, service) != 0U))
@@ -760,8 +1065,15 @@ void CpMpLinkServiceStep(CpMpLinkService_t *service)
   }
 
   service->tickCount++;
+  if (service->safetyDecisionService != NULL)
+  {
+    SafetyDecisionServiceSetConfigReady(service->safetyDecisionService,
+                                        CurrentConfigReady(service));
+  }
   SendHeartbeat(service);
   SendConfigStatus(service);
   SendSafetyStatus(service);
   SendFaultStatus(service);
+  CaptureFaultEvents(service);
+  SendPendingEvent(service);
 }

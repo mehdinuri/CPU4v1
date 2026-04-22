@@ -9,7 +9,7 @@
 #include "Domain/FlashSyncWatchdog.h"
 #include "Adapters/Mock/MockTickAdapter.h"
 
-static tSFlashSyncWatchdog wdt;
+static FlashSyncWatchdog_t wdt;
 
 void setUp(void)
 {
@@ -92,7 +92,7 @@ void test_reset_returns_to_never_fed(void)
 
 void test_driven_via_tick_port(void)
 {
-  tSMockTickAdapterCtx tickCtx;
+  MockTickAdapterCtx_t tickCtx;
   ITickPort_t tickPort;
 
   MockTickAdapter_Init(&tickCtx);

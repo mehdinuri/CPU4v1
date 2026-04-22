@@ -15,12 +15,12 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSFlashPersistenceAdapterCtx;
+  uint8_t reserved;
+} FlashPersistenceAdapterCtx_t;
 
-void FlashPersistenceAdapter_Init(tSFlashPersistenceAdapterCtx *pCtx);
+void FlashPersistenceAdapter_Init(FlashPersistenceAdapterCtx_t *ctx);
 IPersistencePort_t FlashPersistenceAdapter_CreatePort(
-  tSFlashPersistenceAdapterCtx *pCtx);
+  FlashPersistenceAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_FLASH_PERSISTENCE_ADAPTER_H */
 

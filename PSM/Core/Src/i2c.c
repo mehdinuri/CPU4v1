@@ -23,7 +23,6 @@
 /* USER CODE BEGIN 0 */
 #include "utilities.h"
 #include "gpio.h"
-#include "HardwarePorts.h"
 
 #define I2C_EEPROM_DEVICE_BASE_ADDR 0xA0
 #define I2C_EEPROM_PAGE_SIZE 16
@@ -158,23 +157,28 @@ void I2CDeInit(I2C_HandleTypeDef *i2chandle)
 	HAL_I2C_DeInit(i2chandle);
 }
 
-uint8_t I2CEEPROMWrite(uint32_t lAddress, const void *pvData, uint32_t lDataSize)
+uint8_t I2CEEPROMWrite(uint32_t address, const void *data, uint32_t dataSize)
 {
-	uint8_t *pbData = (uint8_t*) pvData;
-	uint16_t sWriteAddr = (uint16_t) lAddress;
-	uint16_t sBytesRemained = lDataSize;
+	uint8_t *cursor = (uint8_t *) data;
+	uint16_t writeAddr = (uint16_t) address;
+	uint16_t bytesRemained = dataSize;
 
 	GPIOEEPROMEnable();
 
-	while (sBytesRemained > 0)
+	/* Do NOT refresh the watchdog here: MaintenanceTask owns that contract.
+	 * Refreshing inside the I2C loop would hide a hung StorageTask from the
+	 * maintenance-failure counter.  The total time this loop can take is
+	 * bounded by STORAGE_MAX_PAYLOAD / I2C_EEPROM_PAGE_SIZE * (xfer + ready)
+	 * which is ≪ MAINTENANCE_TASK_TIMEOUT_MS for PSM's current records. */
+	while (bytesRemained > 0)
 	{
-		Watchdog_Refresh(&g_watchdogPort);
+		uint16_t bytesInPage = I2C_EEPROM_PAGE_SIZE - (writeAddr % I2C_EEPROM_PAGE_SIZE);
+		uint16_t bytesToWrite = (bytesRemained < bytesInPage) ? bytesRemained : bytesInPage;
 
-		uint16_t sBytesInPage = I2C_EEPROM_PAGE_SIZE - (sWriteAddr % I2C_EEPROM_PAGE_SIZE);
-		uint16_t sBytesToWrite = (sBytesRemained < sBytesInPage) ? sBytesRemained : sBytesInPage;
-		
-		if (HAL_I2C_Mem_Write(&hi2c3, (uint16_t)I2C_EEPROM_DEVICE_BASE_ADDR, sWriteAddr, I2C_MEMADD_SIZE_8BIT, pbData,
-				sBytesToWrite, I2C_XFER_TIMEOUT_MAX)
+		if (HAL_I2C_Mem_Write(&hi2c3, (uint16_t)I2C_EEPROM_DEVICE_BASE_ADDR,
+		                      writeAddr, I2C_MEMADD_SIZE_8BIT,
+		                      cursor,
+		                      bytesToWrite, I2C_XFER_TIMEOUT_MAX)
 				!= HAL_OK)
 		{
 			GPIOEEPROMDisable();
@@ -187,19 +191,19 @@ uint8_t I2CEEPROMWrite(uint32_t lAddress, const void *pvData, uint32_t lDataSize
 			return FALSE;
 		}
 
-		sBytesRemained -= sBytesToWrite;
-		pbData += sBytesToWrite;
-		sWriteAddr += sBytesToWrite;
+		bytesRemained -= bytesToWrite;
+		cursor += bytesToWrite;
+		writeAddr += bytesToWrite;
 	}
 
 	GPIOEEPROMDisable();
 	return TRUE;
 }
 
-uint8_t I2CEEPROMRead(uint32_t lAddress, void *pvData, uint32_t lDataSize)
+uint8_t I2CEEPROMRead(uint32_t address, void *data, uint32_t dataSize)
 {
-	return  (HAL_I2C_Mem_Read(&hi2c3, (uint16_t)I2C_EEPROM_DEVICE_BASE_ADDR, (uint16_t)lAddress,
-            I2C_MEMADD_SIZE_8BIT, (uint8_t*)pvData, lDataSize, I2C_XFER_TIMEOUT_MAX) == HAL_OK);
+	return  (HAL_I2C_Mem_Read(&hi2c3, (uint16_t)I2C_EEPROM_DEVICE_BASE_ADDR, (uint16_t)address,
+            I2C_MEMADD_SIZE_8BIT, (uint8_t*)data, dataSize, I2C_XFER_TIMEOUT_MAX) == HAL_OK);
 }
 
 /* USER CODE END 1 */

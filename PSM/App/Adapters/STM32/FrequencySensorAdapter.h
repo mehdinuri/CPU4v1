@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file    Adapters/STM32/FrequencySensorAdapter.h
  * @brief   STM32 adapter for IFrequencySensorPort.
- *          The bFrequency field is written from ISR context via the inline
+ *          The frequency field is written from ISR context via the inline
  *          setter below.  main_stm32.c provides the globally-named ISR
  *          wrapper that forwards to this setter.
  ******************************************************************************
@@ -13,11 +13,11 @@
 
 #include "Ports/IFrequencySensorPort.h"
 
-/* bFrequency is written from ISR context; volatile prevents the compiler from
+/* frequency is written from ISR context; volatile prevents the compiler from
  * caching the value in a register across the ISR boundary. */
 typedef struct
 {
-  volatile uint8_t bFrequency;
+  volatile uint8_t frequency;
 } FrequencySensorAdapterCtx_t;
 
 void                    FrequencySensorAdapterInit(FrequencySensorAdapterCtx_t *ctx);
@@ -27,9 +27,9 @@ IFrequencySensorPort_t  FrequencySensorAdapterCreatePort(FrequencySensorAdapterC
  * ISR-safe setter — called from ISR wrapper in main_stm32.c.
  * ---------------------------------------------------------------------------*/
 static inline void FrequencySensorAdapter_SetNetFrequency(
-    FrequencySensorAdapterCtx_t *ctx, uint8_t bFreq)
+    FrequencySensorAdapterCtx_t *ctx, uint8_t freq)
 {
-  ctx->bFrequency = bFreq;
+  ctx->frequency = freq;
 }
 
 #endif /* ADAPTERS_STM32_FREQUENCYSENSORADAPTER_H */

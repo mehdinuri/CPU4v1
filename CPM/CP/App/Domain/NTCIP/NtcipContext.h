@@ -5,6 +5,8 @@
 #ifndef NTCIP_CONTEXT_H
 #define NTCIP_CONTEXT_H
 
+#include <string.h>
+
 #include "Domain/Intersection/CpMpLinkService.h"
 #include "Domain/Intersection/ConfigurationService.h"
 #include "Domain/Intersection/DetectorReportService.h"
@@ -12,11 +14,16 @@
 #include "Domain/Intersection/IntersectionController.h"
 #include "Domain/Intersection/IntersectionEngine.h"
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
+#include "Domain/Services/EventReportService.h"
 #include "Ports/IDoorSensorPort.h"
 #include "Ports/IHeaterPort.h"
 #include "Ports/IPowerMonitorPort.h"
+#include "Ports/ISnmpSecurityPort.h"
 #include "Ports/IUnitAlarmPort.h"
 #include "Ports/IUnitClockPort.h"
+
+#define NTCIP_SNMPV3_USERNAME_MAX_LENGTH 32U
+#define NTCIP_SNMPV3_PASSPHRASE_MAX_LENGTH 20U
 
 typedef struct
 {
@@ -32,6 +39,11 @@ typedef struct
   IUnitAlarmPort_t *unitAlarmPort;
   IUnitClockPort_t *unitClockPort;
   CpMpLinkService_t *cpMpLinkService;
+  EventReportService_t *eventReportService;
+  ISnmpSecurityPort_t *snmpSecurityPort;
+  char stagedSnmpV3Username[NTCIP_SNMPV3_USERNAME_MAX_LENGTH + 1U];
+  char stagedSnmpV3AuthPassphrase[NTCIP_SNMPV3_PASSPHRASE_MAX_LENGTH + 1U];
+  char stagedSnmpV3PrivPassphrase[NTCIP_SNMPV3_PASSPHRASE_MAX_LENGTH + 1U];
 } NtcipContext_t;
 
 static inline void NtcipContextInit(NtcipContext_t *context,
@@ -42,6 +54,12 @@ static inline void NtcipContextInit(NtcipContext_t *context,
                                     NtcipDbTransactionService_t *
                                     dbTransactionService)
 {
+  if (context == NULL)
+  {
+    return;
+  }
+
+  (void) memset(context, 0, sizeof(*context));
   context->configurationService = configurationService;
   context->intersectionEngine = intersectionEngine;
   context->intersectionController = intersectionController;
@@ -54,6 +72,8 @@ static inline void NtcipContextInit(NtcipContext_t *context,
   context->unitAlarmPort = NULL;
   context->unitClockPort = NULL;
   context->cpMpLinkService = NULL;
+  context->eventReportService = NULL;
+  context->snmpSecurityPort = NULL;
 }
 
 static inline void NtcipContextBindDetectorReportService(
@@ -130,6 +150,26 @@ static inline void NtcipContextBindCpMpLinkService(
   if (context != NULL)
   {
     context->cpMpLinkService = cpMpLinkService;
+  }
+}
+
+static inline void NtcipContextBindEventReportService(
+  NtcipContext_t *context,
+  EventReportService_t *eventReportService)
+{
+  if (context != NULL)
+  {
+    context->eventReportService = eventReportService;
+  }
+}
+
+static inline void NtcipContextBindSnmpSecurityPort(
+  NtcipContext_t *context,
+  ISnmpSecurityPort_t *snmpSecurityPort)
+{
+  if (context != NULL)
+  {
+    context->snmpSecurityPort = snmpSecurityPort;
   }
 }
 

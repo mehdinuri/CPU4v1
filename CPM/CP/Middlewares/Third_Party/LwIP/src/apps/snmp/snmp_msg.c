@@ -99,12 +99,16 @@ u8_t snmp_get_current_request_identity(snmp_request_identity_t *identity)
 #if LWIP_SNMP_V3
   if (spCurrentRequest->version == SNMP_VERSION_3)
   {
+    identity->security_level =
+      (u8_t) (spCurrentRequest->msg_flags
+              & (SNMP_V3_AUTH_FLAG | SNMP_V3_PRIV_FLAG));
     identity->security_name = spCurrentRequest->msg_user_name;
     identity->security_name_len = spCurrentRequest->msg_user_name_len;
     return 1U;
   }
 #endif
 
+  identity->security_level = SNMP_V3_NOAUTHNOPRIV;
   identity->security_name = spCurrentRequest->community;
   identity->security_name_len = spCurrentRequest->community_strlen;
 

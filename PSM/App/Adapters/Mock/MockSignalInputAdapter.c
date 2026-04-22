@@ -16,7 +16,7 @@ static uint8_t AdapterGetState(void *ctx, SignalInputId_t id)
   MockSignalInputAdapterCtx_t *c = (MockSignalInputAdapterCtx_t *) ctx;
   if ((uint8_t) id < MOCK_INPUT_COUNT)
   {
-    return c->aInputStates[(uint8_t) id];
+    return c->inputStates[(uint8_t) id];
   }
   return 0U;
 }

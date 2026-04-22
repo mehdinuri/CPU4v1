@@ -43,7 +43,7 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
   RCC_ClkInitTypeDef    clkconfig;
   uint32_t              uwTimclock = 0;
   uint32_t              uwPrescalerValue = 0;
-  uint32_t              pFLatency;
+  uint32_t              latency;
 
   HAL_StatusTypeDef     status;
 
@@ -51,7 +51,7 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
   __HAL_RCC_TIM1_CLK_ENABLE();
 
   /* Get clock configuration */
-  HAL_RCC_GetClockConfig(&clkconfig, &pFLatency);
+  HAL_RCC_GetClockConfig(&clkconfig, &latency);
 
   /* Compute TIM1 clock */
   uwTimclock = HAL_RCC_GetPCLK2Freq();

@@ -14,9 +14,9 @@
 #define SIGNAL_CARD_OUTPUT_CHANNELS_PER_MODULE 12U
 #define SIGNAL_CARD_MODULES_PER_BANK 4U
 
-uint8_t SignalCardIdentity_IsValid(uint8_t bCardId);
-uint8_t SignalCardIdentity_CommandBank(uint8_t bCardId);
-uint8_t SignalCardIdentity_OutputBitBase(uint8_t bCardId);
+uint8_t SignalCardIdentity_IsValid(uint8_t cardId);
+uint8_t SignalCardIdentity_CommandBank(uint8_t cardId);
+uint8_t SignalCardIdentity_OutputBitBase(uint8_t cardId);
 
 #endif /* DOMAIN_SIGNAL_CARD_IDENTITY_H */
 

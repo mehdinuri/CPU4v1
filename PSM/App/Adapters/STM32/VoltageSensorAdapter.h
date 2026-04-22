@@ -19,9 +19,9 @@
  * values in registers across the ISR boundary. */
 typedef struct
 {
-  volatile float fNetVoltage;
-  volatile float fRegVIn;
-  volatile float fRegVOut;
+  volatile float netVoltage;
+  volatile float regVIn;
+  volatile float regVOut;
 } VoltageSensorAdapterCtx_t;
 
 void                   VoltageSensorAdapterInit(VoltageSensorAdapterCtx_t *ctx);
@@ -32,21 +32,21 @@ IVoltageSensorPort_t   VoltageSensorAdapterCreatePort(VoltageSensorAdapterCtx_t 
  * Called from ISR wrappers in main_stm32.c (which owns the adapter context).
  * ---------------------------------------------------------------------------*/
 static inline void VoltageSensorAdapter_SetNetVoltage(
-    VoltageSensorAdapterCtx_t *ctx, float fVolt)
+    VoltageSensorAdapterCtx_t *ctx, float volt)
 {
-  ctx->fNetVoltage = fVolt;
+  ctx->netVoltage = volt;
 }
 
 static inline void VoltageSensorAdapter_SetRegVIn(
-    VoltageSensorAdapterCtx_t *ctx, float fVIn)
+    VoltageSensorAdapterCtx_t *ctx, float vIn)
 {
-  ctx->fRegVIn = fVIn;
+  ctx->regVIn = vIn;
 }
 
 static inline void VoltageSensorAdapter_SetRegVOut(
-    VoltageSensorAdapterCtx_t *ctx, float fVOut)
+    VoltageSensorAdapterCtx_t *ctx, float vOut)
 {
-  ctx->fRegVOut = fVOut;
+  ctx->regVOut = vOut;
 }
 
 #endif /* ADAPTERS_STM32_VOLTAGESENSORADAPTER_H */

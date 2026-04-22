@@ -11,9 +11,11 @@
 #ifndef __MLM_H__
 #define __MLM_H__
 
-#include "data.h"
+#include "cmsis_os.h"
 
-#define LOG_RECORDS_MAX 1024
+#include "LogTypes.h"
+
+#define LOG_RECORDS_MAX 256U
 #define LOG_SIZE_UPPER_BOUND LOG_RECORDS_MAX - 1
 #define LOG_SIZE_LOWER_BOUND 0
 

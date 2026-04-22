@@ -136,5 +136,6 @@ int main(void)
   RUN_TEST(test_convert_dc_scaling_applied);
   RUN_TEST(test_convert_dc_regulator_vin);
   RUN_TEST(test_convert_dc_zero_adc_max_returns_zero);
+
   return UNITY_END();
 }

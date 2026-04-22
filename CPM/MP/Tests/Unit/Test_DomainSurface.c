@@ -275,6 +275,66 @@ void test_safety_decision_error_severity_drops_when_configured(void)
                     SafetyDecisionServiceGetLatchedAction(&svc));
 }
 
+void test_safety_decision_module_missing_drops_to_dark(void)
+{
+  MockSafetyRelayAdapterCtx_t relayCtx;
+  ISafetyRelayPort_t relay;
+  SafetyDecisionService_t svc;
+  FaultEvent_t event;
+
+  MockSafetyRelayAdapterInit(&relayCtx);
+  relay = MockSafetyRelayAdapterCreatePort(&relayCtx);
+  SafetyDecisionServiceInit(&svc, &relay);
+
+  (void) memset(&event, 0, sizeof(event));
+  event.code = FAULT_CODE_MODULE_CP_MISSING;
+  event.severity = FAULT_SEVERITY_CRITICAL;
+  SafetyDecisionServiceOnFault(&svc, &event);
+
+  TEST_ASSERT_EQUAL(SAFETY_ACTION_DARK,
+                    SafetyDecisionServiceGetLatchedAction(&svc));
+}
+
+void test_safety_decision_config_invalid_drops_to_dark(void)
+{
+  MockSafetyRelayAdapterCtx_t relayCtx;
+  ISafetyRelayPort_t relay;
+  SafetyDecisionService_t svc;
+  FaultEvent_t event;
+
+  MockSafetyRelayAdapterInit(&relayCtx);
+  relay = MockSafetyRelayAdapterCreatePort(&relayCtx);
+  SafetyDecisionServiceInit(&svc, &relay);
+
+  (void) memset(&event, 0, sizeof(event));
+  event.code = FAULT_CODE_MP_CONFIG_INVALID;
+  event.severity = FAULT_SEVERITY_CRITICAL;
+  SafetyDecisionServiceOnFault(&svc, &event);
+
+  TEST_ASSERT_EQUAL(SAFETY_ACTION_DARK,
+                    SafetyDecisionServiceGetLatchedAction(&svc));
+}
+
+void test_safety_decision_rail_fault_stays_non_protective(void)
+{
+  MockSafetyRelayAdapterCtx_t relayCtx;
+  ISafetyRelayPort_t relay;
+  SafetyDecisionService_t svc;
+  FaultEvent_t event;
+
+  MockSafetyRelayAdapterInit(&relayCtx);
+  relay = MockSafetyRelayAdapterCreatePort(&relayCtx);
+  SafetyDecisionServiceInit(&svc, &relay);
+
+  (void) memset(&event, 0, sizeof(event));
+  event.code = FAULT_CODE_PSM_RAIL_24V_FAIL;
+  event.severity = FAULT_SEVERITY_CRITICAL;
+  SafetyDecisionServiceOnFault(&svc, &event);
+
+  TEST_ASSERT_EQUAL(SAFETY_ACTION_NONE,
+                    SafetyDecisionServiceGetLatchedAction(&svc));
+}
+
 void test_safety_decision_reset_restores_relay(void)
 {
   MockSafetyRelayAdapterCtx_t relayCtx;
@@ -286,6 +346,8 @@ void test_safety_decision_reset_restores_relay(void)
   MockSafetyRelayAdapterInit(&relayCtx);
   relay = MockSafetyRelayAdapterCreatePort(&relayCtx);
   SafetyDecisionServiceInit(&svc, &relay);
+  SafetyDecisionServiceSetConfigReady(&svc, 1U);
+  SafetyDecisionServiceSetRequiredSsmHealthy(&svc, 1U);
 
   event.code = FAULT_CODE_CONFLICT_GREEN_GREEN;
   event.severity = FAULT_SEVERITY_CRITICAL;
@@ -300,6 +362,7 @@ void test_safety_decision_reset_restores_relay(void)
   SafetyDecisionServiceReset(&svc);
   TEST_ASSERT_EQUAL(SAFETY_ACTION_NONE,
                     SafetyDecisionServiceGetLatchedAction(&svc));
+  TEST_ASSERT_EQUAL_UINT8(1U, SafetyDecisionServiceGetLocalPermitOutputPower(&svc));
   TEST_ASSERT_EQUAL_UINT8(1U, SafetyRelayGetActualState(&relay, &state));
   TEST_ASSERT_EQUAL(SAFETY_RELAY_STATE_CLOSED, state);
 }
@@ -427,6 +490,9 @@ int main(void)
   RUN_TEST(test_fault_monitor_service_trace_at_out_of_range_returns_null);
   RUN_TEST(test_safety_decision_flash_action_for_power_supply);
   RUN_TEST(test_safety_decision_error_severity_drops_when_configured);
+  RUN_TEST(test_safety_decision_module_missing_drops_to_dark);
+  RUN_TEST(test_safety_decision_config_invalid_drops_to_dark);
+  RUN_TEST(test_safety_decision_rail_fault_stays_non_protective);
   RUN_TEST(test_safety_decision_reset_restores_relay);
   RUN_TEST(test_power_supply_fires_on_high_voltage);
   RUN_TEST(test_power_supply_fires_on_rail_24v_fail);

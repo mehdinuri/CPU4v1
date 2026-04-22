@@ -47,8 +47,10 @@ void test_db_make_id_increments_on_every_read(void)
 
 void test_db_transaction_id_requires_owner_session(void)
 {
-  NtcipRequestContext_t ownerRequest = { 0x1234U, 0U, 0U };
-  NtcipRequestContext_t otherRequest = { 0x5678U, 0U, 0U };
+  NtcipRequestContext_t ownerRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1234U, 0U, 0U);
+  NtcipRequestContext_t otherRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x5678U, 0U, 0U);
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipDbTransactionServiceSetCreateTransactionValue(
@@ -64,7 +66,8 @@ void test_db_transaction_id_requires_owner_session(void)
 
 void test_db_verify_to_done_then_normal_commits_candidate(void)
 {
-  NtcipRequestContext_t ownerRequest = { 0x1234U, 1U, 77U };
+  NtcipRequestContext_t ownerRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1234U, 1U, 77U);
   IntersectionPhaseConfig_t phase;
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
@@ -113,7 +116,8 @@ void test_db_verify_to_done_then_normal_commits_candidate(void)
 
 void test_db_commit_notifies_observer_after_successful_commit(void)
 {
-  NtcipRequestContext_t ownerRequest = { 0x1234U, 1U, 21U };
+  NtcipRequestContext_t ownerRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1234U, 1U, 21U);
 
   NtcipDbTransactionServiceBindCommitObserver(&s_dbService,
                                               OnCommit,

@@ -13,11 +13,11 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSIwdgWatchdogAdapterCtx;
+  uint8_t reserved;
+} IwdgWatchdogAdapterCtx_t;
 
-void IwdgWatchdogAdapter_Init(tSIwdgWatchdogAdapterCtx *pCtx);
-IWatchdogPort_t IwdgWatchdogAdapter_CreatePort(tSIwdgWatchdogAdapterCtx *pCtx);
+void IwdgWatchdogAdapter_Init(IwdgWatchdogAdapterCtx_t *ctx);
+IWatchdogPort_t IwdgWatchdogAdapter_CreatePort(IwdgWatchdogAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_IWDG_WATCHDOG_ADAPTER_H */
 

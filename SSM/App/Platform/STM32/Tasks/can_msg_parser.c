@@ -18,21 +18,42 @@
 #include "Domain/SignalFlashConfig.h"
 #include "Domain/FlashSyncWatchdog.h"
 #include "Domain/SignalCardIdentity.h"
+#include "Domain/CanRxBackpressure.h"
 #include "Platform/STM32/Bootstrap/HardwarePorts.h"
 /* Private typedef -----------------------------------------------------------*/
 typedef enum
 {
   OUTPUT_SET_ACTIVE = 0,
   OUTPUT_SET_FLASH
-} tEOutputSetType;
+} OutputSetType_e;
 
 /* Private variables ---------------------------------------------------------*/
-static uint8_t fFlashStatus = FALSE;
-static uint8_t fFlashSyncStatus = FALSE;
-static tSOutputGroup SaSignalOutputGroups[SIGNAL_GROUPS_PER_SSM];
-static volatile uint32_t lCANRxFaultCount = 0U;
+static uint8_t flashStatus = FALSE;
+static uint8_t flashSyncStatus = FALSE;
+static OutputGroup_t signalOutputGroups[SIGNAL_GROUPS_PER_SSM];
+static volatile uint32_t canRxFaultCount = 0U;
 /* Last flash-config we successfully saved; used to skip redundant writes. */
-static tSSignalFlashConfig SLastSavedFlashCfg;
+static SignalFlashConfig_t lastSavedFlashCfg;
+
+/* TRUE once we have either successfully loaded the persisted flash config
+ * or successfully saved one. While FALSE, SignalOutputFlashConfigSet must
+ * not write — a transient read error should not cause us to clobber the
+ * valid persisted config with the default (all-steady) runtime state.
+ */
+static uint8_t flashCfgKnown = FALSE;
+
+/* CAN Rx backpressure state. Reset on any successful enqueue; incremented
+ * on alloc/queue-put failure. All access is from the FDCAN1 RX FIFO0 ISR,
+ * which is non-reentrant, so no atomic or lock is needed inside.
+ */
+static CanRxBackpressure_t canRxBackpressure;
+
+/* Threshold above which we escalate silent CAN Rx loss to the sticky
+ * EVENT_FLAGS_MAINTENANCE_CAN_RX_OVERRUN flag. At 1 kHz tick and typical
+ * CP→SSM command rates, 8 back-to-back drops = well outside normal
+ * jitter; anything above this indicates real backpressure.
+ */
+#define CAN_RX_OVERRUN_THRESHOLD 8U
 
 /* Private function prototypes -----------------------------------------------*/
 void vCanMsgParserInit(void);
@@ -48,79 +69,109 @@ void vCanMsgParserInit(void);
 /* Private application code --------------------------------------------------*/
 void CANMsgParserInit(void)
 {
-  memset(SaSignalOutputGroups, 0, sizeof(SaSignalOutputGroups));
-  memset(&SLastSavedFlashCfg, 0, sizeof(SLastSavedFlashCfg));
-  lCANRxFaultCount = 0U;
+  memset(signalOutputGroups, 0, sizeof(signalOutputGroups));
+  memset(&lastSavedFlashCfg, 0, sizeof(lastSavedFlashCfg));
+  flashCfgKnown = FALSE;
+  canRxFaultCount = 0U;
+  CanRxBackpressure_Reset(&canRxBackpressure);
 }
 
 void CANRxFaultRecord(void)
 {
-  lCANRxFaultCount++;
+  /* RMW on a plain volatile is not atomic — multiple tasks / ISR paths
+   * may increment concurrently and lose counts. Use a single atomic
+   * increment so the latched-fault flag stays accurate.
+   */
+  (void) __atomic_fetch_add(&canRxFaultCount, 1U, __ATOMIC_RELAXED);
 }
 
 static void SignalOutputFlashConfigSet(void)
 {
-  tSSignalFlashConfig SNewCfg;
-  uint8_t bGroupIdx, bOutputIdx;
+  SignalFlashConfig_t newCfg;
+  uint8_t groupIdx, outputIdx;
 
-  memset(&SNewCfg, 0, sizeof(SNewCfg));
-  for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
+  memset(&newCfg, 0, sizeof(newCfg));
+
+  /* Snapshot runtime isFlashing under a brief critical section so we get
+   * a consistent view. The subsequent memcmp / Save work must stay outside
+   * the critical section — Save goes through the storage task and can
+   * block for up to STORAGE_SYNC_REQ_TIMEOUT_MS.
+   */
+  taskENTER_CRITICAL();
+  for (groupIdx = 0; groupIdx < SIGNAL_GROUPS_PER_SSM; groupIdx++)
   {
-    for (bOutputIdx = 0;
-         bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
-         bOutputIdx++)
+    for (outputIdx = 0;
+         outputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
+         outputIdx++)
     {
-      uint8_t bIdx = (bGroupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + bOutputIdx;
+      uint8_t idx = (groupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + outputIdx;
 
-      SNewCfg.aIsFlashing[bIdx] =
-        SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing
+      newCfg.isFlashing[idx] =
+        signalOutputGroups[groupIdx].signalOutputs[outputIdx].isFlashing
         ? 1U : 0U;
     }
   }
 
-  if (memcmp(&SNewCfg, &SLastSavedFlashCfg, sizeof(SNewCfg)) != 0)
+  taskEXIT_CRITICAL();
+
+  /* Do not write while the persisted config is of unknown state — a
+   * transient read error earlier would otherwise let the first CP command
+   * overwrite a perfectly valid stored config with the runtime default.
+   */
+  if (flashCfgKnown == FALSE)
   {
-    if (SignalFlashConfig_Save(&g_PersistencePort, &SNewCfg))
+    return;
+  }
+
+  if (memcmp(&newCfg, &lastSavedFlashCfg, sizeof(newCfg)) != 0)
+  {
+    if (SignalFlashConfig_Save(&g_persistencePort, &newCfg))
     {
-      SLastSavedFlashCfg = SNewCfg;
+      lastSavedFlashCfg = newCfg;
     }
   }
 }
 
-static void FlashStatusSet(uint8_t fStatus)
+static void FlashStatusSet(uint8_t status)
 {
-  fFlashStatus = fStatus;
+  flashStatus = status;
 }
 
-static void FlashSyncStatusSet(uint8_t fStatus)
+static void FlashSyncStatusSet(uint8_t status)
 {
+  /* Receipt of ANY PSM FLASH_SYNC frame means the system is currently in
+   * flash mode — so raise flashStatus unconditionally. The status
+   * argument carries the half-cycle phase bit (on vs off), not the
+   * mode flag; it's stored separately in flashSyncStatus and consumed
+   * downstream by the flash-output image builder.
+   */
   FlashStatusSet(TRUE);
-  fFlashSyncStatus = fStatus;
+  flashSyncStatus = status;
 }
 
-static void SignalOutputSet(uint8_t bGroupIdx,
-                            uint8_t bOutputIdx,
-                            tEOutputSetType eType,
-                            uint8_t fStatus)
+static void SignalOutputSet(uint8_t groupIdx,
+                            uint8_t outputIdx,
+                            OutputSetType_e eType,
+                            uint8_t status)
 {
-  if (bGroupIdx < SIGNAL_GROUPS_PER_SSM)
+  if (groupIdx < SIGNAL_GROUPS_PER_SSM)
   {
-    if (bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP)
+    if (outputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP)
     {
       switch (eType)
       {
           case OUTPUT_SET_ACTIVE:
           {
             FlashStatusSet(FALSE);
-            SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].
-            fIsActive = fStatus;
+            signalOutputGroups[groupIdx].signalOutputs[outputIdx].
+            isActive = status;
             break;
           }
 
           case OUTPUT_SET_FLASH:
           {
-            SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].
-            fIsFlashing = fStatus;
+            signalOutputGroups[groupIdx].signalOutputs[outputIdx].
+            isFlashing = status;
             break;
           }
       }
@@ -128,35 +179,44 @@ static void SignalOutputSet(uint8_t bGroupIdx,
   }
 }
 
-static void SignalOutputsUpdate(uint8_t *pbData, tEOutputSetType eSetType)
+static void SignalOutputsUpdate(uint8_t *data, OutputSetType_e eSetType)
 {
-  uint8_t bGroupIdx, bOutputIdx;
-  uint8_t bOutputBitIdx = SignalCardIdentity_OutputBitBase(g_bCardId);
+  uint8_t groupIdx, outputIdx;
+  uint8_t outputBitIdx = SignalCardIdentity_OutputBitBase(g_cardId);
 
-  for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
+  /* Writes to signalOutputGroups race with reads from MeasurementTask
+   * (CANSignalOutputStateGet / CANSignalOutputFlashStateGet). The work is
+   * bounded (12 byte writes) so a single critical section around the whole
+   * batch keeps ISR latency low and readers see a consistent commanded
+   * image rather than a partially-updated one.
+   */
+  taskENTER_CRITICAL();
+  for (groupIdx = 0; groupIdx < SIGNAL_GROUPS_PER_SSM; groupIdx++)
   {
-    for (bOutputIdx = 0;
-         bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
-         bOutputIdx++)
+    for (outputIdx = 0;
+         outputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
+         outputIdx++)
     {
-      uint8_t fStatus = GET_BIT_VALUE(pbData[bOutputBitIdx / NUM_BITS_IN_BYTE],
-                                      (bOutputBitIdx % NUM_BITS_IN_BYTE));
+      uint8_t status = GET_BIT_VALUE(data[outputBitIdx / NUM_BITS_IN_BYTE],
+                                     (outputBitIdx % NUM_BITS_IN_BYTE));
 
-      SignalOutputSet(bGroupIdx, bOutputIdx, eSetType, fStatus);
+      SignalOutputSet(groupIdx, outputIdx, eSetType, status);
 
-      bOutputBitIdx++;
+      outputBitIdx++;
     }
   }
+
+  taskEXIT_CRITICAL();
 
   SignalOutputFlashConfigSet();
 }
 
-static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
+static void CANMsgParse(FdcanRxMsg_t *rxMsg)
 {
-  if ((pSRxMsg == NULL)
-      || (pSRxMsg->SRxHeader.IdType != FDCAN_STANDARD_ID)
-      || (pSRxMsg->SRxHeader.RxFrameType != FDCAN_DATA_FRAME)
-      || (pSRxMsg->SRxHeader.DataLength != FDCAN_MAX_DATA_LEN))
+  if ((rxMsg == NULL)
+      || (rxMsg->rxHeader.IdType != FDCAN_STANDARD_ID)
+      || (rxMsg->rxHeader.RxFrameType != FDCAN_DATA_FRAME)
+      || (rxMsg->rxHeader.DataLength != FDCAN_MAX_DATA_LEN))
   {
     CANRxFaultRecord();
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
@@ -164,73 +224,61 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
     return;
   }
 
-  switch (pSRxMsg->SRxHeader.IdType)
+  /* Up-front reject above already guarantees IdType == FDCAN_STANDARD_ID,
+   * so dispatch directly on the identifier.
+   */
+  switch (rxMsg->rxHeader.Identifier)
   {
-      case FDCAN_STANDARD_ID:
+      case FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID:
       {
-        switch (pSRxMsg->SRxHeader.Identifier)
+        if (SignalCardIdentity_CommandBank(g_cardId) == 0U)
         {
-            case FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID:
-            {
-              if (SignalCardIdentity_CommandBank(g_bCardId) == 0U)
-              {
-                SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_ACTIVE);
-              }
+          SignalOutputsUpdate(rxMsg->data, OUTPUT_SET_ACTIVE);
+        }
 
-              break;
-            }
+        break;
+      }
 
-            case FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID:
-            {
-              if (SignalCardIdentity_CommandBank(g_bCardId) == 1U)
-              {
-                SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_ACTIVE);
-              }
+      case FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID:
+      {
+        if (SignalCardIdentity_CommandBank(g_cardId) == 1U)
+        {
+          SignalOutputsUpdate(rxMsg->data, OUTPUT_SET_ACTIVE);
+        }
 
-              break;
-            }
+        break;
+      }
 
-            case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
-            {
-              if (SignalCardIdentity_CommandBank(g_bCardId) == 0U)
-              {
-                SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_FLASH);
-              }
+      case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
+      {
+        if (SignalCardIdentity_CommandBank(g_cardId) == 0U)
+        {
+          SignalOutputsUpdate(rxMsg->data, OUTPUT_SET_FLASH);
+        }
 
-              break;
-            }
+        break;
+      }
 
-            case FDCAN_CP_FLASH_SIGNALS_2_STD_ID:
-            {
-              if (SignalCardIdentity_CommandBank(g_bCardId) == 1U)
-              {
-                SignalOutputsUpdate(pSRxMsg->baData, OUTPUT_SET_FLASH);
-              }
+      case FDCAN_CP_FLASH_SIGNALS_2_STD_ID:
+      {
+        if (SignalCardIdentity_CommandBank(g_cardId) == 1U)
+        {
+          SignalOutputsUpdate(rxMsg->data, OUTPUT_SET_FLASH);
+        }
 
-              break;
-            }
+        break;
+      }
 
-            case FDCAN_PSM_FLASH_SYNC_1_STD_ID:
-            case FDCAN_PSM_FLASH_SYNC_2_STD_ID:
-            {
-              FlashSyncStatusSet(GET_BIT_VALUE(pSRxMsg->baData[0], 0));
+      case FDCAN_PSM_FLASH_SYNC_1_STD_ID:
+      case FDCAN_PSM_FLASH_SYNC_2_STD_ID:
+      {
+        FlashSyncStatusSet(GET_BIT_VALUE(rxMsg->data[0], 0));
 
-              /* Pet the deadman. If PSM goes silent the measurement
-               * task will notice via IsStale() and force outputs off.
-               */
-              FlashSyncWatchdog_Feed(&g_FlashSyncWatchdog,
-                                     Tick_Now_ms(&g_TickPort));
-              break;
-            }
-
-            default:
-            {
-              CANRxFaultRecord();
-              MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
-              break;
-            }
-        } /* switch */
-
+        /* Pet the deadman. If PSM goes silent the measurement
+         * task will notice via IsStale() and force outputs off.
+         */
+        FlashSyncWatchdog_Feed(&g_flashSyncWatchdog,
+                               Tick_Now_ms(&g_tickPort));
         break;
       }
 
@@ -246,103 +294,164 @@ static void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 /* Public application code --------------------------------------------------*/
 uint8_t CANFlashStatusGet(void)
 {
-  return fFlashStatus;
+  return flashStatus;
 }
 
 uint8_t CANFlashSyncStatusGet(void)
 {
-  return fFlashSyncStatus;
+  return flashSyncStatus;
 }
 
-GPIO_PinState CANSignalOutputStateGet(uint8_t bGroupIdx, uint8_t bOutputIdx)
+GPIO_PinState CANSignalOutputStateGet(uint8_t groupIdx, uint8_t outputIdx)
 {
-  return SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsActive
-         ? GPIO_PIN_SET : GPIO_PIN_RESET;
+  uint8_t value;
+
+  if ((groupIdx >= SIGNAL_GROUPS_PER_SSM)
+      || (outputIdx >= SIGNAL_OUTPUTS_PER_SIGNAL_GROUP))
+  {
+    return GPIO_PIN_RESET;
+  }
+
+  taskENTER_CRITICAL();
+  value =
+    signalOutputGroups[groupIdx].signalOutputs[outputIdx].isActive;
+  taskEXIT_CRITICAL();
+
+  return value ? GPIO_PIN_SET : GPIO_PIN_RESET;
 }
 
-GPIO_PinState CANSignalOutputFlashStateGet(uint8_t bGroupIdx,
-                                           uint8_t bOutputIdx)
+GPIO_PinState CANSignalOutputFlashStateGet(uint8_t groupIdx,
+                                           uint8_t outputIdx)
 {
-  return SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing
-         ? GPIO_PIN_SET : GPIO_PIN_RESET;
+  uint8_t value;
+
+  if ((groupIdx >= SIGNAL_GROUPS_PER_SSM)
+      || (outputIdx >= SIGNAL_OUTPUTS_PER_SIGNAL_GROUP))
+  {
+    return GPIO_PIN_RESET;
+  }
+
+  taskENTER_CRITICAL();
+  value =
+    signalOutputGroups[groupIdx].signalOutputs[outputIdx].isFlashing;
+  taskEXIT_CRITICAL();
+
+  return value ? GPIO_PIN_SET : GPIO_PIN_RESET;
 }
 
 void CANSignalOutputFlashConfigCheck(void)
 {
-  tSSignalFlashConfig SLoaded;
-  uint8_t bGroupIdx, bOutputIdx;
+  SignalFlashConfig_t loaded;
+  uint8_t groupIdx, outputIdx;
+  uint8_t loadOk;
 
-  if (SignalFlashConfig_Load(&g_PersistencePort, &SLoaded))
+  /* Load is unbounded (can block on the storage queue) — keep it out of
+   * any critical section. The subsequent writes to signalOutputGroups
+   * must be under taskENTER_CRITICAL because CANMsgParser/MeasurementTask
+   * also read/write those same fields.
+   */
+  loadOk = SignalFlashConfig_Load(&g_persistencePort, &loaded);
+
+  if (loadOk)
   {
-    for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
+    taskENTER_CRITICAL();
+    for (groupIdx = 0; groupIdx < SIGNAL_GROUPS_PER_SSM; groupIdx++)
     {
-      for (bOutputIdx = 0;
-           bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
-           bOutputIdx++)
+      for (outputIdx = 0;
+           outputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
+           outputIdx++)
       {
-        uint8_t bIdx = (bGroupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP)
-                       + bOutputIdx;
+        uint8_t idx = (groupIdx * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP)
+                      + outputIdx;
 
-        SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing
+        signalOutputGroups[groupIdx].signalOutputs[outputIdx].isFlashing
           =
-            SLoaded.aIsFlashing[bIdx];
+            loaded.isFlashing[idx];
       }
     }
 
-    SLastSavedFlashCfg = SLoaded;
+    taskEXIT_CRITICAL();
+
+    lastSavedFlashCfg = loaded;
+    flashCfgKnown = TRUE;
 
     return;
   }
 
-  /* Leave the runtime state at the safe default (all steady), but do not
-   * auto-rewrite flash here. A transient read/backend failure must not erase
-   * the last valid persisted program by overwriting it with defaults.
+  /* Load failed. Leave the runtime state at the safe default (all steady)
+   * and leave the persisted-state cache untouched so SignalOutputFlashConfigSet
+   * stays in "unknown" mode and refuses to write. A transient read/backend
+   * failure must not erase the last valid persisted program by overwriting
+   * it with defaults.
    */
-  for (bGroupIdx = 0; bGroupIdx < SIGNAL_GROUPS_PER_SSM; bGroupIdx++)
+  taskENTER_CRITICAL();
+  for (groupIdx = 0; groupIdx < SIGNAL_GROUPS_PER_SSM; groupIdx++)
   {
-    for (bOutputIdx = 0;
-         bOutputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
-         bOutputIdx++)
+    for (outputIdx = 0;
+         outputIdx < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP;
+         outputIdx++)
     {
-      SaSignalOutputGroups[bGroupIdx].SaSignalOutputs[bOutputIdx].fIsFlashing =
+      signalOutputGroups[groupIdx].signalOutputs[outputIdx].isFlashing =
         0U;
     }
   }
 
-  memset(&SLastSavedFlashCfg, 0, sizeof(SLastSavedFlashCfg));
+  taskEXIT_CRITICAL();
+} /* CANSignalOutputFlashConfigCheck */
+
+static void CANRxRequestDropRecord(void)
+{
+  CANRxFaultRecord();
+
+  if (CanRxBackpressure_RecordDrop(&canRxBackpressure,
+                                   CAN_RX_OVERRUN_THRESHOLD) != 0U)
+  {
+    /* osEventFlagsSet is idempotent, so repeated calls while still in
+     * overrun are cheap. The flag is sticky — cleared only via the
+     * maintenance/operator path.
+     */
+    MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_OVERRUN);
+  }
 }
 
-void CANRxRequest(tpSFDCANRxMsg pSRxMsg)
+void CANRxRequest(FdcanRxMsg_t *rxMsg)
 {
-  if (pSRxMsg == NULL)
+  if (rxMsg == NULL)
   {
-    CANRxFaultRecord();
+    CANRxRequestDropRecord();
 
     return;
   }
 
-  tpSFDCANRxMsg pSReq =
-    (tpSFDCANRxMsg) osMemoryPoolAlloc(CANRxReqsMemPoolHandle,
-                                      0);
+  FdcanRxMsg_t *req =
+    (FdcanRxMsg_t *) osMemoryPoolAlloc(CANRxReqsMemPoolHandle,
+                                       0);
 
-  if (pSReq != NULL)
+  if (req != NULL)
   {
-    memcpy(pSReq, pSRxMsg, sizeof(tSFDCANRxMsg));
-    if (osMessageQueuePut(CANRxReqsQueueHandle, &pSReq, 0, 0) != osOK)
+    memcpy(req, rxMsg, sizeof(FdcanRxMsg_t));
+    if (osMessageQueuePut(CANRxReqsQueueHandle, &req, 0, 0) != osOK)
     {
-      osMemoryPoolFree(CANRxReqsMemPoolHandle, pSReq);
-      CANRxFaultRecord();
+      osMemoryPoolFree(CANRxReqsMemPoolHandle, req);
+      CANRxRequestDropRecord();
+    }
+    else
+    {
+      /* Successful enqueue — reset the consecutive-drop streak. */
+      CanRxBackpressure_RecordSuccess(&canRxBackpressure);
     }
   }
   else
   {
-    CANRxFaultRecord();
+    CANRxRequestDropRecord();
   }
 }
 
 uint8_t CANRxFaultLatched(void)
 {
-  return (lCANRxFaultCount != 0U) ? 1U : 0U;
+  uint32_t count = __atomic_load_n(&canRxFaultCount, __ATOMIC_RELAXED);
+
+  return (count != 0U) ? 1U : 0U;
 }
 
 /* USER CODE BEGIN Header_CANMsgParserTaskFunc */
@@ -358,7 +467,7 @@ void CANMsgParserTaskFunc(void *argument)
   /* USER CODE BEGIN CANMsgParserTaskFunc */
   UNUSED(argument);
 
-  tpSFDCANRxMsg pSRxMsg = NULL;
+  FdcanRxMsg_t *rxMsg = NULL;
 
   CANMsgParserInit();
 
@@ -367,11 +476,11 @@ void CANMsgParserTaskFunc(void *argument)
   /* Infinite loop */
   while (pdTRUE)
   {
-    if (osMessageQueueGet(CANRxReqsQueueHandle, &pSRxMsg, NULL,
+    if (osMessageQueueGet(CANRxReqsQueueHandle, &rxMsg, NULL,
                           MAINTENANCE_TASK_HEARTBEAT_PERIOD_MS) == osOK)
     {
-      CANMsgParse(pSRxMsg);
-      osMemoryPoolFree(CANRxReqsMemPoolHandle, pSRxMsg);
+      CANMsgParse(rxMsg);
+      osMemoryPoolFree(CANRxReqsMemPoolHandle, rxMsg);
     }
 
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_PARSER_TASK_ACTIVE);

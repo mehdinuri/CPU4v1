@@ -7,26 +7,26 @@
 #include <string.h>
 #include "Adapters/Mock/MockTimerAdapter.h"
 
-static void MockStart(void *pCtx, tETimerId eId)
+static void MockStart(void *ctx, TimerId_e eId)
 {
-  tSMockTimerAdapterCtx *pC = (tSMockTimerAdapterCtx *) pCtx;
+  MockTimerAdapterCtx_t *pC = (MockTimerAdapterCtx_t *) ctx;
 
   if ((uint32_t) eId < (uint32_t) TIMER_ID__COUNT)
   {
-    pC->aStartCount[eId]++;
+    pC->startCount[eId]++;
   }
 }
 
-void MockTimerAdapter_Init(tSMockTimerAdapterCtx *pCtx)
+void MockTimerAdapter_Init(MockTimerAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
-ITimerPort_t MockTimerAdapter_CreatePort(tSMockTimerAdapterCtx *pCtx)
+ITimerPort_t MockTimerAdapter_CreatePort(MockTimerAdapterCtx_t *ctx)
 {
   ITimerPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Start = MockStart;
 
   return port;

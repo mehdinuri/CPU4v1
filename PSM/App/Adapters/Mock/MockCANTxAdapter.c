@@ -12,26 +12,26 @@
  * Private implementation
  * ---------------------------------------------------------------------------*/
 static void AdapterSend(void *ctx,
-                         uint32_t lID,
-                         const uint8_t *baData,
-                         uint8_t bDataLen)
+                         uint32_t id,
+                         const uint8_t *data,
+                         uint8_t dataLen)
 {
   MockCANTxAdapterCtx_t *c = (MockCANTxAdapterCtx_t *) ctx;
-  uint8_t bCopy            = (bDataLen > MOCK_CAN_BUF_SIZE) ? MOCK_CAN_BUF_SIZE : bDataLen;
+  uint8_t copy            = (dataLen > MOCK_CAN_BUF_SIZE) ? MOCK_CAN_BUF_SIZE : dataLen;
 
-  c->lLastID  = lID;
-  c->bLastLen = bDataLen;
-  memset(c->aLastData, 0, sizeof(c->aLastData));
-  if (baData != NULL)
+  c->lastID  = id;
+  c->lastLen = dataLen;
+  memset(c->lastData, 0, sizeof(c->lastData));
+  if (data != NULL)
   {
-    memcpy(c->aLastData, baData, bCopy);
+    memcpy(c->lastData, data, copy);
   }
-  c->lSendCount++;
+  c->sendCount++;
 }
 
 static uint8_t AdapterGetOverflowCount(void *ctx)
 {
-  return ((MockCANTxAdapterCtx_t *) ctx)->bMockOverflow;
+  return ((MockCANTxAdapterCtx_t *) ctx)->mockOverflow;
 }
 
 /* ---------------------------------------------------------------------------

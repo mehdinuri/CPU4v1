@@ -17,17 +17,17 @@ typedef struct
    * constant table in the .c. Kept as a struct so future additions
    * (shadow state, last-image cache) don't break the API.
    */
-  uint8_t bReserved;
-} tSGpioOutputAdapterCtx;
+  uint8_t reserved;
+} GpioOutputAdapterCtx_t;
 
-void GpioOutputAdapter_Init(tSGpioOutputAdapterCtx *pCtx);
-ISignalOutputPort_t GpioOutputAdapter_CreatePort(tSGpioOutputAdapterCtx *pCtx);
+void GpioOutputAdapter_Init(GpioOutputAdapterCtx_t *ctx);
+ISignalOutputPort_t GpioOutputAdapter_CreatePort(GpioOutputAdapterCtx_t *ctx);
 
 /**
  * @brief Drive every signal output pin to GPIO_PIN_RESET with no RTOS /
  *        context dependency. Safe to call from Error_Handler, before
  *        MainApplication_Init, or from any non-ISR context where the
- *        g_SignalOutputPort may not yet be wired.
+ *        g_signalOutputPort may not yet be wired.
  *
  * MX_GPIO_Init() must already have run (pins in output mode); that happens
  * in main() before USER CODE BEGIN 2.

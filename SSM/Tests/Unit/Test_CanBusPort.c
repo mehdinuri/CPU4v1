@@ -8,7 +8,7 @@
 #include "Ports/ICanBusPort.h"
 #include "Adapters/Mock/MockCanBusAdapter.h"
 
-static tSMockCanBusAdapterCtx mockCtx;
+static MockCanBusAdapterCtx_t mockCtx;
 static ICanBusPort_t port;
 
 void setUp(void)
@@ -23,53 +23,53 @@ void tearDown(void)
 
 void test_send_records_frame(void)
 {
-  tSCanFrame frame;
+  CanFrame_t frame;
 
-  frame.sStdId = 0x050U;
-  frame.bLen = 4U;
+  frame.stdId = 0x050U;
+  frame.len = 4U;
   frame.abData[0] = 0xDEU;
   frame.abData[1] = 0xADU;
   frame.abData[2] = 0xBEU;
   frame.abData[3] = 0xEFU;
 
   TEST_ASSERT_EQUAL_UINT8(1U, CanBus_SendStd(&port, CAN_BUS_FDCAN1, &frame));
-  TEST_ASSERT_EQUAL_UINT8(1U, mockCtx.bSentCount);
-  TEST_ASSERT_EQUAL(CAN_BUS_FDCAN1, mockCtx.aSent[0].eBus);
-  TEST_ASSERT_EQUAL_UINT16(0x050U, mockCtx.aSent[0].SFrame.sStdId);
-  TEST_ASSERT_EQUAL_UINT8(4U, mockCtx.aSent[0].SFrame.bLen);
-  TEST_ASSERT_EQUAL_UINT8(0xDEU, mockCtx.aSent[0].SFrame.abData[0]);
-  TEST_ASSERT_EQUAL_UINT8(0xEFU, mockCtx.aSent[0].SFrame.abData[3]);
+  TEST_ASSERT_EQUAL_UINT8(1U, mockCtx.sentCount);
+  TEST_ASSERT_EQUAL(CAN_BUS_FDCAN1, mockCtx.sent[0].eBus);
+  TEST_ASSERT_EQUAL_UINT16(0x050U, mockCtx.sent[0].frame.stdId);
+  TEST_ASSERT_EQUAL_UINT8(4U, mockCtx.sent[0].frame.len);
+  TEST_ASSERT_EQUAL_UINT8(0xDEU, mockCtx.sent[0].frame.abData[0]);
+  TEST_ASSERT_EQUAL_UINT8(0xEFU, mockCtx.sent[0].frame.abData[3]);
 }
 
 void test_send_records_multiple_frames_in_order(void)
 {
-  tSCanFrame f1 = { .sStdId = 0x100U, .bLen = 0U };
-  tSCanFrame f2 = { .sStdId = 0x200U, .bLen = 0U };
-  tSCanFrame f3 = { .sStdId = 0x300U, .bLen = 0U };
+  CanFrame_t f1 = { .stdId = 0x100U, .len = 0U };
+  CanFrame_t f2 = { .stdId = 0x200U, .len = 0U };
+  CanFrame_t f3 = { .stdId = 0x300U, .len = 0U };
 
   CanBus_SendStd(&port, CAN_BUS_FDCAN1, &f1);
   CanBus_SendStd(&port, CAN_BUS_FDCAN2, &f2);
   CanBus_SendStd(&port, CAN_BUS_FDCAN1, &f3);
 
-  TEST_ASSERT_EQUAL_UINT8(3U, mockCtx.bSentCount);
-  TEST_ASSERT_EQUAL_UINT16(0x100U, mockCtx.aSent[0].SFrame.sStdId);
-  TEST_ASSERT_EQUAL(CAN_BUS_FDCAN2, mockCtx.aSent[1].eBus);
-  TEST_ASSERT_EQUAL_UINT16(0x300U, mockCtx.aSent[2].SFrame.sStdId);
+  TEST_ASSERT_EQUAL_UINT8(3U, mockCtx.sentCount);
+  TEST_ASSERT_EQUAL_UINT16(0x100U, mockCtx.sent[0].frame.stdId);
+  TEST_ASSERT_EQUAL(CAN_BUS_FDCAN2, mockCtx.sent[1].eBus);
+  TEST_ASSERT_EQUAL_UINT16(0x300U, mockCtx.sent[2].frame.stdId);
 }
 
 void test_send_honours_force_fail(void)
 {
-  tSCanFrame frame = { .sStdId = 0x050U, .bLen = 0U };
+  CanFrame_t frame = { .stdId = 0x050U, .len = 0U };
 
-  mockCtx.bForceSendFail = 1U;
+  mockCtx.forceSendFail = 1U;
 
   TEST_ASSERT_EQUAL_UINT8(0U, CanBus_SendStd(&port, CAN_BUS_FDCAN1, &frame));
-  TEST_ASSERT_EQUAL_UINT8(0U, mockCtx.bSentCount);
+  TEST_ASSERT_EQUAL_UINT8(0U, mockCtx.sentCount);
 }
 
 void test_mock_saturates_at_capacity(void)
 {
-  tSCanFrame frame = { .sStdId = 0x050U, .bLen = 0U };
+  CanFrame_t frame = { .stdId = 0x050U, .len = 0U };
   uint8_t i;
 
   for (i = 0U; i < (MOCK_CAN_MAX_RECORDED + 5U); i++)
@@ -77,7 +77,7 @@ void test_mock_saturates_at_capacity(void)
     CanBus_SendStd(&port, CAN_BUS_FDCAN1, &frame);
   }
 
-  TEST_ASSERT_EQUAL_UINT8(MOCK_CAN_MAX_RECORDED, mockCtx.bSentCount);
+  TEST_ASSERT_EQUAL_UINT8(MOCK_CAN_MAX_RECORDED, mockCtx.sentCount);
 }
 
 int main(void)

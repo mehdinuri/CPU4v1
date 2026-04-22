@@ -21,20 +21,28 @@ typedef struct
   ConfigurationService_t *configurationService;
   SafetyDecisionService_t *safetyDecisionService;
   FaultMonitorService_t *faultMonitorService;
+  CpMpFaultEventV1_t eventQueue[FAULT_MONITOR_TRACE_CAPACITY];
+  CpMpFaultEventV1_t pendingEvent;
   uint32_t tickCount;
   uint32_t lastCpHeartbeatTick;
   uint32_t expectedGeneration;
   uint32_t appliedGeneration;
   uint32_t loadingGeneration;
+  uint32_t nextEventSequenceToQueue;
   uint16_t expectedSetId;
   uint16_t appliedSetId;
   uint16_t loadingSetId;
   uint16_t expectedImageBytes;
   uint8_t totalChunks;
-  uint8_t receivedChunkMask;
+  uint8_t receivedChunks[CPMP_CONFIG_CHUNK_BITMAP_BYTES];
+  uint8_t eventQueueHead;
+  uint8_t eventQueueTail;
+  uint8_t eventQueueCount;
+  uint8_t pendingEventValid;
   uint8_t registeredRxCallback;
+  uint8_t lastCpPermitOutputPower;
   CpMpConfigState_t configState;
-  CpMpMmuConfigImageV1_t configImage;
+  CpMpMmuConfigImage_t configImage;
 } CpMpLinkService_t;
 
 void CpMpLinkServiceInit(CpMpLinkService_t *service,

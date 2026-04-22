@@ -30,13 +30,13 @@
 
 /* Public function prototypes -----------------------------------------------*/
 extern void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
-                         uint32_t lIDType,
-                         uint32_t lID,
-                         uint32_t lFrameType,
-                         uint32_t lBitRateSwitch,
-                         uint32_t lFDFormat,
-                         uint8_t *baData,
-                         uint8_t bDataLen);
+                         uint32_t idType,
+                         uint32_t id,
+                         uint32_t frameType,
+                         uint32_t bitRateSwitch,
+                         uint32_t fdFormat,
+                         uint8_t *data,
+                         uint8_t dataLen);
 
 #endif /* APP_PLATFORM_STM32_TASKS_CAN_MSG_SENDER_H */
 

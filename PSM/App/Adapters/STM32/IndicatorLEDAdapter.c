@@ -55,7 +55,7 @@ static void AdapterToggle(void *ctx, IndicatorLEDId_t id)
  * ---------------------------------------------------------------------------*/
 void IndicatorLEDAdapterInit(IndicatorLEDAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 IIndicatorLEDPort_t IndicatorLEDAdapterCreatePort(IndicatorLEDAdapterCtx_t *ctx)

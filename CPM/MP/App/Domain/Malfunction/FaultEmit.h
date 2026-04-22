@@ -1,7 +1,7 @@
 /* App/Domain/Malfunction/FaultEmit.h
  *
  * Uniform sink for monitors to publish FaultEvent_t entries during a
- * tick. The engine wires this to the event log and FaultMonitorService.
+ * tick. The engine wires this to the safety and fault-monitor services.
  */
 #ifndef FAULT_EMIT_H
 #define FAULT_EMIT_H

@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#include "Domain/Services/EventReportService.h"
+
 enum
 {
   UI_DOOR_EVENT_OPEN = 64U,
@@ -45,18 +47,20 @@ void UiDoorServiceRefreshLatestLogIndices(UiDoorService_t *service)
 
   index = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
   service->latestOpenLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
-  if (MmiEventLogServiceFindLatestByEventCode(service->eventLogService,
-                                              UI_DOOR_EVENT_OPEN,
-                                              &index) != 0U)
+  if (MmiEventLogServiceFindLatestByEventId(
+        service->eventLogService,
+        EVENT_REPORT_EVENT_ID_DOOR_OPEN,
+        &index) != 0U)
   {
     service->latestOpenLogIndex = index;
   }
 
   index = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
   service->latestCloseLogIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
-  if (MmiEventLogServiceFindLatestByEventCode(service->eventLogService,
-                                              UI_DOOR_EVENT_CLOSED,
-                                              &index) != 0U)
+  if (MmiEventLogServiceFindLatestByEventId(
+        service->eventLogService,
+        EVENT_REPORT_EVENT_ID_DOOR_CLOSED,
+        &index) != 0U)
   {
     service->latestCloseLogIndex = index;
   }

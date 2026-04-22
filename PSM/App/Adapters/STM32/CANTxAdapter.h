@@ -13,7 +13,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } CANTxAdapterCtx_t;
 
 void          CANTxAdapterInit(CANTxAdapterCtx_t *ctx);

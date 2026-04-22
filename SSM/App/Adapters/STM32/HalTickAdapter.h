@@ -13,11 +13,11 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSHalTickAdapterCtx;
+  uint8_t reserved;
+} HalTickAdapterCtx_t;
 
-void HalTickAdapter_Init(tSHalTickAdapterCtx *pCtx);
-ITickPort_t HalTickAdapter_CreatePort(tSHalTickAdapterCtx *pCtx);
+void HalTickAdapter_Init(HalTickAdapterCtx_t *ctx);
+ITickPort_t HalTickAdapter_CreatePort(HalTickAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_HAL_TICK_ADAPTER_H */
 

@@ -69,7 +69,6 @@ uint8_t bResetSource = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 void MainApplication_Init(void);
 
@@ -82,22 +81,6 @@ static void ClearAllFlagsLocal(void)
   __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
   __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
   __HAL_RCC_CLEAR_RESET_FLAGS();
-}
-
-static void DisableDebugLocal(void)
-{
-#ifndef DEBUG
-  DBGMCU->CR = 0x00000000;
-#endif
-}
-
-static void EnableDebugLocal(void)
-{
-#ifdef DEBUG
-  HAL_DBGMCU_EnableDBGSleepMode();
-  HAL_DBGMCU_EnableDBGStopMode();
-  HAL_DBGMCU_EnableDBGStandbyMode();
-#endif
 }
 
 static void CheckWakeupOnResetLocal(void)
@@ -169,12 +152,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-#if	defined(DEBUG) || defined(TRACE)
-	#warning NEVER FORGET REMOVING PREPROCESSOR SYMBOLS "DEBUG/TRACE" BEFORE FINAL BUILD & RELEASE
- 	EnableDebugLocal();
-#else
-	DisableDebugLocal();
-#endif
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -201,13 +179,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
   PeripheralsInit();
   GPIOInitialPinStateSet();
-	
+
+  MainApplication_Init();
   /* USER CODE END 2 */
 
   /* Init scheduler */
   osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
-  MainApplication_Init();
-
+  
   /* Start scheduler */
   osKernelStart();
 

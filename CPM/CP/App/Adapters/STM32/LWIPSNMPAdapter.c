@@ -5,8 +5,13 @@
 #include "LWIPSNMPAdapter.h"
 
 #include "Domain/NTCIP/NTCIP1201.h"
+#include "Domain/NTCIP/NTCIP1103.h"
 #include "Domain/NTCIP/NTCIP1202.h"
-#include "Domain/NTCIP/MibVendor59748/CpMpDiagnosticsObjects.h"
+#include "Domain/NTCIP/MibVendor59748/ChannelFaultObjects.h"
+#include "Domain/NTCIP/MibVendor59748/CpMpLinkObjects.h"
+#include "Domain/NTCIP/MibVendor59748/DriverModuleObjects.h"
+#include "Domain/NTCIP/MibVendor59748/EventSourceObjects.h"
+#include "Domain/NTCIP/MibVendor59748/UnitObjects.h"
 
 #include <string.h>
 
@@ -18,6 +23,124 @@ static const uint32_t kDbTransactionIdOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 6U, 2U, 4U, 0U
 };
+
+static void HandleEventReportTransactionTransition(
+  LWIPSNMPAdapterCtx_t *ctx,
+  NtcipDbCreateState_t previousState,
+  NtcipDbVerifyStatus_t previousVerifyStatus,
+  const NtcipValue_t *value)
+{
+  if ((ctx == NULL) || (ctx->eventReportService == NULL) || (value == NULL)
+      || (value->type != NTCIP_VALUE_TYPE_UNSIGNED32))
+  {
+    return;
+  }
+
+  switch (previousState)
+  {
+    case NTCIP_DB_CREATE_STATE_NORMAL:
+      if (value->data.unsigned32 == (uint32_t) NTCIP_DB_CREATE_STATE_TRANSACTION)
+      {
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3Username[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3Username));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3AuthPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3AuthPassphrase));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3PrivPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3PrivPassphrase));
+        EventReportServiceCreateTransaction(ctx->eventReportService);
+      }
+      break;
+
+    case NTCIP_DB_CREATE_STATE_TRANSACTION:
+      if (value->data.unsigned32 == (uint32_t) NTCIP_DB_CREATE_STATE_VERIFY)
+      {
+        EventReportServiceVerifyTransaction(ctx->eventReportService);
+      }
+      else if (value->data.unsigned32 == (uint32_t) NTCIP_DB_CREATE_STATE_NORMAL)
+      {
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3Username[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3Username));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3AuthPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3AuthPassphrase));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3PrivPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3PrivPassphrase));
+        EventReportServiceRollbackTransaction(ctx->eventReportService);
+      }
+      break;
+
+    case NTCIP_DB_CREATE_STATE_DONE:
+      if (value->data.unsigned32 == (uint32_t) NTCIP_DB_CREATE_STATE_NORMAL)
+      {
+        if (previousVerifyStatus == NTCIP_DB_VERIFY_STATUS_DONE_WITH_NO_ERROR)
+        {
+          EventReportServiceCommitTransaction(ctx->eventReportService);
+          if (ctx->ntcipContext.snmpSecurityPort != NULL)
+          {
+            const EventReportConfiguration_t *config =
+              EventReportServiceGetActiveConfig(ctx->eventReportService);
+            char readCommunity[17];
+            char writeCommunity[17];
+            char trapCommunity[17];
+
+            if ((config != NULL)
+                && (config->communityRows[0].communityNameLength > 0U)
+                && (config->communityRows[1].communityNameLength > 0U)
+                && (config->communityRows[2].communityNameLength > 0U)
+                && (config->communityRows[0].communityNameLength
+                    < sizeof(readCommunity))
+                && (config->communityRows[1].communityNameLength
+                    < sizeof(writeCommunity))
+                && (config->communityRows[2].communityNameLength
+                    < sizeof(trapCommunity)))
+            {
+              (void) memset(&readCommunity[0], 0, sizeof(readCommunity));
+              (void) memset(&writeCommunity[0], 0, sizeof(writeCommunity));
+              (void) memset(&trapCommunity[0], 0, sizeof(trapCommunity));
+              (void) memcpy(&readCommunity[0],
+                            &config->communityRows[0].communityNameUser[0],
+                            config->communityRows[0].communityNameLength);
+              (void) memcpy(&writeCommunity[0],
+                            &config->communityRows[1].communityNameUser[0],
+                            config->communityRows[1].communityNameLength);
+              (void) memcpy(&trapCommunity[0],
+                            &config->communityRows[2].communityNameUser[0],
+                            config->communityRows[2].communityNameLength);
+              (void) SnmpSecurityPortSetSnmpV2cCommunities(
+                ctx->ntcipContext.snmpSecurityPort,
+                &readCommunity[0],
+                &writeCommunity[0],
+                &trapCommunity[0]);
+            }
+          }
+        }
+        else
+        {
+          EventReportServiceRollbackTransaction(ctx->eventReportService);
+        }
+
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3Username[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3Username));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3AuthPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3AuthPassphrase));
+        (void) memset(&ctx->ntcipContext.stagedSnmpV3PrivPassphrase[0],
+                      0,
+                      sizeof(ctx->ntcipContext.stagedSnmpV3PrivPassphrase));
+      }
+      break;
+
+    case NTCIP_DB_CREATE_STATE_VERIFY:
+    default:
+      break;
+  }
+}
 
 static uint8_t OidEquals(const uint32_t *left,
                          uint8_t leftLength,
@@ -64,8 +187,9 @@ static LWIPSNMPSessionState_t *FindSessionState(LWIPSNMPAdapterCtx_t *ctx,
   return NULL;
 }
 
-static LWIPSNMPSessionState_t *GetOrCreateSessionState(LWIPSNMPAdapterCtx_t *ctx,
-                                                       uint32_t sessionKey)
+static LWIPSNMPSessionState_t *GetOrCreateSessionState(
+  LWIPSNMPAdapterCtx_t *ctx,
+  uint32_t sessionKey)
 {
   LWIPSNMPSessionState_t *state;
   LWIPSNMPSessionState_t *candidate;
@@ -186,6 +310,7 @@ void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
   ctx->intersectionController = intersectionController;
   ctx->detectorReportService = NULL;
   ctx->globalTimeManagementService = NULL;
+  ctx->eventReportService = NULL;
   ctx->doorSensorPort = NULL;
   ctx->heaterPort = NULL;
   ctx->powerMonitorPort = NULL;
@@ -202,13 +327,20 @@ void LWIPSNMPAdapterInit(LWIPSNMPAdapterCtx_t *ctx,
                    &ctx->dbTransactionService);
   NtcipObjectDirectoryInit(&ctx->objectDirectory);
   Ntcip1201RegisterObjects(&ctx->objectDirectory, &ctx->ntcipContext);
+  Ntcip1103RegisterObjects(&ctx->objectDirectory, &ctx->ntcipContext);
   Ntcip1202RegisterObjects(&ctx->objectDirectory, &ctx->ntcipContext);
-  CpMpDiagnosticsObjectsRegister(&ctx->objectDirectory, &ctx->ntcipContext);
+  TeknotelUnitObjectsRegister(&ctx->objectDirectory, &ctx->ntcipContext);
+  TeknotelChannelFaultObjectsRegister(&ctx->objectDirectory,
+                                      &ctx->ntcipContext);
+  TeknotelCpMpLinkObjectsRegister(&ctx->objectDirectory, &ctx->ntcipContext);
+  TeknotelDriverModuleObjectsRegister(&ctx->objectDirectory,
+                                      &ctx->ntcipContext);
+  TeknotelEventSourceObjectsRegister(&ctx->objectDirectory, &ctx->ntcipContext);
 }
 
-void LWIPSNMPAdapterBindDetectorReportService(
-  LWIPSNMPAdapterCtx_t *ctx,
-  DetectorReportService_t *detectorReportService)
+void LWIPSNMPAdapterBindDetectorReportService(LWIPSNMPAdapterCtx_t *ctx,
+                                              DetectorReportService_t *
+                                              detectorReportService)
 {
   if (ctx == NULL)
   {
@@ -220,9 +352,9 @@ void LWIPSNMPAdapterBindDetectorReportService(
                                         detectorReportService);
 }
 
-void LWIPSNMPAdapterBindGlobalTimeManagementService(
-  LWIPSNMPAdapterCtx_t *ctx,
-  GlobalTimeManagementService_t *globalTimeManagementService)
+void LWIPSNMPAdapterBindGlobalTimeManagementService(LWIPSNMPAdapterCtx_t *ctx,
+                                                    GlobalTimeManagementService_t
+                                                    *globalTimeManagementService)
 {
   if (ctx == NULL)
   {
@@ -234,9 +366,32 @@ void LWIPSNMPAdapterBindGlobalTimeManagementService(
                                               globalTimeManagementService);
 }
 
-void LWIPSNMPAdapterBindActivationService(
-  LWIPSNMPAdapterCtx_t *ctx,
-  IntersectionActivationService_t *activationService)
+void LWIPSNMPAdapterBindEventReportService(LWIPSNMPAdapterCtx_t *ctx,
+                                           EventReportService_t *eventReportService)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->eventReportService = eventReportService;
+  NtcipContextBindEventReportService(&ctx->ntcipContext, eventReportService);
+}
+
+void LWIPSNMPAdapterBindSnmpSecurityPort(LWIPSNMPAdapterCtx_t *ctx,
+                                         ISnmpSecurityPort_t *snmpSecurityPort)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  NtcipContextBindSnmpSecurityPort(&ctx->ntcipContext, snmpSecurityPort);
+}
+
+void LWIPSNMPAdapterBindActivationService(LWIPSNMPAdapterCtx_t *ctx,
+                                          IntersectionActivationService_t *
+                                          activationService)
 {
   if (ctx == NULL)
   {
@@ -324,7 +479,9 @@ LWIPSNMPManagedState_t LWIPSNMPAdapterGetManagedState(
   const LWIPSNMPAdapterCtx_t *ctx,
   const uint32_t *oid,
   uint8_t oidLength,
-  const NtcipObjectDescriptor_t **descriptorOut)
+  const
+  NtcipObjectDescriptor_t **
+  descriptorOut)
 {
   NtcipValue_t value;
   NtcipResolvedObject_t resolvedObject;
@@ -378,7 +535,7 @@ LWIPSNMPManagedState_t LWIPSNMPAdapterGetManagedState(
   }
 
   return LWIP_SNMP_MANAGED_STATE_UNMANAGED;
-}
+} /* LWIPSNMPAdapterGetManagedState */
 
 void LWIPSNMPAdapterBuildRequestContext(LWIPSNMPAdapterCtx_t *ctx,
                                         uint32_t sessionKey,
@@ -436,6 +593,12 @@ NtcipError_t LWIPSNMPAdapterSetValue(LWIPSNMPAdapterCtx_t *ctx,
                                      const NtcipValue_t *value)
 {
   NtcipError_t error;
+  NtcipDbCreateState_t previousState;
+  NtcipDbVerifyStatus_t previousVerifyStatus;
+
+  previousState = NtcipDbTransactionServiceGetState(&ctx->dbTransactionService);
+  previousVerifyStatus =
+    NtcipDbTransactionServiceGetVerifyStatus(&ctx->dbTransactionService);
 
   error = NtcipObjectDirectorySetValue(&ctx->objectDirectory,
                                        oid,
@@ -453,7 +616,8 @@ NtcipError_t LWIPSNMPAdapterSetValue(LWIPSNMPAdapterCtx_t *ctx,
   if (OidEquals(oid,
                 oidLength,
                 kDbTransactionIdOid,
-                (uint8_t) (sizeof(kDbTransactionIdOid) / sizeof(kDbTransactionIdOid[0])))
+                (uint8_t) (sizeof(kDbTransactionIdOid)
+                           / sizeof(kDbTransactionIdOid[0])))
       && (value->data.unsigned32 <= 0xFFU))
   {
     RecordTransactionId(ctx,
@@ -463,7 +627,8 @@ NtcipError_t LWIPSNMPAdapterSetValue(LWIPSNMPAdapterCtx_t *ctx,
   else if (OidEquals(oid,
                      oidLength,
                      kDbCreateTransactionOid,
-                     (uint8_t) (sizeof(kDbCreateTransactionOid) / sizeof(kDbCreateTransactionOid[0])))
+                     (uint8_t) (sizeof(kDbCreateTransactionOid)
+                                / sizeof(kDbCreateTransactionOid[0])))
            && ((value->data.unsigned32
                 == (uint32_t) NTCIP_DB_CREATE_STATE_TRANSACTION)
                || (value->data.unsigned32
@@ -472,5 +637,17 @@ NtcipError_t LWIPSNMPAdapterSetValue(LWIPSNMPAdapterCtx_t *ctx,
     ClearTransactionId(ctx, requestContext->sessionKey);
   }
 
+  if (OidEquals(oid,
+                oidLength,
+                kDbCreateTransactionOid,
+                (uint8_t) (sizeof(kDbCreateTransactionOid)
+                           / sizeof(kDbCreateTransactionOid[0]))))
+  {
+    HandleEventReportTransactionTransition(ctx,
+                                           previousState,
+                                           previousVerifyStatus,
+                                           value);
+  }
+
   return error;
-}
+} /* LWIPSNMPAdapterSetValue */

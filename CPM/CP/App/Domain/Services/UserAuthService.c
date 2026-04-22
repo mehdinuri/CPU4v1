@@ -65,7 +65,6 @@ static uint8_t RecordIsValid(const UserAuthStoreRecord_t *record)
 static uint8_t EnsureLoaded(UserAuthService_t *service)
 {
   UserAuthStoreRecord_t record;
-  uint16_t legacyAdminPin = USER_AUTH_DEFAULT_ADMIN_PIN;
 
   if (service == NULL)
   {
@@ -92,13 +91,6 @@ static uint8_t EnsureLoaded(UserAuthService_t *service)
   }
 
   RecordSetDefaults(&service->record);
-  if ((UserAuthStoreLoadLegacyAdminPin(service->storePort, &legacyAdminPin)
-       != 0U)
-      && (PinIsValid(legacyAdminPin) != 0U))
-  {
-    service->record.adminPinHash = HashPin(USER_ROLE_ADMIN, legacyAdminPin);
-  }
-
   (void) UserAuthStoreSave(service->storePort, &service->record);
   service->loaded = 1U;
   return 1U;

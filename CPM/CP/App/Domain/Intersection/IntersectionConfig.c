@@ -280,6 +280,18 @@ static uint8_t ValidateIoMapInputDeviceAddr(
   }
 }
 
+static uint8_t ValidFailureFlashPeriodDs(uint8_t failureFlashPeriodDs)
+{
+  return (uint8_t) ((failureFlashPeriodDs
+                     == INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_500MS_DS)
+                    || (failureFlashPeriodDs
+                        == INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_1000MS_DS)
+                    || (failureFlashPeriodDs
+                        == INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS)
+                    || (failureFlashPeriodDs
+                        == INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_4000MS_DS));
+}
+
 static uint8_t ValidateIoMapInputDevicePin(
   const IntersectionIoInputMapRowConfig_t *row)
 {
@@ -816,6 +828,8 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
     return;
   }
 
+  memset(config, 0, sizeof(*config));
+
   config->phaseCount = INTERSECTION_PHASE_COUNT_MAX;
   config->ringCount = INTERSECTION_RING_COUNT_MAX;
   config->barrierCount = INTERSECTION_BARRIER_COUNT_MAX;
@@ -1091,6 +1105,8 @@ void IntersectionConfigInitDefaults(IntersectionConfig_t *config)
   config->unit.redRevertDs = 0U;
   config->unit.startUpFlashMode =
     (uint8_t) INTERSECTION_UNIT_STARTUP_FLASH_MODE_AUTO_FLASH;
+  config->unit.failureFlashPeriodDs =
+    INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_500MS_DS;
   config->unit.timeSourceCommanded = (uint8_t) UNIT_CLOCK_SOURCE_GNSS;
   config->unit.elevationOffsetMeters =
     INTERSECTION_UNIT_ELEVATION_OFFSET_UNKNOWN;
@@ -1300,6 +1316,13 @@ uint8_t IntersectionConfigValidate(const IntersectionConfig_t *config,
     SetError(errorInfo,
              INTERSECTION_CONFIG_ERROR_UNIT_STARTUP_FLASH_MODE,
              0U);
+
+    return 0U;
+  }
+
+  if (ValidFailureFlashPeriodDs(config->unit.failureFlashPeriodDs) == 0U)
+  {
+    SetError(errorInfo, INTERSECTION_CONFIG_ERROR_UNIT_FAILURE_FLASH_PERIOD, 0U);
 
     return 0U;
   }

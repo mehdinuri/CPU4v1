@@ -12,7 +12,7 @@
 
 typedef struct
 {
-  uint8_t bFrequency; /* pre-set by test to simulate measured frequency */
+  uint8_t frequency; /* pre-set by test to simulate measured frequency */
 } MockFrequencySensorAdapterCtx_t;
 
 void                    MockFrequencySensorAdapterInit(MockFrequencySensorAdapterCtx_t *ctx);

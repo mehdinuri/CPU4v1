@@ -13,17 +13,17 @@
  * ---------------------------------------------------------------------------*/
 static float AdapterGetNetVoltage(void *ctx)
 {
-  return ((MockVoltageSensorAdapterCtx_t *) ctx)->fNetVoltage;
+  return ((MockVoltageSensorAdapterCtx_t *) ctx)->netVoltage;
 }
 
 static float AdapterGetRegVIn(void *ctx)
 {
-  return ((MockVoltageSensorAdapterCtx_t *) ctx)->fRegVIn;
+  return ((MockVoltageSensorAdapterCtx_t *) ctx)->regVIn;
 }
 
 static float AdapterGetRegVOut(void *ctx)
 {
-  return ((MockVoltageSensorAdapterCtx_t *) ctx)->fRegVOut;
+  return ((MockVoltageSensorAdapterCtx_t *) ctx)->regVOut;
 }
 
 /* ---------------------------------------------------------------------------

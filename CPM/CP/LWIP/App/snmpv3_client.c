@@ -133,7 +133,7 @@ static void snmpv3_init_user_table(void)
 
   if ((username == NULL) || (username[0] == '\0'))
   {
-    username = "lwip-agent";
+    username = MCS_DEFAULT_SNMPV3_USERNAME;
   }
 
   /* Add configurable user */

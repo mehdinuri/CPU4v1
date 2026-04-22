@@ -25,6 +25,7 @@ target_sources(Domain PRIVATE
     Services/MmiSnapshotCache.c
     Services/MmiLocalSettingsService.c
     Services/MmiEventLogService.c
+    Services/EventReportService.c
     Services/MmiMaintenanceService.c
     Services/UiPowerService.c
     Services/UiLanguageService.c
@@ -47,12 +48,19 @@ target_sources(Domain PRIVATE
     Lcd/LcdPage_SettingsLanguage.c
     Lcd/LcdPage_SettingsDateTime.c
     Lcd/LcdPage_SettingsGps.c
+    Lcd/LcdPage_OutputPower.c
     Lcd/LcdPage_OutputTest.c
     NTCIP/Core/NtcipTypes.c
     NTCIP/Core/NtcipObjectDirectory.c
     NTCIP/Core/NtcipDbTransactionService.c
+    NTCIP/NTCIP1103.c
     NTCIP/NTCIP1201.c
     NTCIP/NTCIP1202.c
+    NTCIP/Mib1103v0352/GlobalReportObjects.c
+    NTCIP/Mib1103v0352/SecurityObjects.c
+    NTCIP/Mib1103v0352/LogicalNameObjects.c
+    NTCIP/Mib1103v0352/BlockObjects.c
+    NTCIP/Mib1103v0352/TrapObjects.c
     NTCIP/Mib1201v0315/GlobalConfigurationObjects.c
     NTCIP/Mib1201v0315/GlobalDbManagementObjects.c
     NTCIP/Mib1201v0315/GlobalTimeManagementObjects.c
@@ -79,7 +87,11 @@ target_sources(Domain PRIVATE
     NTCIP/Mib1202v0335/OverlapStatusObjects.c
     NTCIP/Mib1202v0335/PreemptObjects.c
     NTCIP/Mib1202v0335/UnitObjects.c
-    NTCIP/MibVendor59748/CpMpDiagnosticsObjects.c
+    NTCIP/MibVendor59748/UnitObjects.c
+    NTCIP/MibVendor59748/ChannelFaultObjects.c
+    NTCIP/MibVendor59748/CpMpLinkObjects.c
+    NTCIP/MibVendor59748/DriverModuleObjects.c
+    NTCIP/MibVendor59748/EventSourceObjects.c
     Intersection/DetectorReportService.c
 )
 

@@ -10,7 +10,10 @@
 #include "Domain/Intersection/IntersectionEngine.h"
 #include "Domain/NTCIP/NTCIP1201.h"
 #include "Domain/NTCIP/NTCIP1202.h"
-#include "Domain/NTCIP/MibVendor59748/CpMpDiagnosticsObjects.h"
+#include "Domain/NTCIP/MibVendor59748/ChannelFaultObjects.h"
+#include "Domain/NTCIP/MibVendor59748/CpMpLinkObjects.h"
+#include "Domain/NTCIP/MibVendor59748/DriverModuleObjects.h"
+#include "Domain/NTCIP/MibVendor59748/UnitObjects.h"
 #include "Domain/NTCIP/Core/NtcipDbTransactionService.h"
 #include "Domain/NTCIP/Core/NtcipObjectDirectory.h"
 #include "Domain/NTCIP/NtcipContext.h"
@@ -547,25 +550,29 @@ static const uint32_t kPreemptGateDescriptionOid[] =
 {
   1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 2U, 1U, 6U, 9U, 1U, 3U, 1U
 };
-static const uint32_t kCpMpDiagPeerHealthyOid[] =
+static const uint32_t kCpMpLinkPeerHealthyOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 2U, 0U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 20U, 2U, 0U
 };
-static const uint32_t kCpMpDiagSafetyActionOid[] =
+static const uint32_t kCpMpLinkSafetyActionOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 5U, 0U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 20U, 5U, 0U
 };
-static const uint32_t kCpMpDiagSafetyReasonCodeOid[] =
+static const uint32_t kCpMpLinkSafetyReasonCodeOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 6U, 0U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 20U, 6U, 0U
 };
-static const uint32_t kCpMpDiagGlobalFlagsOid[] =
+static const uint32_t kCpMpLinkGlobalFlagsOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 8U, 0U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 20U, 8U, 0U
 };
-static const uint32_t kCpMpDiagChannelFlagsOid[] =
+static const uint32_t kChannelFaultFlagsOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 1U, 10U, 1U, 2U, 1U
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 8U, 2U, 1U, 2U, 1U
+};
+static const uint32_t kUnitFailureFlashPeriodDsOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 59748U, 4U, 2U, 1U, 3U, 1U, 0U
 };
 
 enum
@@ -782,7 +789,10 @@ void setUp(void)
   NtcipObjectDirectoryInit(&s_directory);
   Ntcip1201RegisterObjects(&s_directory, &s_ntcipContext);
   Ntcip1202RegisterObjects(&s_directory, &s_ntcipContext);
-  CpMpDiagnosticsObjectsRegister(&s_directory, &s_ntcipContext);
+  TeknotelUnitObjectsRegister(&s_directory, &s_ntcipContext);
+  TeknotelChannelFaultObjectsRegister(&s_directory, &s_ntcipContext);
+  TeknotelCpMpLinkObjectsRegister(&s_directory, &s_ntcipContext);
+  TeknotelDriverModuleObjectsRegister(&s_directory, &s_ntcipContext);
   ReloadEngine();
 }
 
@@ -836,7 +846,8 @@ void test_directory_routes_phase_minimum_green_oid_in_mib_units(void)
 
 void test_candidate_changes_stay_hidden_until_transaction_commits(void)
 {
-  NtcipRequestContext_t request = { 0x1111U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1111U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 9U);
@@ -875,7 +886,8 @@ void test_candidate_changes_stay_hidden_until_transaction_commits(void)
 
 void test_phase_walk_is_transactional_and_committed_in_seconds(void)
 {
-  NtcipRequestContext_t request = { 0x1212U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1212U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 12U);
@@ -907,8 +919,10 @@ void test_phase_walk_is_transactional_and_committed_in_seconds(void)
 
 void test_database_writes_require_owner_and_matching_transaction_id(void)
 {
-  NtcipRequestContext_t ownerRequest = { 0x2222U, 0U, 0U };
-  NtcipRequestContext_t otherRequest = { 0x3333U, 1U, 7U };
+  NtcipRequestContext_t ownerRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x2222U, 0U, 0U);
+  NtcipRequestContext_t otherRequest =
+    NTCIP_REQUEST_CONTEXT_INIT(0x3333U, 1U, 7U);
   NtcipValue_t value;
 
   BeginTransaction(&ownerRequest, 7U);
@@ -931,7 +945,8 @@ void test_database_writes_require_owner_and_matching_transaction_id(void)
 
 void test_phase_ring_zero_disables_phase_and_auxio_group_is_present(void)
 {
-  NtcipRequestContext_t request = { 0x4444U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x4444U, 0U, 0U);
   NtcipValue_t value;
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
@@ -965,7 +980,8 @@ void test_phase_ring_zero_disables_phase_and_auxio_group_is_present(void)
 
 void test_global_set_id_changes_after_committed_configuration_change(void)
 {
-  NtcipRequestContext_t request = { 0x5555U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x5555U, 0U, 0U);
   NtcipValue_t before;
   NtcipValue_t after;
 
@@ -1014,7 +1030,8 @@ void test_phase_status_group_reads_runtime_from_engine(void)
 void test_channel_and_overlap_runtime_status_follow_committed_configuration(
   void)
 {
-  NtcipRequestContext_t request = { 0x6666U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6666U, 0U, 0U);
   NtcipValue_t value;
   const uint8_t overlapIncluded[] = { 1U, 2U };
 
@@ -1075,7 +1092,8 @@ void test_channel_and_overlap_runtime_status_follow_committed_configuration(
 
 void test_ped_status_and_phase_pedestrian_channel_follow_runtime_service(void)
 {
-  NtcipRequestContext_t request = { 0x7777U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x7777U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 51U);
@@ -1366,7 +1384,8 @@ void test_ring_control_group_force_off_mask_drives_engine_runtime(void)
 void test_sequence_table_reports_supported_sequence_count_and_commits_reordered_ring(
   void)
 {
-  NtcipRequestContext_t request = { 0x7272U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x7272U, 0U, 0U);
   NtcipValue_t value;
   static const uint8_t defaultSequence[] = { 1U, 2U, 3U, 4U };
   static const uint8_t reorderedSequence[] = { 2U, 1U, 3U, 4U };
@@ -1469,7 +1488,8 @@ void test_sequence_table_reports_supported_sequence_count_and_commits_reordered_
 void test_detector_objects_route_transactional_call_phase_and_runtime_status(
   void)
 {
-  NtcipRequestContext_t request = { 0x7878U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x7878U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 52U);
@@ -1668,7 +1688,8 @@ void test_detector_alarm_objects_include_module_bus_diagnostics_and_reported_ala
 void test_detector_objects_expose_full_committed_config_and_pair_reciprocity(
   void)
 {
-  NtcipRequestContext_t request = { 0x7979U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x7979U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 53U);
@@ -2097,7 +2118,8 @@ void test_detector_control_group_actuation_drives_runtime_detector_status(void)
 void test_detector_object_validation_rejects_invalid_ranges_and_reset_is_ephemeral(
   void)
 {
-  NtcipRequestContext_t request = { 0x7A7AU, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x7A7AU, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 54U);
@@ -2173,7 +2195,8 @@ void test_detector_object_validation_rejects_invalid_ranges_and_reset_is_ephemer
 
 void test_preempt_objects_route_transactional_config_and_runtime_status(void)
 {
-  NtcipRequestContext_t request = { 0x9999U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x9999U, 0U, 0U);
   NtcipValue_t value;
   const uint8_t trackPhase[] = { 2U };
   static const uint8_t gateDescription[] = "Gate 1";
@@ -2370,7 +2393,8 @@ void test_preempt_objects_route_transactional_config_and_runtime_status(void)
 
 void test_coordination_pattern_cycle_time_is_transactional_and_committed(void)
 {
-  NtcipRequestContext_t request = { 0x8888U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x8888U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 61U);
@@ -3012,24 +3036,24 @@ void test_vendor_cp_mp_diagnostics_objects_expose_cached_fault_status(void)
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
-                                                kCpMpDiagPeerHealthyOid,
-                                                10U,
+                                                kCpMpLinkPeerHealthyOid,
+                                                13U,
                                                 NULL,
                                                 &value));
   TEST_ASSERT_EQUAL_UINT32(1U, value.data.unsigned32);
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
-                                                kCpMpDiagSafetyActionOid,
-                                                10U,
+                                                kCpMpLinkSafetyActionOid,
+                                                13U,
                                                 NULL,
                                                 &value));
   TEST_ASSERT_EQUAL_UINT32(CPMP_SAFETY_ACTION_DARK, value.data.unsigned32);
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
-                                                kCpMpDiagSafetyReasonCodeOid,
-                                                10U,
+                                                kCpMpLinkSafetyReasonCodeOid,
+                                                13U,
                                                 NULL,
                                                 &value));
   TEST_ASSERT_EQUAL_UINT32(TEST_CPMP_REASON_CONFLICT,
@@ -3037,8 +3061,8 @@ void test_vendor_cp_mp_diagnostics_objects_expose_cached_fault_status(void)
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
-                                                kCpMpDiagGlobalFlagsOid,
-                                                10U,
+                                                kCpMpLinkGlobalFlagsOid,
+                                                13U,
                                                 NULL,
                                                 &value));
   TEST_ASSERT_EQUAL_UINT32(CPMP_FAULT_GLOBAL_FLAG_CP_MISSING
@@ -3047,8 +3071,8 @@ void test_vendor_cp_mp_diagnostics_objects_expose_cached_fault_status(void)
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
                         NtcipObjectDirectoryGet(&s_directory,
-                                                kCpMpDiagChannelFlagsOid,
-                                                12U,
+                                                kChannelFaultFlagsOid,
+                                                15U,
                                                 NULL,
                                                 &value));
   TEST_ASSERT_EQUAL_UINT32(CPMP_FAULT_CHANNEL_FLAG_CONFLICT
@@ -3160,7 +3184,8 @@ void test_unit_control_object_rejects_reserved_bit_and_drives_runtime_demands(
 
 void test_preempt_verify_accepts_short_service_exit_type(void)
 {
-  NtcipRequestContext_t request = { 0x9999U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x9999U, 0U, 0U);
   NtcipValue_t value;
   const uint8_t trackPhase[] = { 2U };
 
@@ -3318,7 +3343,8 @@ void test_global_set_id_table_reports_zero_supported_rows(void)
 
 void test_unit_config_objects_are_transactional_and_committed(void)
 {
-  NtcipRequestContext_t request = { 0x6111U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6111U, 0U, 0U);
   NtcipValue_t value;
 
   NtcipValueSetUnsigned32(&value, (uint32_t) NTCIP_DB_CREATE_STATE_TRANSACTION);
@@ -3450,7 +3476,8 @@ void test_unit_config_objects_are_transactional_and_committed(void)
 
 void test_unit_asc_elevation_offset_rejects_values_above_mib_limit(void)
 {
-  NtcipRequestContext_t request = { 0x6112U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6112U, 0U, 0U);
   NtcipValue_t value;
 
   NtcipValueSetUnsigned32(&value, (uint32_t) NTCIP_DB_CREATE_STATE_TRANSACTION);
@@ -3479,9 +3506,55 @@ void test_unit_asc_elevation_offset_rejects_values_above_mib_limit(void)
                                                     &value));
 }
 
+void test_vendor_failure_flash_period_object_is_transactional_and_committed(void)
+{
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6113U, 0U, 0U);
+  NtcipValue_t value;
+
+  BeginTransaction(&request, 8U);
+
+  NtcipValueSetUnsigned32(&value,
+                          INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectorySetValue(&s_directory,
+                                                     kUnitFailureFlashPeriodDsOid,
+                                                     13U,
+                                                     &request,
+                                                     &value));
+  VerifyAndCommitTransaction(&request);
+
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
+                        NtcipObjectDirectoryGet(&s_directory,
+                                                kUnitFailureFlashPeriodDsOid,
+                                                13U,
+                                                NULL,
+                                                &value));
+  TEST_ASSERT_EQUAL_UINT32(INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS,
+                           value.data.unsigned32);
+}
+
+void test_vendor_failure_flash_period_object_rejects_invalid_values(void)
+{
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6114U, 0U, 0U);
+  NtcipValue_t value;
+
+  BeginTransaction(&request, 9U);
+
+  NtcipValueSetUnsigned32(&value, 7U);
+  TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_BAD_VALUE,
+                        NtcipObjectDirectorySetValue(&s_directory,
+                                                     kUnitFailureFlashPeriodDsOid,
+                                                     13U,
+                                                     &request,
+                                                     &value));
+}
+
 void test_unit_user_defined_backup_objects_are_transactional_and_committed(void)
 {
-  NtcipRequestContext_t request = { 0x6161U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x6161U, 0U, 0U);
   NtcipValue_t value;
   static const uint32_t backupMatchOid[] =
   {
@@ -3715,7 +3788,8 @@ void test_remote_manual_control_objects_require_mode_and_follow_runtime_timer(
 
 void test_matching_set_oid_resets_user_defined_backup_timer(void)
 {
-  NtcipRequestContext_t request = { 0xA2A2U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0xA2A2U, 0U, 0U);
   NtcipValue_t value;
   const IntersectionRuntime_t *runtime;
   static const uint32_t backupMatchOid[] =
@@ -3851,7 +3925,8 @@ void test_special_function_output_objects_follow_runtime_control_and_timebase(
 void test_timebase_objects_route_transactional_table_and_runtime_action_control(
   void)
 {
-  NtcipRequestContext_t request = { 0x5151U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x5151U, 0U, 0U);
   NtcipValue_t value;
 
   TEST_ASSERT_EQUAL_INT(NTCIP_ERROR_OK,
@@ -3959,7 +4034,8 @@ void test_timebase_objects_route_transactional_table_and_runtime_action_control(
 
 void test_timebase_auxiliary_reserved_bits_are_rejected(void)
 {
-  NtcipRequestContext_t request = { 0x5252U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x5252U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 18U);
@@ -3974,7 +4050,8 @@ void test_timebase_auxiliary_reserved_bits_are_rejected(void)
 
 void test_unit_control_status_reports_interconnect_and_backup(void)
 {
-  NtcipRequestContext_t request = { 0x5353U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x5353U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 19U);
@@ -4029,7 +4106,8 @@ void test_unit_control_status_reports_interconnect_and_backup(void)
 
 void test_remote_command_lockout_denies_all_sets_except_unlock(void)
 {
-  NtcipRequestContext_t request = { 0xA1A1U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0xA1A1U, 0U, 0U);
   NtcipValue_t value;
 
   NtcipValueSetUnsigned32(&value, 0x02U);
@@ -4194,6 +4272,8 @@ int main(void)
   RUN_TEST(test_global_set_id_table_reports_zero_supported_rows);
   RUN_TEST(test_unit_config_objects_are_transactional_and_committed);
   RUN_TEST(test_unit_asc_elevation_offset_rejects_values_above_mib_limit);
+  RUN_TEST(test_vendor_failure_flash_period_object_is_transactional_and_committed);
+  RUN_TEST(test_vendor_failure_flash_period_object_rejects_invalid_values);
   RUN_TEST(test_unit_user_defined_backup_objects_are_transactional_and_committed);
   RUN_TEST(test_remote_manual_control_objects_require_mode_and_follow_runtime_timer);
   RUN_TEST(test_matching_set_oid_resets_user_defined_backup_timer);

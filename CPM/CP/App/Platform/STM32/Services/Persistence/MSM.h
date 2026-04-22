@@ -15,6 +15,8 @@
 /*  include files */
 #include "MCS.h"
 #include "MLM.h"
+#include "SettingsStorage.h"
+#include "SystemStartTimeStore.h"
 #include "flash.h"
 #include "Ports/IEepromStoragePort.h"
 #include "Ports/IFlashStoragePort.h"
@@ -57,31 +59,25 @@ typedef enum
 /*  EEPROM addresses */
 #define EEPROM_STORAGE_ADDR_BASE 0x0000
 
-#define EEPROM_STORAGE_ADDR_DEVICE_UID EEPROM_STORAGE_ADDR_BASE
+/* User settings */
+#define EEPROM_STORAGE_ADDR_USER_SETTINGS EEPROM_STORAGE_ADDR_BASE
 
-/* SO Powers */
-#define EEPROM_STORAGE_ADDR_SO_POWERS                                          \
-        EEPROM_STORAGE_ADDR_DEVICE_UID + sizeof(tSSDeviceUID)
+#define EEPROM_STORAGE_ADDR_BROKEN_INPUT_SETTINGS                              \
+        EEPROM_STORAGE_ADDR_USER_SETTINGS + (sizeof(tSUserSettings))
 
-/* User Requested Operation Modes */
-#define EEPROM_STORAGE_ADDR_USER_REQUEST                                       \
-        EEPROM_STORAGE_ADDR_SO_POWERS \
-        + (sizeof(tSSOPowerRecord) * SIGNAL_OUTPUTS_MAX)
+#define EEPROM_STORAGE_ADDR_SERVER_SETTINGS                                    \
+        EEPROM_STORAGE_ADDR_BROKEN_INPUT_SETTINGS + (sizeof(tSBrokenInputSettings))
 
-/* Heater & Lamp Dimming */
-/* H&D Commented */
+#define EEPROM_STORAGE_ADDR_SYSTEM_START_TIME                                  \
+        EEPROM_STORAGE_ADDR_SERVER_SETTINGS + (sizeof(tSServerSettings))
 
-/*
- #define  EEPROM_STORAGE_ADDR_HEATER
- *  EEPROM_STORAGE_ADDR_USER_REQUEST
- + (sizeof(tSUserState)) #define  EEPROM_STORAGE_ADDR_LAMP_DIM
- +  EEPROM_STORAGE_ADDR_HEATER
- + (sizeof(tSHeaterLampDim))
- */
+/* LRLF Detect Time Settings */
+#define EEPROM_STORAGE_LRLF_DETECT_TIME_SETTTINGS                              \
+        EEPROM_STORAGE_ADDR_SYSTEM_START_TIME + (sizeof(tSSystemStartTime))
 
 /* GPRS Modem Type */
 #define EEPROM_STORAGE_ADDR_MCS_CON_INFO                                       \
-        EEPROM_STORAGE_ADDR_USER_REQUEST + (sizeof(tSUserState))
+        EEPROM_STORAGE_LRLF_DETECT_TIME_SETTTINGS + (sizeof(uint8_t))
 
 /* GPS Port */
 #define EEPROM_STORAGE_ADDR_GPS_PORT                                           \
@@ -95,67 +91,32 @@ typedef enum
 #define EEPROM_STORAGE_ADDR_LANGUAGE                                           \
         EEPROM_STORAGE_ADDR_GPS_BAUD_RATE + (sizeof(uint8_t))
 
-/* Users */
-#define EEPROM_STORAGE_ADDR_ADMIN_USERNAME                                     \
-        EEPROM_STORAGE_ADDR_LANGUAGE + (sizeof(uint8_t))
-#define EEPROM_STORAGE_ADDR_ADMIN_PASSWORD                                     \
-        EEPROM_STORAGE_ADDR_ADMIN_USERNAME + (sizeof(uint16_t))
-#define EEPROM_STORAGE_ADDR_ADMIN_VALIDITY                                     \
-        EEPROM_STORAGE_ADDR_ADMIN_PASSWORD + (sizeof(uint16_t))
-
 /* Logs */
 #define EEPROM_STORAGE_ADDR_LOG                                                \
-        EEPROM_STORAGE_ADDR_ADMIN_VALIDITY + (sizeof(uint8_t))
+        EEPROM_STORAGE_ADDR_LANGUAGE + (sizeof(uint8_t))
 #define EEPROM_STORAGE_ADDR_LOG_RECORD_NUMBER                                  \
-        EEPROM_STORAGE_ADDR_LOG + (sizeof(tSLogRecord) * LOG_RECORDS_MAX)
+        EEPROM_STORAGE_ADDR_LOG                                                \
+        + (sizeof(EventLogStorageRecord_t) * LOG_RECORDS_MAX)
 #define EEPROM_STORAGE_ADDR_LOG_EXISTENCE                                      \
         EEPROM_STORAGE_ADDR_LOG_RECORD_NUMBER + (sizeof(uint16_t))
 #define EEPROM_STORAGE_ADDR_LOG_INDEXES                                        \
         EEPROM_STORAGE_ADDR_LOG_EXISTENCE + (sizeof(uint8_t))
 
-/* User settings */
-#define EEPROM_STORAGE_ADDR_USER_SETTINGS                                      \
-        EEPROM_STORAGE_ADDR_LOG_INDEXES + (sizeof(uint16_t))
-
-/* License */
-#define EEPROM_STORAGE_ADDR_FUNC_CONF                                          \
-        EEPROM_STORAGE_ADDR_USER_SETTINGS + (sizeof(tSUserSettings))
-
-/* Daylight Saving Time */
-#define EEPROM_STORAGE_ADDR_DST_FLAG                                           \
-        EEPROM_STORAGE_ADDR_FUNC_CONF + (sizeof(tSFuncConf))
-
-/* Log Settings */
-#define EEPROM_STORAGE_ADDR_LOG_SETTINGS                                       \
-        EEPROM_STORAGE_ADDR_DST_FLAG + (sizeof(uint8_t))
-
-/* System Start Time */
-#define EEPROM_STORAGE_ADDR_SYSTEM_START_TIME                                  \
-        EEPROM_STORAGE_ADDR_LOG_SETTINGS + (sizeof(tSLogSettings))
-
-/* LRLF Detect Time Settings */
-#define EEPROM_STORAGE_LRLF_DETECT_TIME_SETTTINGS                              \
-        EEPROM_STORAGE_ADDR_SYSTEM_START_TIME + (sizeof(tSSystemStartTime))
-
-#define EEPROM_STORAGE_ADDR_BROKEN_INPUT_SETTINGS                              \
-        EEPROM_STORAGE_LRLF_DETECT_TIME_SETTTINGS +                                  \
-        (sizeof(uint8_t))
-
-#define EEPROM_STORAGE_ADDR_PROGRAM_LAST_CHANGE_TIME                           \
-        EEPROM_STORAGE_ADDR_BROKEN_INPUT_SETTINGS \
-        + (sizeof(tSBrokenInputSettings))
-
-#define EEPROM_STORAGE_ADDR_SERVER_SETTINGS \
-        EEPROM_STORAGE_ADDR_PROGRAM_LAST_CHANGE_TIME  + (sizeof(uint32_t))
-
 #define EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL \
-        EEPROM_STORAGE_ADDR_SERVER_SETTINGS + (sizeof(tSServerSettings))
+        EEPROM_STORAGE_ADDR_LOG_INDEXES + (sizeof(uint16_t))
 
 #define EEPROM_STORAGE_ADDR_SNMPV3_STATE \
         EEPROM_STORAGE_ADDR_CONFIG_MIGRATION_JOURNAL + 64U
 
-#define EEPROM_STORAGE_ADDR_AUTH_STATE \
+#define EEPROM_STORAGE_ADDR_SNMP_BOOTSTRAP_INFO \
         EEPROM_STORAGE_ADDR_SNMPV3_STATE + (sizeof(tSMCSSNMPv3State))
+
+#define EEPROM_STORAGE_ADDR_SNMPV3_BOOTSTRAP_STATE \
+        EEPROM_STORAGE_ADDR_SNMP_BOOTSTRAP_INFO + (sizeof(tSMCSSNMPBootstrapInfo))
+
+#define EEPROM_STORAGE_ADDR_AUTH_STATE \
+        EEPROM_STORAGE_ADDR_SNMPV3_BOOTSTRAP_STATE \
+        + (sizeof(tSMCSSNMPv3State))
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  public methods */

@@ -9,7 +9,7 @@
 #include "unity.h"
 #include "Domain/VoltageCurrentFrame.h"
 
-static tSVoltageCurrentFrameInputs in;
+static VoltageCurrentFrameInputs_t in;
 static uint8_t bytes[VOLTAGE_CURRENT_FRAME_BYTES];
 
 void setUp(void)
@@ -34,7 +34,7 @@ void test_all_zeros_produces_all_zero_bytes(void)
 
 void test_channel_0_voltage_sets_bit_0_of_byte_0(void)
 {
-  in.SVoltageImage.aChannels[0] = 1U;
+  in.voltageImage.channels[0] = 1U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x01U, bytes[0]);
@@ -43,7 +43,7 @@ void test_channel_0_voltage_sets_bit_0_of_byte_0(void)
 
 void test_channel_7_voltage_sets_bit_7_of_byte_0(void)
 {
-  in.SVoltageImage.aChannels[7] = 1U;
+  in.voltageImage.channels[7] = 1U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x80U, bytes[0]);
@@ -52,7 +52,7 @@ void test_channel_7_voltage_sets_bit_7_of_byte_0(void)
 
 void test_channel_8_voltage_sets_bit_0_of_byte_1(void)
 {
-  in.SVoltageImage.aChannels[8] = 1U;
+  in.voltageImage.channels[8] = 1U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x00U, bytes[0]);
@@ -61,7 +61,7 @@ void test_channel_8_voltage_sets_bit_0_of_byte_1(void)
 
 void test_channel_11_voltage_sets_bit_3_of_byte_1(void)
 {
-  in.SVoltageImage.aChannels[11] = 1U;
+  in.voltageImage.channels[11] = 1U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x00U, bytes[0]);
@@ -74,7 +74,7 @@ void test_all_12_voltage_channels_high(void)
 {
   for (uint8_t i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    in.SVoltageImage.aChannels[i] = 1U;
+    in.voltageImage.channels[i] = 1U;
   }
 
   VoltageCurrentFrame_Encode(&in, bytes);
@@ -85,9 +85,9 @@ void test_all_12_voltage_channels_high(void)
 
 void test_nonzero_voltage_values_normalise_to_single_bit(void)
 {
-  /* aChannels stores 1 by convention but any nonzero value should
+  /* channels stores 1 by convention but any nonzero value should
    * still just set the bit. */
-  in.SVoltageImage.aChannels[2] = 0xFFU;
+  in.voltageImage.channels[2] = 0xFFU;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x04U, bytes[0]);
@@ -95,10 +95,10 @@ void test_nonzero_voltage_values_normalise_to_single_bit(void)
 
 void test_current_low_bytes_pass_through(void)
 {
-  in.SCurrentWire.aCurLow[0] = 0x11U;
-  in.SCurrentWire.aCurLow[1] = 0x22U;
-  in.SCurrentWire.aCurLow[2] = 0x33U;
-  in.SCurrentWire.aCurLow[3] = 0x44U;
+  in.currentWire.curLow[0] = 0x11U;
+  in.currentWire.curLow[1] = 0x22U;
+  in.currentWire.curLow[2] = 0x33U;
+  in.currentWire.curLow[3] = 0x44U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0x11U, bytes[2]);
@@ -109,7 +109,7 @@ void test_current_low_bytes_pass_through(void)
 
 void test_current_high_bits_pass_through(void)
 {
-  in.SCurrentWire.bCurHighBitsPacked = 0xE4U;    /* 0b11100100 */
+  in.currentWire.curHighBitsPacked = 0xE4U;    /* 0b11100100 */
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0xE4U, bytes[6]);
@@ -117,7 +117,7 @@ void test_current_high_bits_pass_through(void)
 
 void test_byte_7_status_passthrough(void)
 {
-  in.bStatus = 0xA5U;
+  in.status = 0xA5U;
   VoltageCurrentFrame_Encode(&in, bytes);
 
   TEST_ASSERT_EQUAL_UINT8(0xA5U, bytes[7]);
@@ -126,11 +126,11 @@ void test_byte_7_status_passthrough(void)
 void test_voltage_independent_of_current_fields(void)
 {
   /* Setting current fields should not touch voltage bytes. */
-  in.SCurrentWire.aCurLow[0] = 0xFFU;
-  in.SCurrentWire.aCurLow[1] = 0xFFU;
-  in.SCurrentWire.aCurLow[2] = 0xFFU;
-  in.SCurrentWire.aCurLow[3] = 0xFFU;
-  in.SCurrentWire.bCurHighBitsPacked = 0xFFU;
+  in.currentWire.curLow[0] = 0xFFU;
+  in.currentWire.curLow[1] = 0xFFU;
+  in.currentWire.curLow[2] = 0xFFU;
+  in.currentWire.curLow[3] = 0xFFU;
+  in.currentWire.curHighBitsPacked = 0xFFU;
 
   VoltageCurrentFrame_Encode(&in, bytes);
 

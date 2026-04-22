@@ -12,7 +12,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } SignalInputAdapterCtx_t;
 
 void                SignalInputAdapterInit(SignalInputAdapterCtx_t *ctx);

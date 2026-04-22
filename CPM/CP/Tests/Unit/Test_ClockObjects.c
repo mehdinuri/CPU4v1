@@ -324,7 +324,8 @@ void test_max_time_sources_and_available_table_follow_bound_clock_port(void)
 
 void test_unit_time_source_commanded_roundtrips_through_transaction_commit(void)
 {
-  NtcipRequestContext_t request = { 0x2100U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x2100U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTx(&request, 1U);
@@ -344,7 +345,8 @@ void test_unit_time_source_commanded_roundtrips_through_transaction_commit(void)
 
 void test_unit_time_source_commanded_rejects_unsupported_sources(void)
 {
-  NtcipRequestContext_t request = { 0x2101U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x2101U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTx(&request, 3U);

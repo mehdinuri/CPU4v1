@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#define CPMP_PROTOCOL_VERSION 2U
+#define CPMP_PROTOCOL_VERSION 4U
 
 #define CPMP_FRAME_ID_CP_HEARTBEAT   0x100U
 #define CPMP_FRAME_ID_CP_CFG_BEGIN   0x101U
@@ -26,7 +26,9 @@
 #define CPMP_PEER_TIMEOUT_TICKS 5U
 
 #define CPMP_CONFIG_CHUNK_PAYLOAD_BYTES 60U
-#define CPMP_CONFIG_IMAGE_MAX_OUTPUT_MAP 48U
+#define CPMP_CONFIG_CHANNEL_COUNT 32U
+#define CPMP_CONFIG_PHASE_COUNT 8U
+#define CPMP_CONFIG_IMAGE_MAX_OUTPUT_MAP 96U
 
 typedef enum
 {
@@ -96,12 +98,17 @@ typedef struct
   uint8_t outputMapCount;
   uint8_t startupFlashSeconds;
   uint8_t startupFlashMode;
-  uint8_t reserved0[2];
-  uint8_t channelControlType[16];
-  uint8_t channelControlSource[16];
-  uint8_t phaseYellowChangeDs[8];
-  uint8_t phaseRedClearDs[8];
-  uint8_t phaseConcurrencyMask[8];
+  uint8_t failureFlashPeriodDs;
+  uint8_t reserved0;
+  uint8_t channelControlType[CPMP_CONFIG_CHANNEL_COUNT];
+  uint8_t channelControlSource[CPMP_CONFIG_CHANNEL_COUNT];
+  uint8_t channelFlashMask[CPMP_CONFIG_CHANNEL_COUNT];
+  uint32_t channelConflictMask[CPMP_CONFIG_CHANNEL_COUNT];
+  uint8_t channelMinYellowDs[CPMP_CONFIG_CHANNEL_COUNT];
+  uint8_t channelRedClearDs[CPMP_CONFIG_CHANNEL_COUNT];
+  uint8_t phaseYellowChangeDs[CPMP_CONFIG_PHASE_COUNT];
+  uint8_t phaseRedClearDs[CPMP_CONFIG_PHASE_COUNT];
+  uint8_t phaseConcurrencyMask[CPMP_CONFIG_PHASE_COUNT];
   CpMpOutputMapEntry_t outputMap[CPMP_CONFIG_IMAGE_MAX_OUTPUT_MAP];
 } CpMpMmuConfigImageV1_t;
 
@@ -109,11 +116,36 @@ typedef struct
 {
   uint32_t sequence;
   uint32_t globalFlags;
-  uint16_t channelFlags[16];
+  uint16_t channelFlags[CPMP_CONFIG_CHANNEL_COUNT];
   uint8_t safetyAction;
   uint8_t safetyReasonCode;
   uint8_t configState;
   uint8_t reserved0;
-} CpMpFaultStatusImageV1_t;
+} CpMpFaultStatusImageV2_t;
+
+typedef struct
+{
+  uint32_t sequence;
+  uint32_t timestampTicks;
+  uint32_t param;
+  uint16_t source;
+  uint8_t code;
+  uint8_t severity;
+} CpMpFaultEventV1_t;
+
+typedef struct
+{
+  uint32_t sequence;
+} CpMpEventAckV1_t;
+
+#define CPMP_CONFIG_CHUNK_MAX_COUNT \
+  ((sizeof(CpMpMmuConfigImageV1_t) + CPMP_CONFIG_CHUNK_PAYLOAD_BYTES - 1U) \
+   / CPMP_CONFIG_CHUNK_PAYLOAD_BYTES)
+#define CPMP_CONFIG_CHUNK_BITMAP_BYTES \
+  ((CPMP_CONFIG_CHUNK_MAX_COUNT + 7U) / 8U)
+
+typedef CpMpMmuConfigImageV1_t CpMpMmuConfigImage_t;
+typedef CpMpFaultStatusImageV2_t CpMpFaultStatusImage_t;
+typedef CpMpFaultStatusImageV2_t CpMpFaultStatusImageV1_t;
 
 #endif /* CPMP_SHARED_PROTOCOL_H */

@@ -13,7 +13,7 @@
  * ---------------------------------------------------------------------------*/
 static uint8_t AdapterGetNetFrequency(void *ctx)
 {
-  return ((MockFrequencySensorAdapterCtx_t *) ctx)->bFrequency;
+  return ((MockFrequencySensorAdapterCtx_t *) ctx)->frequency;
 }
 
 /* ---------------------------------------------------------------------------

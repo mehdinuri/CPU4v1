@@ -18,9 +18,28 @@ typedef struct
 
 #define CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT 16U
 #define CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT 8U
+#define CONFIGURATION_LEGACY_CHANNEL_COUNT 16U
+#define CONFIGURATION_LEGACY_OVERLAP_COUNT 16U
+#define CONFIGURATION_LEGACY_IO_MAP_MAX_OUTPUTS \
+        (CONFIGURATION_LEGACY_CHANNEL_COUNT * 3U)
+#define CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE \
+        (8U + CONFIGURATION_LEGACY_CHANNEL_COUNT)
+#define CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE 38U
+#define CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE \
+        (13U \
+         + (4U * (1U + INTERSECTION_PHASE_COUNT_MAX)) \
+         + (3U * (1U + CONFIGURATION_LEGACY_OVERLAP_COUNT)) \
+         + (2U * (1U + INTERSECTION_PHASE_COUNT_MAX)) \
+         + 6U)
 #define CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE \
         (INTERSECTION_IO_MAP_DESCRIPTION_MAX \
-         + (INTERSECTION_IO_MAP_MAX_OUTPUTS \
+         + (CONFIGURATION_LEGACY_IO_MAP_MAX_OUTPUTS \
+            * CONFIGURATION_IO_MAP_OUTPUT_ROW_IMAGE_SIZE))
+#define CONFIGURATION_LEGACY_V21_IO_MAP_IMAGE_SIZE \
+        (INTERSECTION_IO_MAP_DESCRIPTION_MAX \
+         + (INTERSECTION_IO_MAP_MAX_INPUTS \
+            * CONFIGURATION_IO_MAP_INPUT_ROW_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_IO_MAP_MAX_OUTPUTS \
             * CONFIGURATION_IO_MAP_OUTPUT_ROW_IMAGE_SIZE))
 
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V2 2UL
@@ -29,14 +48,18 @@ typedef struct
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V3 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 16U) \
          + (INTERSECTION_RING_COUNT_MAX * 8U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V4 4UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V4 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 24U) \
          + (INTERSECTION_RING_COUNT_MAX * 8U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V5 5UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V5 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 24U) \
@@ -44,8 +67,10 @@ typedef struct
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V6 6UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V6 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 24U) \
@@ -53,9 +78,12 @@ typedef struct
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V7 7UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V7 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 24U) \
@@ -63,13 +91,16 @@ typedef struct
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
             * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V8 8UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V8 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * 24U) \
@@ -77,15 +108,18 @@ typedef struct
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
             * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 2U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V9 9UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V9 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * CONFIGURATION_PHASE_IMAGE_SIZE) \
@@ -93,15 +127,18 @@ typedef struct
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
          + (INTERSECTION_PREEMPT_COUNT_MAX \
             * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
          + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 2U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U))
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE))
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V10 10UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V11 11UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V12 12UL
@@ -113,13 +150,15 @@ typedef struct
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18 18UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V19 19UL
 #define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V20 20UL
+#define CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V21 21UL
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20 \
         (4U + (INTERSECTION_PHASE_COUNT_MAX * CONFIGURATION_PHASE_IMAGE_SIZE) \
          + (INTERSECTION_SEQUENCE_COUNT_MAX * INTERSECTION_RING_COUNT_MAX * 8U) \
          + 8U \
          + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
          + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
-         + (INTERSECTION_PREEMPT_COUNT_MAX * 124U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
          + (CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT \
             * CONFIGURATION_VEHICLE_DETECTOR_IMAGE_SIZE) \
          + (CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT \
@@ -131,17 +170,51 @@ typedef struct
             * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
          + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
          + (INTERSECTION_PREEMPT_COUNT_MAX * 2U) \
-         + (INTERSECTION_CHANNEL_COUNT_MAX * 24U) \
-         + (INTERSECTION_OVERLAP_COUNT_MAX * 38U) \
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE) \
          + 2U \
          + (INTERSECTION_TIMEBASE_ACTION_COUNT_MAX \
             * CONFIGURATION_TIMEBASE_ACTION_IMAGE_SIZE) \
          + CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE \
-         + CONFIGURATION_UNIT_IMAGE_SIZE \
+         + 12U \
          + (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
             * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE) \
          + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE \
          + CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE)
+#define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V21 \
+        (4U + (INTERSECTION_PHASE_COUNT_MAX * CONFIGURATION_PHASE_IMAGE_SIZE) \
+         + (INTERSECTION_SEQUENCE_COUNT_MAX * INTERSECTION_RING_COUNT_MAX * 8U) \
+         + 8U \
+         + (INTERSECTION_PATTERN_COUNT_MAX * 8U) \
+         + (INTERSECTION_SPLIT_COUNT_MAX * INTERSECTION_PHASE_COUNT_MAX * 4U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_PREEMPT_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT \
+            * CONFIGURATION_VEHICLE_DETECTOR_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT \
+            * CONFIGURATION_PED_DETECTOR_IMAGE_SIZE) \
+         + 8U \
+         + (INTERSECTION_PREEMPT_COUNT_MAX \
+            * CONFIGURATION_LEGACY_V20_VEHICLE_DETECTOR_COUNT * 2U) \
+         + (INTERSECTION_PREEMPT_GATE_COUNT_MAX \
+            * (1U + INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX)) \
+         + (INTERSECTION_PHASE_COUNT_MAX * 2U) \
+         + (INTERSECTION_PREEMPT_COUNT_MAX * 2U) \
+         + (CONFIGURATION_LEGACY_CHANNEL_COUNT \
+            * CONFIGURATION_LEGACY_CHANNEL_IMAGE_SIZE) \
+         + (CONFIGURATION_LEGACY_OVERLAP_COUNT \
+            * CONFIGURATION_LEGACY_OVERLAP_IMAGE_SIZE) \
+         + 2U \
+         + (INTERSECTION_TIMEBASE_ACTION_COUNT_MAX \
+            * CONFIGURATION_TIMEBASE_ACTION_IMAGE_SIZE) \
+         + CONFIGURATION_GLOBAL_TIME_MANAGEMENT_IMAGE_SIZE \
+         + 12U \
+         + (INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX \
+            * CONFIGURATION_USER_DEFINED_BACKUP_CONTENT_IMAGE_SIZE) \
+         + CONFIGURATION_CABINET_ENVIRONMENT_IMAGE_SIZE \
+         + CONFIGURATION_LEGACY_V21_IO_MAP_IMAGE_SIZE)
 #define CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19 \
         (CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20 \
          - CONFIGURATION_LEGACY_V20_IO_MAP_IMAGE_SIZE)
@@ -240,7 +313,7 @@ static uint8_t NormalizeVehicleDetectorOptions(uint8_t options)
   return options;
 }
 
-static void RebuildLegacyInputMapping(IntersectionConfig_t *config)
+static void RebuildPhaseInputMapping(IntersectionConfig_t *config)
 {
   uint8_t phaseIndex;
   uint8_t detectorIndex;
@@ -286,27 +359,6 @@ static void RebuildLegacyInputMapping(IntersectionConfig_t *config)
   }
 }
 
-static void ReplicateBaseSequencePlans(IntersectionConfig_t *config)
-{
-  uint8_t sequenceIndex;
-  uint8_t ringIndex;
-
-  if (config == NULL)
-  {
-    return;
-  }
-
-  for (sequenceIndex = 1U;
-       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
-       sequenceIndex++)
-  {
-    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
-    {
-      config->sequencePlans[sequenceIndex][ringIndex] = config->rings[ringIndex];
-    }
-  }
-}
-
 static void WriteLe16(uint8_t *dst, uint16_t value)
 {
   dst[0] = (uint8_t) (value & 0xFFU);
@@ -332,24 +384,6 @@ static uint32_t ReadLe32(const uint8_t *src)
          | ((uint32_t) src[1] << 8)
          | ((uint32_t) src[2] << 16)
          | ((uint32_t) src[3] << 24);
-}
-
-static uint16_t PhaseOptionsFromLegacyFlags(uint8_t enabled,
-                                            uint8_t vehicleRecall)
-{
-  uint16_t options = 0U;
-
-  if (enabled != 0U)
-  {
-    options |= PHASE_OPTIONS_ENABLED;
-  }
-
-  if (vehicleRecall != 0U)
-  {
-    options |= PHASE_OPTIONS_MIN_RECALL;
-  }
-
-  return options;
 }
 
 static uint32_t Crc32Compute(const uint8_t *data, uint32_t length)
@@ -924,6 +958,7 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
   offset += 2U;
   payload[offset++] = config->unit.redRevertDs;
   payload[offset++] = config->unit.startUpFlashMode;
+  payload[offset++] = config->unit.failureFlashPeriodDs;
   payload[offset++] = config->unit.timeSourceCommanded;
   payload[offset++] = config->unit.elevationOffsetMeters;
 
@@ -1058,6 +1093,7 @@ static void PayloadSerialize(const IntersectionConfig_t *config,
   }
 } /* PayloadSerialize */
 
+#if 0
 static void PayloadDeserializeLegacyV2(const uint8_t *payload,
                                        IntersectionConfig_t *config)
 {
@@ -1189,7 +1225,7 @@ static void PayloadDeserializeLegacyV3(const uint8_t *payload,
   }
 
   for (channelIndex = 0U;
-       channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
        channelIndex++)
   {
     IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
@@ -1202,7 +1238,7 @@ static void PayloadDeserializeLegacyV3(const uint8_t *payload,
     channel->greenIncluded.length = payload[offset++];
 
     for (itemIndex = 0U;
-         itemIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+         itemIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
          itemIndex++)
     {
       channel->greenIncluded.values[itemIndex] = payload[offset++];
@@ -1213,7 +1249,7 @@ static void PayloadDeserializeLegacyV3(const uint8_t *payload,
   }
 
   for (overlapIndex = 0U;
-       overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       overlapIndex < CONFIGURATION_LEGACY_OVERLAP_COUNT;
        overlapIndex++)
   {
     IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
@@ -1327,7 +1363,7 @@ static void PayloadDeserializeLegacyV4(const uint8_t *payload,
   }
 
   for (channelIndex = 0U;
-       channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
        channelIndex++)
   {
     IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
@@ -1340,7 +1376,7 @@ static void PayloadDeserializeLegacyV4(const uint8_t *payload,
     channel->greenIncluded.length = payload[offset++];
 
     for (itemIndex = 0U;
-         itemIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+         itemIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
          itemIndex++)
     {
       channel->greenIncluded.values[itemIndex] = payload[offset++];
@@ -1351,7 +1387,7 @@ static void PayloadDeserializeLegacyV4(const uint8_t *payload,
   }
 
   for (overlapIndex = 0U;
-       overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       overlapIndex < CONFIGURATION_LEGACY_OVERLAP_COUNT;
        overlapIndex++)
   {
     IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
@@ -1509,7 +1545,7 @@ static void PayloadDeserializeLegacyV5(const uint8_t *payload,
   }
 
   for (channelIndex = 0U;
-       channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
        channelIndex++)
   {
     IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
@@ -1522,7 +1558,7 @@ static void PayloadDeserializeLegacyV5(const uint8_t *payload,
     channel->greenIncluded.length = payload[offset++];
 
     for (itemIndex = 0U;
-         itemIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+         itemIndex < CONFIGURATION_LEGACY_CHANNEL_COUNT;
          itemIndex++)
     {
       channel->greenIncluded.values[itemIndex] = payload[offset++];
@@ -1533,7 +1569,7 @@ static void PayloadDeserializeLegacyV5(const uint8_t *payload,
   }
 
   for (overlapIndex = 0U;
-       overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       overlapIndex < CONFIGURATION_LEGACY_OVERLAP_COUNT;
        overlapIndex++)
   {
     IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
@@ -1589,6 +1625,7 @@ static void PayloadDeserialize(const uint8_t *payload,
   uint8_t overlapIndex;
   uint8_t itemIndex;
   uint8_t currentLayout;
+  uint8_t fullIoMapLayout;
   uint8_t currentOrLegacyV20Layout;
   uint8_t currentOrLegacyV19Layout;
   uint8_t currentOrLegacyV18Layout;
@@ -1597,6 +1634,9 @@ static void PayloadDeserialize(const uint8_t *payload,
   uint8_t multiSequenceLayout;
   uint8_t vehicleDetectorCountInPayload;
   uint8_t pedDetectorCountInPayload;
+  uint8_t channelCountInPayload;
+  uint8_t overlapCountInPayload;
+  uint8_t ioMapOutputCountInPayload;
 
   if ((payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2)
       && (payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE))
@@ -1632,7 +1672,10 @@ static void PayloadDeserialize(const uint8_t *payload,
 
   IntersectionConfigInitDefaults(config);
   currentLayout = (uint8_t) (payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE);
-  currentOrLegacyV20Layout = (uint8_t) ((currentLayout != 0U)
+  fullIoMapLayout = (uint8_t) ((currentLayout != 0U)
+                               || (payloadLength
+                                   == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V21));
+  currentOrLegacyV20Layout = (uint8_t) ((fullIoMapLayout != 0U)
                                         || (payloadLength
                                             == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V20));
   currentOrLegacyV19Layout = (uint8_t) ((currentOrLegacyV20Layout != 0U)
@@ -1670,6 +1713,18 @@ static void PayloadDeserialize(const uint8_t *payload,
     (uint8_t) ((currentLayout != 0U)
                ? INTERSECTION_PED_INPUT_COUNT_MAX
                : CONFIGURATION_LEGACY_V20_PED_INPUT_COUNT);
+  channelCountInPayload =
+    (uint8_t) ((currentLayout != 0U)
+               ? INTERSECTION_CHANNEL_COUNT_MAX
+               : CONFIGURATION_LEGACY_CHANNEL_COUNT);
+  overlapCountInPayload =
+    (uint8_t) ((currentLayout != 0U)
+               ? INTERSECTION_OVERLAP_COUNT_MAX
+               : CONFIGURATION_LEGACY_OVERLAP_COUNT);
+  ioMapOutputCountInPayload =
+    (uint8_t) ((currentLayout != 0U)
+               ? INTERSECTION_IO_MAP_MAX_OUTPUTS
+               : CONFIGURATION_LEGACY_IO_MAP_MAX_OUTPUTS);
 
   config->phaseCount = payload[offset++];
   config->ringCount = payload[offset++];
@@ -1913,18 +1968,14 @@ static void PayloadDeserialize(const uint8_t *payload,
 
     preempt->trackOverlaps.length = payload[offset++];
 
-    for (itemIndex = 0U;
-         itemIndex < INTERSECTION_OVERLAP_COUNT_MAX;
-         itemIndex++)
+    for (itemIndex = 0U; itemIndex < overlapCountInPayload; itemIndex++)
     {
       preempt->trackOverlaps.values[itemIndex] = payload[offset++];
     }
 
     preempt->dwellOverlaps.length = payload[offset++];
 
-    for (itemIndex = 0U;
-         itemIndex < INTERSECTION_OVERLAP_COUNT_MAX;
-         itemIndex++)
+    for (itemIndex = 0U; itemIndex < overlapCountInPayload; itemIndex++)
     {
       preempt->dwellOverlaps.values[itemIndex] = payload[offset++];
     }
@@ -1945,9 +1996,7 @@ static void PayloadDeserialize(const uint8_t *payload,
 
     preempt->cyclingOverlaps.length = payload[offset++];
 
-    for (itemIndex = 0U;
-         itemIndex < INTERSECTION_OVERLAP_COUNT_MAX;
-         itemIndex++)
+    for (itemIndex = 0U; itemIndex < overlapCountInPayload; itemIndex++)
     {
       preempt->cyclingOverlaps.values[itemIndex] = payload[offset++];
     }
@@ -2069,9 +2118,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  for (channelIndex = 0U;
-       channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
-       channelIndex++)
+  for (channelIndex = 0U; channelIndex < channelCountInPayload; channelIndex++)
   {
     IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
 
@@ -2082,9 +2129,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     channel->greenType = payload[offset++];
     channel->greenIncluded.length = payload[offset++];
 
-    for (itemIndex = 0U;
-         itemIndex < INTERSECTION_CHANNEL_COUNT_MAX;
-         itemIndex++)
+    for (itemIndex = 0U; itemIndex < channelCountInPayload; itemIndex++)
     {
       channel->greenIncluded.values[itemIndex] = payload[offset++];
     }
@@ -2093,9 +2138,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     offset += 2U;
   }
 
-  for (overlapIndex = 0U;
-       overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
-       overlapIndex++)
+  for (overlapIndex = 0U; overlapIndex < overlapCountInPayload; overlapIndex++)
   {
     IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
 
@@ -2285,6 +2328,10 @@ static void PayloadDeserialize(const uint8_t *payload,
     offset += 2U;
     config->unit.redRevertDs = payload[offset++];
     config->unit.startUpFlashMode = payload[offset++];
+    if (currentLayout != 0U)
+    {
+      config->unit.failureFlashPeriodDs = payload[offset++];
+    }
     config->unit.timeSourceCommanded = payload[offset++];
     config->unit.elevationOffsetMeters = payload[offset++];
     config->unit.userDefinedBackupTimeSeconds = ReadLe32(&payload[offset]);
@@ -2398,7 +2445,7 @@ static void PayloadDeserialize(const uint8_t *payload,
     }
   }
 
-  if (currentLayout != 0U)
+  if (fullIoMapLayout != 0U)
   {
     for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_DESCRIPTION_MAX;
          itemIndex++)
@@ -2424,8 +2471,7 @@ static void PayloadDeserialize(const uint8_t *payload,
       row->functionIndex = payload[offset++];
     }
 
-    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
-         itemIndex++)
+    for (itemIndex = 0U; itemIndex < ioMapOutputCountInPayload; itemIndex++)
     {
       IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
 
@@ -2450,7 +2496,8 @@ static void PayloadDeserialize(const uint8_t *payload,
       config->ioMap.description[itemIndex] = payload[offset++];
     }
 
-    for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+    for (itemIndex = 0U;
+         itemIndex < CONFIGURATION_LEGACY_IO_MAP_MAX_OUTPUTS;
          itemIndex++)
     {
       IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
@@ -2486,8 +2533,641 @@ static void PayloadDeserialize(const uint8_t *payload,
     ReplicateBaseSequencePlans(config);
   }
 
-  RebuildLegacyInputMapping(config);
+  RebuildPhaseInputMapping(config);
 } /* PayloadDeserialize */
+#endif
+
+static void PayloadDeserialize(const uint8_t *payload,
+                               uint32_t payloadLength,
+                               IntersectionConfig_t *config)
+{
+  uint32_t offset = 0U;
+  uint8_t phaseIndex;
+  uint8_t sequenceIndex;
+  uint8_t ringIndex;
+  uint8_t patternIndex;
+  uint8_t splitIndex;
+  uint8_t preemptIndex;
+  uint8_t detectorIndex;
+  uint8_t pedDetectorIndex;
+  uint8_t channelIndex;
+  uint8_t overlapIndex;
+  uint8_t itemIndex;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  IntersectionConfigInitDefaults(config);
+
+  if ((payload == NULL) || (payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE))
+  {
+    return;
+  }
+
+  config->phaseCount = payload[offset++];
+  config->ringCount = payload[offset++];
+  config->barrierCount = payload[offset++];
+  config->reserved = payload[offset++];
+
+  for (phaseIndex = 0U; phaseIndex < INTERSECTION_PHASE_COUNT_MAX; phaseIndex++)
+  {
+    IntersectionPhaseConfig_t *phase = &config->phases[phaseIndex];
+
+    phase->phaseOptions = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->ring = payload[offset++];
+    phase->startup = payload[offset++];
+    phase->walkSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->pedClearSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->minGreenDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->phaseMaximum2Ds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->maxGreenDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->phaseMaximum3Ds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->passageDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->maxInitialDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->yellowChangeDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->redClearDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->redRevertDs = payload[offset++];
+    phase->addedInitialDs = payload[offset++];
+    phase->timeBeforeReductionSec = payload[offset++];
+    phase->carsBeforeReduction = payload[offset++];
+    phase->timeToReduceSec = payload[offset++];
+    phase->reduceByDs = payload[offset++];
+    phase->minimumGapDs = payload[offset++];
+    phase->dynamicMaxLimitSeconds = payload[offset++];
+    phase->dynamicMaxStepDs = payload[offset++];
+    phase->concurrency.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      phase->concurrency.values[itemIndex] = payload[offset++];
+    }
+
+    phase->yellowRedBeforeEndPedClearDs = payload[offset++];
+    phase->pedWalkService = payload[offset++];
+    phase->dontWalkRevertDs = payload[offset++];
+    phase->pedAlternateClearSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->pedAlternateWalkSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->pedAdvanceWalkDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->pedDelayDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    phase->advWarnGrnStartTimeDs = payload[offset++];
+    phase->advWarnRedStartTimeDs = payload[offset++];
+    phase->altMinTimeTransitionSeconds = payload[offset++];
+  }
+
+  for (sequenceIndex = 0U;
+       sequenceIndex < INTERSECTION_SEQUENCE_COUNT_MAX;
+       sequenceIndex++)
+  {
+    for (ringIndex = 0U; ringIndex < INTERSECTION_RING_COUNT_MAX; ringIndex++)
+    {
+      IntersectionRingPlan_t *ringPlan =
+        &config->sequencePlans[sequenceIndex][ringIndex];
+      uint8_t serviceIndex;
+
+      ringPlan->phaseCount = payload[offset++];
+      ringPlan->barrierPhaseCount = payload[offset++];
+      ringPlan->reserved0 = payload[offset++];
+      ringPlan->reserved1 = payload[offset++];
+
+      for (serviceIndex = 0U;
+           serviceIndex < INTERSECTION_RING_PHASE_COUNT_MAX;
+           serviceIndex++)
+      {
+        ringPlan->phaseOrder[serviceIndex] = payload[offset++];
+      }
+    }
+  }
+
+  config->coordination.operationalMode = payload[offset++];
+  config->coordination.correctionMode = payload[offset++];
+  config->coordination.maximumMode = payload[offset++];
+  config->coordination.forceMode = payload[offset++];
+  config->coordination.unitCoordSyncPoint = payload[offset++];
+  config->coordination.reserved0 = payload[offset++];
+  config->coordination.reserved1 = payload[offset++];
+  config->coordination.reserved2 = payload[offset++];
+
+  for (patternIndex = 0U;
+       patternIndex < INTERSECTION_PATTERN_COUNT_MAX;
+       patternIndex++)
+  {
+    IntersectionPatternConfig_t *pattern =
+      &config->coordination.patterns[patternIndex];
+
+    pattern->cycleTimeSeconds = payload[offset++];
+    pattern->offsetTimeSeconds = payload[offset++];
+    pattern->splitNumber = payload[offset++];
+    pattern->sequenceNumber = payload[offset++];
+    pattern->coordSyncPoint = payload[offset++];
+    pattern->options = payload[offset++];
+    pattern->reserved0 = payload[offset++];
+    pattern->reserved1 = payload[offset++];
+  }
+
+  for (splitIndex = 0U; splitIndex < INTERSECTION_SPLIT_COUNT_MAX; splitIndex++)
+  {
+    for (phaseIndex = 0U;
+         phaseIndex < INTERSECTION_PHASE_COUNT_MAX;
+         phaseIndex++)
+    {
+      IntersectionSplitPhaseConfig_t *split =
+        &config->coordination.splits[splitIndex][phaseIndex];
+
+      split->timeSeconds = payload[offset++];
+      split->mode = payload[offset++];
+      split->coordPhase = payload[offset++];
+      split->options = payload[offset++];
+    }
+  }
+
+  for (preemptIndex = 0U;
+       preemptIndex < INTERSECTION_PREEMPT_COUNT_MAX;
+       preemptIndex++)
+  {
+    IntersectionPreemptConfig_t *preempt = &config->preempts[preemptIndex];
+
+    preempt->control = payload[offset++];
+    preempt->link = payload[offset++];
+    preempt->delaySeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    preempt->minimumDurationSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    preempt->minimumGreenSeconds = payload[offset++];
+    preempt->minimumWalkSeconds = payload[offset++];
+    preempt->enterPedClearSeconds = payload[offset++];
+    preempt->trackGreenSeconds = payload[offset++];
+    preempt->dwellGreenSeconds = payload[offset++];
+    preempt->maximumPresenceSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    preempt->trackPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->trackPhases.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->dwellPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->dwellPhases.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->dwellPeds.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->dwellPeds.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->exitPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->exitPhases.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->trackOverlaps.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_OVERLAP_COUNT_MAX; itemIndex++)
+    {
+      preempt->trackOverlaps.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->dwellOverlaps.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_OVERLAP_COUNT_MAX; itemIndex++)
+    {
+      preempt->dwellOverlaps.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->cyclingPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->cyclingPhases.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->cyclingPeds.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      preempt->cyclingPeds.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->cyclingOverlaps.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_OVERLAP_COUNT_MAX; itemIndex++)
+    {
+      preempt->cyclingOverlaps.values[itemIndex] = payload[offset++];
+    }
+
+    preempt->enterYellowChangeDs = payload[offset++];
+    preempt->enterRedClearDs = payload[offset++];
+    preempt->trackYellowChangeDs = payload[offset++];
+    preempt->trackRedClearDs = payload[offset++];
+    preempt->sequenceNumber = payload[offset++];
+    preempt->exitType = payload[offset++];
+  }
+
+  for (detectorIndex = 0U;
+       detectorIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
+       detectorIndex++)
+  {
+    IntersectionVehicleDetectorConfig_t *detector =
+      &config->vehicleDetectors[detectorIndex];
+
+    detector->options = NormalizeVehicleDetectorOptions(payload[offset++]);
+    detector->callPhase = payload[offset++];
+    detector->switchPhase = payload[offset++];
+    detector->delayDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    detector->extendDs = payload[offset++];
+    detector->queueLimitSeconds = payload[offset++];
+    detector->noActivityMinutes = payload[offset++];
+    detector->maxPresenceMinutes = payload[offset++];
+    detector->erraticCountsPerMinute = payload[offset++];
+    detector->failTimeSeconds = payload[offset++];
+    detector->options2 = payload[offset++];
+    detector->pairedDetector = payload[offset++];
+    detector->pairedDetectorSpacingCm = ReadLe16(&payload[offset]);
+    offset += 2U;
+    detector->avgVehicleLengthCm = ReadLe16(&payload[offset]);
+    offset += 2U;
+    detector->detectorLengthCm = ReadLe16(&payload[offset]);
+    offset += 2U;
+    detector->travelMode = payload[offset++];
+  }
+
+  for (pedDetectorIndex = 0U;
+       pedDetectorIndex < INTERSECTION_PED_INPUT_COUNT_MAX;
+       pedDetectorIndex++)
+  {
+    IntersectionPedestrianDetectorConfig_t *detector =
+      &config->pedestrianDetectors[pedDetectorIndex];
+
+    detector->callPhase = payload[offset++];
+    detector->noActivityMinutes = payload[offset++];
+    detector->maxPresenceMinutes = payload[offset++];
+    detector->erraticCountsPerMinute = payload[offset++];
+    detector->apsMinimumActuationDs = payload[offset++];
+    detector->options = payload[offset++];
+  }
+
+  config->detectorReports.volumeOccupancyPeriodSeconds = payload[offset++];
+  config->detectorReports.volumeOccupancyPeriodV3Seconds =
+    ReadLe16(&payload[offset]);
+  offset += 2U;
+  config->detectorReports.pedestrianDetectorPeriodSeconds =
+    ReadLe16(&payload[offset]);
+  offset += 2U;
+  config->detectorReports.reserved0 = payload[offset++];
+  config->detectorReports.reserved1 = payload[offset++];
+  config->detectorReports.reserved2 = payload[offset++];
+
+  for (preemptIndex = 0U; preemptIndex < INTERSECTION_PREEMPT_COUNT_MAX;
+       preemptIndex++)
+  {
+    for (itemIndex = 0U; itemIndex < INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX;
+         itemIndex++)
+    {
+      config->preemptQueueDelayWeights[preemptIndex][itemIndex] =
+        ReadLe16(&payload[offset]);
+      offset += 2U;
+    }
+  }
+
+  for (preemptIndex = 0U; preemptIndex < INTERSECTION_PREEMPT_GATE_COUNT_MAX;
+       preemptIndex++)
+  {
+    IntersectionPreemptGateConfig_t *gate = &config->preemptGates[preemptIndex];
+
+    gate->descriptionLength = payload[offset++];
+
+    for (itemIndex = 0U;
+         itemIndex < INTERSECTION_PREEMPT_GATE_DESCRIPTION_MAX;
+         itemIndex++)
+    {
+      gate->description[itemIndex] = payload[offset++];
+    }
+  }
+
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex++)
+  {
+    IntersectionChannelConfig_t *channel = &config->channels[channelIndex];
+
+    channel->controlSource = payload[offset++];
+    channel->controlType = payload[offset++];
+    channel->flashMask = payload[offset++];
+    channel->dimMask = payload[offset++];
+    channel->greenType = payload[offset++];
+    channel->greenIncluded.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_CHANNEL_COUNT_MAX; itemIndex++)
+    {
+      channel->greenIncluded.values[itemIndex] = payload[offset++];
+    }
+
+    channel->intersectionId = ReadLe16(&payload[offset]);
+    offset += 2U;
+  }
+
+  for (overlapIndex = 0U; overlapIndex < INTERSECTION_OVERLAP_COUNT_MAX;
+       overlapIndex++)
+  {
+    IntersectionOverlapConfig_t *overlap = &config->overlaps[overlapIndex];
+
+    overlap->type = payload[offset++];
+    overlap->includedPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      overlap->includedPhases.values[itemIndex] = payload[offset++];
+    }
+
+    overlap->modifierPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      overlap->modifierPhases.values[itemIndex] = payload[offset++];
+    }
+
+    overlap->trailGreenDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    overlap->trailYellowDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    overlap->trailRedDs = ReadLe16(&payload[offset]);
+    offset += 2U;
+    overlap->walkSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    overlap->pedClearSeconds = ReadLe16(&payload[offset]);
+    offset += 2U;
+    overlap->conflictingPedPhases.length = payload[offset++];
+
+    for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+    {
+      overlap->conflictingPedPhases.values[itemIndex] = payload[offset++];
+    }
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+  {
+    config->inputMapping.phaseDetectors[itemIndex] = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_PHASE_COUNT_MAX; itemIndex++)
+  {
+    config->inputMapping.phasePedInputs[itemIndex] = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_PREEMPT_COUNT_MAX; itemIndex++)
+  {
+    config->inputMapping.preemptInputs[itemIndex] = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_PREEMPT_COUNT_MAX; itemIndex++)
+  {
+    config->inputMapping.preemptControls[itemIndex] = payload[offset++];
+  }
+
+  config->timebase.patternSyncMinutes = ReadLe16(&payload[offset]);
+  offset += 2U;
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_TIMEBASE_ACTION_COUNT_MAX;
+       itemIndex++)
+  {
+    IntersectionTimebaseActionConfig_t *action =
+      &config->timebase.actions[itemIndex];
+
+    action->pattern = payload[offset++];
+    action->auxiliaryFunction = payload[offset++];
+    action->specialFunction = payload[offset++];
+    action->enabledLane = payload[offset++];
+  }
+
+  config->globalTimeManagement.globalDaylightSaving = payload[offset++];
+  config->globalTimeManagement.controllerStandardTimeZoneSeconds =
+    (int32_t) ReadLe32(&payload[offset]);
+  offset += 4U;
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_TIMEBASE_SCHEDULE_COUNT_MAX;
+       itemIndex++)
+  {
+    IntersectionTimebaseScheduleEntryConfig_t *schedule =
+      &config->globalTimeManagement.schedules[itemIndex];
+
+    schedule->monthMask = ReadLe16(&payload[offset]);
+    offset += 2U;
+    schedule->dayMask = payload[offset++];
+    schedule->dayPlanNumber = payload[offset++];
+    schedule->dateMask = ReadLe32(&payload[offset]);
+    offset += 4U;
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_DAY_PLAN_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t eventIndex;
+
+    for (eventIndex = 0U; eventIndex < INTERSECTION_DAY_PLAN_EVENT_COUNT_MAX;
+         eventIndex++)
+    {
+      IntersectionDayPlanEventConfig_t *event =
+        &config->globalTimeManagement.dayPlans[itemIndex][eventIndex];
+
+      event->hour = payload[offset++];
+      event->minute = payload[offset++];
+      event->actionNumber = payload[offset++];
+      event->reserved0 = 0U;
+    }
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_DAYLIGHT_SAVING_ENTRY_COUNT_MAX;
+       itemIndex++)
+  {
+    IntersectionDaylightSavingEntryConfig_t *entry =
+      &config->globalTimeManagement.daylightSavingEntries[itemIndex];
+
+    entry->beginMonth = payload[offset++];
+    entry->beginOccurrences = payload[offset++];
+    entry->beginDayOfWeek = payload[offset++];
+    entry->beginDayOfMonth = payload[offset++];
+    entry->beginSecondsToTransition = ReadLe32(&payload[offset]);
+    offset += 4U;
+    entry->endMonth = payload[offset++];
+    entry->endOccurrences = payload[offset++];
+    entry->endDayOfWeek = payload[offset++];
+    entry->endDayOfMonth = payload[offset++];
+    entry->endSecondsToTransition = ReadLe32(&payload[offset]);
+    offset += 4U;
+    entry->secondsToAdjust = ReadLe32(&payload[offset]);
+    offset += 4U;
+  }
+
+  config->globalTimeManagement.reserved0 = 0U;
+  config->globalTimeManagement.reserved1 = 0U;
+  config->globalTimeManagement.reserved2 = 0U;
+
+  config->unit.startUpFlashSeconds = payload[offset++];
+  config->unit.autoPedestrianClear = payload[offset++];
+  config->unit.backupTimeSeconds = ReadLe16(&payload[offset]);
+  offset += 2U;
+  config->unit.redRevertDs = payload[offset++];
+  config->unit.startUpFlashMode = payload[offset++];
+  config->unit.failureFlashPeriodDs = payload[offset++];
+  config->unit.timeSourceCommanded = payload[offset++];
+  config->unit.elevationOffsetMeters = payload[offset++];
+  config->unit.userDefinedBackupTimeSeconds = ReadLe32(&payload[offset]);
+  offset += 4U;
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_USER_DEFINED_BACKUP_CONTENT_COUNT_MAX;
+       itemIndex++)
+  {
+    IntersectionUserDefinedBackupContentConfig_t *content =
+      &config->userDefinedBackupContents[itemIndex];
+    uint8_t oidIndex;
+    uint8_t descriptionIndex;
+
+    content->oidLength = payload[offset++];
+    content->descriptionLength = payload[offset++];
+    content->reserved0 = 0U;
+    content->reserved1 = 0U;
+
+    for (oidIndex = 0U;
+         oidIndex < INTERSECTION_USER_DEFINED_BACKUP_OID_COMPONENT_COUNT_MAX;
+         oidIndex++)
+    {
+      content->oid[oidIndex] = ReadLe32(&payload[offset]);
+      offset += 4U;
+    }
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_USER_DEFINED_BACKUP_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      content->description[descriptionIndex] = payload[offset++];
+    }
+  }
+
+  config->cabinetEnvironment.atccLedMode = payload[offset++];
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_ENVIRONMENT_DEVICE_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    IntersectionCabinetEnvironmentDeviceConfig_t *device =
+      &config->cabinetEnvironment.devices[itemIndex];
+
+    device->type = payload[offset++];
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      device->description[descriptionIndex] = payload[offset++];
+    }
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_TEMP_SENSOR_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    IntersectionCabinetTemperatureSensorConfig_t *sensor =
+      &config->cabinetEnvironment.temperatureSensors[itemIndex];
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      sensor->description[descriptionIndex] = payload[offset++];
+    }
+
+    sensor->highThreshold = (int8_t) payload[offset++];
+    sensor->lowThreshold = (int8_t) payload[offset++];
+  }
+
+  for (itemIndex = 0U;
+       itemIndex < INTERSECTION_CABINET_HUMIDITY_SENSOR_COUNT_MAX;
+       itemIndex++)
+  {
+    uint8_t descriptionIndex;
+    IntersectionCabinetHumiditySensorConfig_t *sensor =
+      &config->cabinetEnvironment.humiditySensors[itemIndex];
+
+    for (descriptionIndex = 0U;
+         descriptionIndex < INTERSECTION_CABINET_ENVIRONMENT_DESCRIPTION_MAX;
+         descriptionIndex++)
+    {
+      sensor->description[descriptionIndex] = payload[offset++];
+    }
+
+    sensor->threshold = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_DESCRIPTION_MAX;
+       itemIndex++)
+  {
+    config->ioMap.description[itemIndex] = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_INPUTS;
+       itemIndex++)
+  {
+    IntersectionIoInputMapRowConfig_t *row = &config->ioMap.inputs[itemIndex];
+
+    row->deviceType = payload[offset++];
+    row->devicePnn = ReadLe16(&payload[offset]);
+    offset += 2U;
+    row->devicePtype = payload[offset++];
+    row->deviceAddr = payload[offset++];
+    row->devicePin = payload[offset++];
+    row->functionType = ReadLe16(&payload[offset]);
+    offset += 2U;
+    row->functionPtype = payload[offset++];
+    row->function = payload[offset++];
+    row->functionIndex = payload[offset++];
+  }
+
+  for (itemIndex = 0U; itemIndex < INTERSECTION_IO_MAP_MAX_OUTPUTS;
+       itemIndex++)
+  {
+    IntersectionIoOutputMapRowConfig_t *row = &config->ioMap.outputs[itemIndex];
+
+    row->deviceType = payload[offset++];
+    row->devicePnn = ReadLe16(&payload[offset]);
+    offset += 2U;
+    row->devicePtype = payload[offset++];
+    row->deviceAddr = payload[offset++];
+    row->devicePin = payload[offset++];
+    row->functionType = ReadLe16(&payload[offset]);
+    offset += 2U;
+    row->functionPtype = payload[offset++];
+    row->function = payload[offset++];
+    row->functionIndex = payload[offset++];
+  }
+}
 
 static void HeaderEncode(const ConfigurationImageHeader_t *header,
                          uint8_t *bytes)
@@ -2777,7 +3457,7 @@ static uint8_t MaterializeCandidate(const ConfigurationService_t *service,
     }
   }
 
-  RebuildLegacyInputMapping(config);
+  RebuildPhaseInputMapping(config);
 
   return 1U;
 } /* MaterializeCandidate */
@@ -2806,7 +3486,7 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
 
   if (capacity
       < (CONFIGURATION_IMAGE_HEADER_SIZE
-         + CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2))
+         + CONFIGURATION_IMAGE_PAYLOAD_SIZE))
   {
     return 0U;
   }
@@ -2834,80 +3514,8 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
     return 0U;
   }
 
-  if (!(((header.schemaVersion == CONFIGURATION_IMAGE_SCHEMA_VERSION)
-         && (header.payloadLength == CONFIGURATION_IMAGE_PAYLOAD_SIZE))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V19)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V19))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V18)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V18))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V17)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V17))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V15)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V16))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V14)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V14))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V13)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V13))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V12)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V12))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V11)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V11))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V10)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V10))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V9)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V9))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V8)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V8))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V7)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V7))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V6)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V6))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V4)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V4))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V5)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V5))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V3)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V3))
-        || ((header.schemaVersion
-             == CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V2)
-            && (header.payloadLength
-                == CONFIGURATION_IMAGE_PAYLOAD_SIZE_LEGACY_V2))))
+  if ((header.schemaVersion != CONFIGURATION_IMAGE_SCHEMA_VERSION)
+      || (header.payloadLength != CONFIGURATION_IMAGE_PAYLOAD_SIZE))
   {
     return 0U;
   }
@@ -2927,13 +3535,6 @@ static uint8_t LoadSlot(ConfigurationService_t *service,
   }
 
   PayloadDeserialize(payloadBytes, header.payloadLength, &loadedSlot->config);
-
-  if (header.schemaVersion < CONFIGURATION_IMAGE_SCHEMA_VERSION_LEGACY_V16)
-  {
-    loadedSlot->config.unit.elevationOffsetMeters =
-      INTERSECTION_UNIT_ELEVATION_OFFSET_UNKNOWN;
-  }
-
   if (IntersectionConfigValidate(&loadedSlot->config, &errorInfo) == 0U)
   {
     return 0U;
@@ -3020,7 +3621,7 @@ static uint8_t UpdateVehicleDetector(
   }
 
   candidateConfig.vehicleDetectors[detectorIndex] = *detector;
-  RebuildLegacyInputMapping(&candidateConfig);
+  RebuildPhaseInputMapping(&candidateConfig);
   service->candidate.vehicleDetectorValid[detectorIndex] = 1U;
   service->candidate.vehicleDetectors[detectorIndex] =
     candidateConfig.vehicleDetectors[detectorIndex];
@@ -3049,7 +3650,7 @@ static uint8_t UpdatePedestrianDetector(
   }
 
   candidateConfig.pedestrianDetectors[detectorIndex] = *detector;
-  RebuildLegacyInputMapping(&candidateConfig);
+  RebuildPhaseInputMapping(&candidateConfig);
   service->candidate.pedestrianDetectorValid[detectorIndex] = 1U;
   service->candidate.pedestrianDetectors[detectorIndex] =
     candidateConfig.pedestrianDetectors[detectorIndex];
@@ -5405,7 +6006,7 @@ uint8_t ConfigurationServiceSetVehicleDetectorPairedDetector(
       detectorNumber;
   }
 
-  RebuildLegacyInputMapping(&candidateConfig);
+  RebuildPhaseInputMapping(&candidateConfig);
 
   service->candidate.vehicleDetectorValid[detectorIndex] = 1U;
   service->candidate.vehicleDetectors[detectorIndex] =
@@ -6620,6 +7221,22 @@ uint8_t ConfigurationServiceSetUnitStartUpFlashMode(
   }
 
   unit.startUpFlashMode = startUpFlashMode;
+
+  return UpdateUnit(service, &unit);
+}
+
+uint8_t ConfigurationServiceSetUnitFailureFlashPeriodDs(
+  ConfigurationService_t *service,
+  uint8_t failureFlashPeriodDs)
+{
+  IntersectionUnitConfig_t unit;
+
+  if (GetCandidateUnit(service, &unit) == 0U)
+  {
+    return 0U;
+  }
+
+  unit.failureFlashPeriodDs = failureFlashPeriodDs;
 
   return UpdateUnit(service, &unit);
 }

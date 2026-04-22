@@ -22,7 +22,7 @@ void tearDown(void)
 
 void test_rtc_port_snapshot_round_trip(void)
 {
-  RtcSnapshot_t written = { 21U, 24U, 4U, 8U, 2U, 13U, 14U, 15U };
+  RtcSnapshot_t written = { 21U, 24U, 4U, 8U, 2U, 13U, 14U, 15U, 678U };
   RtcSnapshot_t read = { 0 };
 
   TEST_ASSERT_TRUE(RealtimeClockWriteSnapshot(&s_port, &written));
@@ -36,6 +36,7 @@ void test_rtc_port_snapshot_round_trip(void)
   TEST_ASSERT_EQUAL_UINT8(written.Hours, read.Hours);
   TEST_ASSERT_EQUAL_UINT8(written.Minutes, read.Minutes);
   TEST_ASSERT_EQUAL_UINT8(written.Seconds, read.Seconds);
+  TEST_ASSERT_EQUAL_UINT16(written.Milliseconds, read.Milliseconds);
 }
 
 void test_rtc_port_metadata_round_trip(void)

@@ -8,44 +8,44 @@
 #include "Domain/SignalSampleAccumulator.h"
 #include "Domain/SignalOutput.h"
 
-void SignalSampleAccumulator_Reset(tSSignalSampleAccumulator *pAcc)
+void SignalSampleAccumulator_Reset(SignalSampleAccumulator_t *acc)
 {
-  memset(pAcc, 0, sizeof(*pAcc));
+  memset(acc, 0, sizeof(*acc));
 }
 
-void SignalSampleAccumulator_Observe(tSSignalSampleAccumulator *pAcc,
-                                     const tSSignalInputSnapshot *pSnap)
+void SignalSampleAccumulator_Observe(SignalSampleAccumulator_t *acc,
+                                     const SignalInputSnapshot_t *snap)
 {
   uint8_t i;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    if (pSnap->aChannels[i] != 0U)
+    if (snap->channels[i] != 0U)
     {
-      if (pAcc->aOnCntr[i] < 0xFFU)
+      if (acc->onCntr[i] < 0xFFU)
       {
-        pAcc->aOnCntr[i]++;
+        acc->onCntr[i]++;
       }
     }
     else
     {
-      if (pAcc->aOffCntr[i] < 0xFFU)
+      if (acc->offCntr[i] < 0xFFU)
       {
-        pAcc->aOffCntr[i]++;
+        acc->offCntr[i]++;
       }
     }
   }
 }
 
-void SignalSampleAccumulator_Summary(const tSSignalSampleAccumulator *pAcc,
-                                     tSSignalOutputImage *pOut)
+void SignalSampleAccumulator_Summary(const SignalSampleAccumulator_t *acc,
+                                     SignalOutputImage_t *out)
 {
   uint8_t i;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    pOut->aChannels[i] = SignalOutput_IsActive(pAcc->aOnCntr[i],
-                                               pAcc->aOffCntr[i]);
+    out->channels[i] = SignalOutput_IsActive(acc->onCntr[i],
+                                             acc->offCntr[i]);
   }
 }
 

@@ -42,20 +42,20 @@
 #define FREQ_TOLERANCE_HZ 5
 #define BAD_READINGS_BEFORE_SLEEP 10
 
-volatile uint64_t lICValue1 = 0;
-volatile uint64_t lICValue2 = 0;
-volatile uint64_t lICCaptureDiff = 0;
-volatile uint8_t fFirstValueCaptured = FALSE;
-volatile uint8_t bMeasuredFreqInHz = 0;
+volatile uint64_t icValue1 = 0;
+volatile uint64_t icValue2 = 0;
+volatile uint64_t icCaptureDiff = 0;
+volatile uint8_t firstValueCaptured = FALSE;
+volatile uint8_t measuredFreqInHz = 0;
 
-volatile uint32_t lLastCaptureTime = 0;
-volatile uint16_t sBadReadingsCntr = 0;
+volatile uint32_t lastCaptureTime = 0;
+volatile uint16_t badReadingsCntr = 0;
 
-volatile uint64_t lTim2Ch1CurrentCounterValue = 0;
-volatile uint64_t lTim2Ch1NextCompareValue = 0;
+volatile uint64_t tim2Ch1CurrentCounterValue = 0;
+volatile uint64_t tim2Ch1NextCompareValue = 0;
 
-volatile uint32_t lTim4Ch1CurrentCounterValue = 0;
-volatile uint32_t lTim4Ch1NextCompareValue = 0;
+volatile uint32_t tim4Ch1CurrentCounterValue = 0;
+volatile uint32_t tim4Ch1NextCompareValue = 0;
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim2;
@@ -70,9 +70,9 @@ void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 0 */
 
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_IC_InitTypeDef sConfigIC = {0};
+  TIM_MasterConfigTypeDef masterConfig = {0};
+  TIM_OC_InitTypeDef configOc = {0};
+  TIM_IC_InitTypeDef configIc = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -91,25 +91,25 @@ void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  masterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  masterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &masterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 1000;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  configOc.OCMode = TIM_OCMODE_TIMING;
+  configOc.Pulse = 1000;
+  configOc.OCPolarity = TIM_OCPOLARITY_HIGH;
+  configOc.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim2, &configOc, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0x0F;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
+  configIc.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  configIc.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  configIc.ICPrescaler = TIM_ICPSC_DIV1;
+  configIc.ICFilter = 0x0F;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &configIc, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
@@ -126,8 +126,8 @@ void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_ClockConfigTypeDef clockSourceConfig = {0};
+  TIM_MasterConfigTypeDef masterConfig = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
 
@@ -142,14 +142,14 @@ void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  clockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &clockSourceConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  masterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  masterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &masterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -166,8 +166,8 @@ void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 0 */
 
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_MasterConfigTypeDef masterConfig = {0};
+  TIM_OC_InitTypeDef configOc = {0};
 
   /* USER CODE BEGIN TIM4_Init 1 */
 
@@ -182,17 +182,17 @@ void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  masterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  masterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &masterConfig) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 100;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  configOc.OCMode = TIM_OCMODE_TIMING;
+  configOc.Pulse = 100;
+  configOc.OCPolarity = TIM_OCPOLARITY_HIGH;
+  configOc.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim4, &configOc, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -329,8 +329,8 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 /* USER CODE BEGIN 1 */
 void Tim2ICStartIT(void)
 {
-	fFirstValueCaptured = 0;
-	lLastCaptureTime = HAL_GetTick();
+	firstValueCaptured = 0;
+	lastCaptureTime = HAL_GetTick();
 	
 	if (HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3) != HAL_OK)
 	{
@@ -412,41 +412,41 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
 	{
-		lLastCaptureTime = HAL_GetTick();
+		lastCaptureTime = HAL_GetTick();
 
-		if (fFirstValueCaptured == FALSE) 
+		if (firstValueCaptured == FALSE) 
 		{
-			lICValue1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
-			fFirstValueCaptured = TRUE;
+			icValue1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
+			firstValueCaptured = TRUE;
 		} 
 		else 
 		{
-			lICValue2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
+			icValue2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_3);
 
-			if (lICValue2 > lICValue1)
+			if (icValue2 > icValue1)
 			{
-				lICCaptureDiff = lICValue2 - lICValue1;
+				icCaptureDiff = icValue2 - icValue1;
 			} 
-			else if (lICValue2 < lICValue1)
+			else if (icValue2 < icValue1)
 			{
-				lICCaptureDiff = ((TIM2_MAX_COUNT - lICValue1) + lICValue2) + 1;
+				icCaptureDiff = ((TIM2_MAX_COUNT - icValue1) + icValue2) + 1;
 			}
 			else
 			{
-				lICCaptureDiff = 0;
-				fFirstValueCaptured = FALSE;
+				icCaptureDiff = 0;
+				firstValueCaptured = FALSE;
 			}
 
-			if (lICCaptureDiff != 0)
+			if (icCaptureDiff != 0)
 			{
-				bMeasuredFreqInHz = TIM2_CLOCK_FREQ / lICCaptureDiff;
+				measuredFreqInHz = TIM2_CLOCK_FREQ / icCaptureDiff;
 			}
 			else
 			{
-				bMeasuredFreqInHz = 0;
+				measuredFreqInHz = 0;
 			}
 			
-			lICValue1 = lICValue2;
+			icValue1 = icValue2;
 		}
 		
 		// Re-phase TIM3 to the 50Hz reference
@@ -459,32 +459,32 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) 
 	{
-		uint32_t lCurTime = HAL_GetTick();
-		uint8_t bFreq = bMeasuredFreqInHz;
-		uint8_t fSignalTimedout = FALSE;
+		uint32_t curTime = HAL_GetTick();
+		uint8_t freq = measuredFreqInHz;
+		uint8_t signalTimedout = FALSE;
 
-		 if (!fFirstValueCaptured || ((lCurTime - lLastCaptureTime) > TIM2_CH1_CAPTURE_TIMEOUT_MS))
+		 if (!firstValueCaptured || ((curTime - lastCaptureTime) > TIM2_CH1_CAPTURE_TIMEOUT_MS))
 		 {
-			 fSignalTimedout = TRUE;
-			 if (bMeasuredFreqInHz != 0 || fFirstValueCaptured) 
+			 signalTimedout = TRUE;
+			 if (measuredFreqInHz != 0 || firstValueCaptured) 
 			 {
-				 bMeasuredFreqInHz = 0;
-				 fFirstValueCaptured = 0;
+				 measuredFreqInHz = 0;
+				 firstValueCaptured = 0;
 			 }
 
-			 bFreq = 0;
+			 freq = 0;
 		}
 
-		if (!fSignalTimedout && (bFreq >= (TARGET_FREQ_HZ - FREQ_TOLERANCE_HZ)) && (bFreq <= (TARGET_FREQ_HZ + FREQ_TOLERANCE_HZ)))
+		if (!signalTimedout && (freq >= (TARGET_FREQ_HZ - FREQ_TOLERANCE_HZ)) && (freq <= (TARGET_FREQ_HZ + FREQ_TOLERANCE_HZ)))
 		{
-			sBadReadingsCntr = 0;
+			badReadingsCntr = 0;
 		}
 		else
 		{
-			sBadReadingsCntr++;
+			badReadingsCntr++;
 		}
 
-		if (sBadReadingsCntr >= BAD_READINGS_BEFORE_SLEEP)
+		if (badReadingsCntr >= BAD_READINGS_BEFORE_SLEEP)
 		{
 			Tim2OCStopIT();
 			Tim2ICStopIT();
@@ -493,30 +493,30 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 		}
 		else
 		{
-			lTim2Ch1CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
-			lTim2Ch1NextCompareValue = (lTim2Ch1CurrentCounterValue + TIM2_CH1_EVALUATION_INTERVAL_COUNTS);
+			tim2Ch1CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
+			tim2Ch1NextCompareValue = (tim2Ch1CurrentCounterValue + TIM2_CH1_EVALUATION_INTERVAL_COUNTS);
 			
-			if (lTim2Ch1NextCompareValue > TIM2_MAX_COUNT)
+			if (tim2Ch1NextCompareValue > TIM2_MAX_COUNT)
 			{
-				lTim2Ch1NextCompareValue -= (TIM2_MAX_COUNT + 1);
+				tim2Ch1NextCompareValue -= (TIM2_MAX_COUNT + 1);
 			}
 			
-			__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, lTim2Ch1NextCompareValue);
+			__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, tim2Ch1NextCompareValue);
 		}
 	}
 	else if (htim->Instance == TIM4 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) 
 	{
 		MeasurementSGStatesCntrsSet();
 		
-		lTim4Ch1CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
-		lTim4Ch1NextCompareValue = (lTim4Ch1CurrentCounterValue + TIM4_CH1_EVALUATION_INTERVAL_COUNTS);
+		tim4Ch1CurrentCounterValue = __HAL_TIM_GET_COUNTER(htim);
+		tim4Ch1NextCompareValue = (tim4Ch1CurrentCounterValue + TIM4_CH1_EVALUATION_INTERVAL_COUNTS);
 			
-		if (lTim4Ch1NextCompareValue > TIM4_MAX_COUNT) 
+		if (tim4Ch1NextCompareValue > TIM4_MAX_COUNT) 
 		{
-			lTim4Ch1NextCompareValue -= (TIM4_MAX_COUNT + 1);
+			tim4Ch1NextCompareValue -= (TIM4_MAX_COUNT + 1);
 		}
 		
-		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, lTim4Ch1NextCompareValue);
+		__HAL_TIM_SET_COMPARE(htim, TIM_CHANNEL_1, tim4Ch1NextCompareValue);
 	}
 }
 /* USER CODE END 1 */

@@ -4,12 +4,17 @@
 
 #include <string.h>
 
+#include "DomainServices.h"
+#include "defs.h"
 #include "HardwarePorts.h"
 #include "MLM.h"
 #include "Platform/STM32/Core/Tim2CaptureView.h"
-#include "data.h"
 #include "gps.h"
+#include "maintenance.h"
 #include "main.h"
+#include "SystemRuntime.h"
+#include "SystemStartTimeStore.h"
+#include "TimeSourceState.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  Definitions */
@@ -60,6 +65,35 @@ static uint8_t TimeLineSyncSignalValid(void)
   uint32_t frequency = Tim2CapturedFreqHzGet();
 
   return (uint8_t) ((frequency >= 95U) && (frequency <= 105U));
+}
+
+static int8_t TimeStandardTimeZoneHoursGet(void)
+{
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+
+  if (ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+        &g_configurationService,
+        &globalTimeManagement) == FALSE)
+  {
+    return 0;
+  }
+
+  return (int8_t) (globalTimeManagement.controllerStandardTimeZoneSeconds
+                   / 3600);
+}
+
+static uint8_t TimeDaylightSavingEnabled(void)
+{
+  IntersectionGlobalTimeManagementConfig_t globalTimeManagement;
+
+  if (ConfigurationServiceGetActiveGlobalTimeManagementConfig(
+        &g_configurationService,
+        &globalTimeManagement) == FALSE)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (globalTimeManagement.globalDaylightSaving == 20U);
 }
 
 static void TimeApplyCommandedSource(void)
@@ -686,18 +720,19 @@ void TimeHourDec(tpSTime pSTime)
 
 void TimeUTCCalculate(tpSTime pSTime)
 {
+  int8_t timeZoneHours = TimeStandardTimeZoneHoursGet();
   uint8_t ucIdx = 0;
 
-  if (GetDeviceTimeZone() > 0)
+  if (timeZoneHours > 0)
   {
-    for (ucIdx = 0; ucIdx < GetDeviceTimeZone(); ucIdx++)
+    for (ucIdx = 0; ucIdx < (uint8_t) timeZoneHours; ucIdx++)
     {
       TimeHourDec(pSTime);
     }
   }
   else
   {
-    for (ucIdx = 0; ucIdx < (-1) * GetDeviceTimeZone(); ucIdx++)
+    for (ucIdx = 0; ucIdx < (uint8_t) (-1 * timeZoneHours); ucIdx++)
     {
       TimeHourInc(pSTime);
     }
@@ -854,9 +889,6 @@ void TimeTaskFunc(void *argument)
 
   TimeInit();
 
-  SRuntimes.SaSignalStateRuntimes[SignalStateRuntimeCurNoGet()].bExecutionMode =
-    SIGNAL_STATE_EXEC_MODE_INIT;
-
   /* power on logs */
   LogRequest(LOG_REQ_APPEND_ASYNCH, NULL, EVENT_POWER_ON, 0, 0, 0, 0);
   LogRequest(LOG_REQ_APPEND_ASYNCH, NULL, GetDeviceResetEvent(), 0, 0, 0, 0);
@@ -868,7 +900,7 @@ void TimeTaskFunc(void *argument)
 
     TimeRTCRead();
 
-    if (IsDaylightSavingTimeFlagSet())
+    if (TimeDaylightSavingEnabled())
     {
       TimeDSTAdjustmentInit();
       TimeDSTAdjustmentRun();
@@ -895,9 +927,5 @@ void TimeTaskFunc(void *argument)
 
     osDelay(1000);
 
-    if (TimeSourceGet() == TIME_SOURCE_GPS)
-    {
-      GpsSynchro();
-    }
   }
 } /* TimeTaskFunc */

@@ -442,6 +442,7 @@ uint8_t IntersectionControllerStep(IntersectionController_t *controller)
     return 0U;
   }
 
+  (void) MmuSetRequiredSsmHealthy(controller->mmuPort, 0U);
   ApplyLocalUnitInputs(controller);
   (void) IntersectionEngineSetMmuFlashControl(
     controller->engine,
@@ -451,6 +452,10 @@ uint8_t IntersectionControllerStep(IntersectionController_t *controller)
       && (ModuleBusReadSnapshot(controller->moduleBusPort, &snapshot) != 0U))
   {
     snapshotValid = 1U;
+    (void) MmuSetRequiredSsmHealthy(
+      controller->mmuPort,
+      ModuleBusSnapshotSourceReady(&snapshot,
+                                   MODULE_BUS_SNAPSHOT_VALID_LOAD_SWITCH));
     snapshotApplyOk = ApplyModuleBusSnapshot(controller, &snapshot);
     if (snapshotApplyOk == 0U)
     {

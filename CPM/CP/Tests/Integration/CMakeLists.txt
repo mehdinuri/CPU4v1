@@ -8,3 +8,5 @@
 # Placeholder — added when NTCIP and Sequence features are complete:
 # Add_Unity_Test(test_actuated_control  test_actuated_control.c)
 # Add_Unity_Test(test_snmp_get_set      test_snmp_get_set.c)
+
+Add_Unity_Test(Test_NTCIP1202Annex4 Test_NTCIP1202Annex4.c)

@@ -7,10 +7,8 @@
 typedef struct
 {
   UserAuthStoreRecord_t record;
-  uint16_t legacyAdminPin;
   uint8_t loadOk;
   uint8_t saveOk;
-  uint8_t legacyOk;
 } TestUserAuthStoreCtx_t;
 
 static uint8_t TestLoad(void *ctx, UserAuthStoreRecord_t *record)
@@ -39,19 +37,6 @@ static uint8_t TestSave(void *ctx, const UserAuthStoreRecord_t *record)
   return 1U;
 }
 
-static uint8_t TestLoadLegacyAdminPin(void *ctx, uint16_t *adminPin)
-{
-  TestUserAuthStoreCtx_t *store = (TestUserAuthStoreCtx_t *) ctx;
-
-  if ((store->legacyOk == 0U) || (adminPin == NULL))
-  {
-    return 0U;
-  }
-
-  *adminPin = store->legacyAdminPin;
-  return 1U;
-}
-
 void setUp(void)
 {
 }
@@ -60,7 +45,7 @@ void tearDown(void)
 {
 }
 
-void test_UserAuthServiceMigratesLegacyAdminPinAndAuthenticatesRoles(void)
+void test_UserAuthServiceUsesDefaultPinsWhenStoreMissingAndAuthenticatesRoles(void)
 {
   TestUserAuthStoreCtx_t storeCtx;
   IUserAuthStorePort_t storePort;
@@ -69,13 +54,10 @@ void test_UserAuthServiceMigratesLegacyAdminPinAndAuthenticatesRoles(void)
   (void) memset(&storeCtx, 0, sizeof(storeCtx));
   storeCtx.loadOk = 0U;
   storeCtx.saveOk = 1U;
-  storeCtx.legacyOk = 1U;
-  storeCtx.legacyAdminPin = 2468U;
 
   storePort.ctx = &storeCtx;
   storePort.Load = TestLoad;
   storePort.Save = TestSave;
-  storePort.LoadLegacyAdminPin = TestLoadLegacyAdminPin;
 
   UserAuthServiceInit(&service);
   UserAuthServiceBind(&service, &storePort);
@@ -83,7 +65,7 @@ void test_UserAuthServiceMigratesLegacyAdminPinAndAuthenticatesRoles(void)
   TEST_ASSERT_EQUAL(USER_ROLE_ADMIN,
                     UserAuthServiceLogin(&service,
                                         USER_AUTH_ADMIN_USERNAME,
-                                        2468U));
+                                        USER_AUTH_DEFAULT_ADMIN_PIN));
   TEST_ASSERT_EQUAL(USER_ROLE_ADMIN,
                     UserAuthServiceGetActiveRole(&service));
 
@@ -103,23 +85,24 @@ void test_UserAuthServiceChangeAdminPinPersistsAndRejectsWeakPins(void)
   (void) memset(&storeCtx, 0, sizeof(storeCtx));
   storeCtx.loadOk = 0U;
   storeCtx.saveOk = 1U;
-  storeCtx.legacyOk = 1U;
-  storeCtx.legacyAdminPin = 4321U;
 
   storePort.ctx = &storeCtx;
   storePort.Load = TestLoad;
   storePort.Save = TestSave;
-  storePort.LoadLegacyAdminPin = TestLoadLegacyAdminPin;
 
   UserAuthServiceInit(&service);
   UserAuthServiceBind(&service, &storePort);
 
   TEST_ASSERT_EQUAL(USER_AUTH_CHANGE_INVALID_CURRENT,
-                    UserAuthServiceChangeAdminPin(&service, 1111U, 2468U));
+                    UserAuthServiceChangeAdminPin(&service, 2222U, 2468U));
   TEST_ASSERT_EQUAL(USER_AUTH_CHANGE_INVALID_NEW,
-                    UserAuthServiceChangeAdminPin(&service, 4321U, 0U));
+                    UserAuthServiceChangeAdminPin(&service,
+                                                  USER_AUTH_DEFAULT_ADMIN_PIN,
+                                                  0U));
   TEST_ASSERT_EQUAL(USER_AUTH_CHANGE_OK,
-                    UserAuthServiceChangeAdminPin(&service, 4321U, 2468U));
+                    UserAuthServiceChangeAdminPin(&service,
+                                                  USER_AUTH_DEFAULT_ADMIN_PIN,
+                                                  2468U));
   TEST_ASSERT_EQUAL(USER_ROLE_ADMIN,
                     UserAuthServiceLogin(&service,
                                         USER_AUTH_ADMIN_USERNAME,
@@ -129,7 +112,7 @@ void test_UserAuthServiceChangeAdminPinPersistsAndRejectsWeakPins(void)
 int main(void)
 {
   UNITY_BEGIN();
-  RUN_TEST(test_UserAuthServiceMigratesLegacyAdminPinAndAuthenticatesRoles);
+  RUN_TEST(test_UserAuthServiceUsesDefaultPinsWhenStoreMissingAndAuthenticatesRoles);
   RUN_TEST(test_UserAuthServiceChangeAdminPinPersistsAndRejectsWeakPins);
   return UNITY_END();
 }

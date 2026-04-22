@@ -8,31 +8,31 @@
 
 #include <string.h>
 
-static void AdapterRestart(void *ctx, uint32_t lNowMs)
+static void AdapterRestart(void *ctx, uint32_t nowMs)
 {
   MockFrequencyCaptureAdapterCtx_t *c = (MockFrequencyCaptureAdapterCtx_t *) ctx;
-  c->lRestartCount++;
-  c->lLastRestartNowMs = lNowMs;
+  c->restartCount++;
+  c->lastRestartNowMs = nowMs;
 }
 
-static void AdapterOnEdge(void *ctx, uint32_t lCaptureValue, uint32_t lNowMs)
+static void AdapterOnEdge(void *ctx, uint32_t captureValue, uint32_t nowMs)
 {
   MockFrequencyCaptureAdapterCtx_t *c = (MockFrequencyCaptureAdapterCtx_t *) ctx;
-  c->lOnEdgeCount++;
-  c->lLastCaptureValue = lCaptureValue;
-  c->lLastOnEdgeNowMs  = lNowMs;
+  c->onEdgeCount++;
+  c->lastCaptureValue = captureValue;
+  c->lastOnEdgeNowMs  = nowMs;
 
-  if ((c->fPublishOnEdge != 0U) && (c->publish != NULL))
+  if ((c->publishOnEdge != 0U) && (c->publish != NULL))
   {
-    c->publish(c->bPublishFreq);
+    c->publish(c->publishFreq);
   }
 }
 
-static uint8_t AdapterEvaluate(void *ctx, uint32_t lNowMs)
+static uint8_t AdapterEvaluate(void *ctx, uint32_t nowMs)
 {
   MockFrequencyCaptureAdapterCtx_t *c = (MockFrequencyCaptureAdapterCtx_t *) ctx;
-  c->lEvaluateCount++;
-  c->lLastEvaluateNowMs = lNowMs;
+  c->evaluateCount++;
+  c->lastEvaluateNowMs = nowMs;
   return c->eEvaluateVerdict;
 }
 

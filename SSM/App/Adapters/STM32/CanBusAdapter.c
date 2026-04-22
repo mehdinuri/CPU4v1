@@ -8,7 +8,7 @@
 #include "fdcan.h"
 #include "can_msg_sender.h"
 
-static FDCAN_HandleTypeDef *HandleFor(tECanBusId eBus)
+static FDCAN_HandleTypeDef *HandleFor(CanBusId_e eBus)
 {
   switch (eBus)
   {
@@ -32,47 +32,47 @@ static FDCAN_HandleTypeDef *HandleFor(tECanBusId eBus)
   }
 }
 
-static uint8_t AdapterSendStd(void *pCtx,
-                              tECanBusId eBus,
-                              const tSCanFrame *pFrame)
+static uint8_t AdapterSendStd(void *ctx,
+                              CanBusId_e eBus,
+                              const CanFrame_t *frame)
 {
-  (void) pCtx;
+  (void) ctx;
 
-  FDCAN_HandleTypeDef *pHandle = HandleFor(eBus);
+  FDCAN_HandleTypeDef *handle = HandleFor(eBus);
 
-  if (pHandle == 0)
+  if (handle == 0)
   {
     return 0U;
   }
 
-  if (pFrame->bLen > 8U)
+  if (frame->len > 8U)
   {
     return 0U;
   }
 
-  /* CANTxRequest's pData is non-const for historical reasons; the enqueue
+  /* CANTxRequest's data is non-const for historical reasons; the enqueue
    * path memcpy's before returning, so casting away const is safe.
    */
-  return CANTxRequest(pHandle,
+  return CANTxRequest(handle,
                       FDCAN_STANDARD_ID,
-                      (uint32_t) pFrame->sStdId,
+                      (uint32_t) frame->stdId,
                       FDCAN_DATA_FRAME,
                       FDCAN_BRS_OFF,
                       FDCAN_CLASSIC_CAN,
-                      pFrame->abData,
-                      pFrame->bLen);
+                      frame->abData,
+                      frame->len);
 }
 
-void CanBusAdapter_Init(tSCanBusAdapterCtx *pCtx)
+void CanBusAdapter_Init(CanBusAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 }
 
-ICanBusPort_t CanBusAdapter_CreatePort(tSCanBusAdapterCtx *pCtx)
+ICanBusPort_t CanBusAdapter_CreatePort(CanBusAdapterCtx_t *ctx)
 {
   ICanBusPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.SendStd = AdapterSendStd;
 
   return port;

@@ -16,6 +16,7 @@ target_sources(ssm_domain PRIVATE
     SignalDiagnostics.c
     PersistenceJournal.c
     VoltageCurrentFrame.c
+    CanRxBackpressure.c
 )
 
 # Public include: callers use #include "Domain/SignalOutput.h"

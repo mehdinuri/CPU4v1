@@ -21,8 +21,9 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
-#include "data.h"
+#include "common.h"
 #include "gpio.h"
+#include "SystemPower.h"
 
 #define TARGET_FREQ_HZ 100
 #define FREQ_TOLERANCE_HZ 5

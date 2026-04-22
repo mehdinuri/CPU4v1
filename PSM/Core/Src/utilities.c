@@ -22,7 +22,7 @@
 
 /* Public variables ---------------------------------------------------------*/
 
-const uint32_t laUtilsBitValues[32] =
+const uint32_t utilsBitValues[32] =
 {
 	0x00000001,
 	0x00000002,

@@ -29,7 +29,7 @@ static uint8_t AdapterGetState(void *ctx, SignalInputId_t id)
  * ---------------------------------------------------------------------------*/
 void SignalInputAdapterInit(SignalInputAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 ISignalInputPort_t SignalInputAdapterCreatePort(SignalInputAdapterCtx_t *ctx)

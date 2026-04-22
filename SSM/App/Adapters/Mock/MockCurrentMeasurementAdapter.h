@@ -14,19 +14,19 @@
 
 typedef struct
 {
-  tSCurrentMeasurementSnapshot SStored;
-  uint32_t lGetLatestCount;
-} tSMockCurrentMeasurementAdapterCtx;
+  CurrentMeasurementSnapshot_t stored;
+  uint32_t getLatestCount;
+} MockCurrentMeasurementAdapterCtx_t;
 
 void MockCurrentMeasurementAdapter_Init(
-  tSMockCurrentMeasurementAdapterCtx *pCtx);
+  MockCurrentMeasurementAdapterCtx_t *ctx);
 void MockCurrentMeasurementAdapter_SetSnapshot(
-  tSMockCurrentMeasurementAdapterCtx *pCtx,
+  MockCurrentMeasurementAdapterCtx_t *ctx,
   const
-  tSCurrentMeasurementSnapshot *
-  pSnap);
+  CurrentMeasurementSnapshot_t *
+  snap);
 ICurrentMeasurementPort_t MockCurrentMeasurementAdapter_CreatePort(
-  tSMockCurrentMeasurementAdapterCtx *pCtx);
+  MockCurrentMeasurementAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_CURRENT_MEASUREMENT_ADAPTER_H */
 

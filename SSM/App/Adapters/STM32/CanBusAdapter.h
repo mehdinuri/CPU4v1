@@ -3,7 +3,7 @@
  * @file    Adapters/STM32/CanBusAdapter.h
  * @brief   STM32 adapter for ICanBusPort TX side.
  *          Wraps the existing CANTxRequest enqueue-then-CANMsgSenderTask flow.
- *          Adapter is bus-agnostic: tECanBusId → FDCAN handle happens inside.
+ *          Adapter is bus-agnostic: CanBusId_e → FDCAN handle happens inside.
  ******************************************************************************
  */
 
@@ -15,11 +15,11 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSCanBusAdapterCtx;
+  uint8_t reserved;
+} CanBusAdapterCtx_t;
 
-void CanBusAdapter_Init(tSCanBusAdapterCtx *pCtx);
-ICanBusPort_t CanBusAdapter_CreatePort(tSCanBusAdapterCtx *pCtx);
+void CanBusAdapter_Init(CanBusAdapterCtx_t *ctx);
+ICanBusPort_t CanBusAdapter_CreatePort(CanBusAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_CAN_BUS_ADAPTER_H */
 

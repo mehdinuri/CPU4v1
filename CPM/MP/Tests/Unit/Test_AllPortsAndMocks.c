@@ -13,7 +13,6 @@
 #include "unity.h"
 
 #include "Adapters/Mock/MockControlBusAdapter.h"
-#include "Adapters/Mock/MockEventLogAdapter.h"
 #include "Adapters/Mock/MockFieldBusAdapter.h"
 #include "Adapters/Mock/MockPersistenceAdapter.h"
 #include "Adapters/Mock/MockRealtimeClockAdapter.h"
@@ -79,29 +78,6 @@ void test_status_led_port_set_state(void)
                           StatusLEDSetState(&port,
                                             STATUS_LED_STATE_BLINK_FAST));
   TEST_ASSERT_EQUAL(STATUS_LED_STATE_BLINK_FAST, ctx.lastState);
-}
-
-void test_event_log_port_fifo(void)
-{
-  MockEventLogAdapterCtx_t ctx;
-  EventLogRecord_t r1 = { .timestampSeconds = 10U, .eventCode = 1U };
-  EventLogRecord_t r2 = { .timestampSeconds = 20U, .eventCode = 2U };
-  EventLogRecord_t out;
-  uint32_t count;
-
-  MockEventLogAdapterInit(&ctx);
-  IEventLogPort_t port = MockEventLogAdapterCreatePort(&ctx);
-
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogAppend(&port, &r1));
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogAppend(&port, &r2));
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogCount(&port, &count));
-  TEST_ASSERT_EQUAL_UINT32(2U, count);
-
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogReadNext(&port, &out));
-  TEST_ASSERT_EQUAL_UINT16(1U, out.eventCode);
-  TEST_ASSERT_EQUAL_UINT8(1U, EventLogReadNext(&port, &out));
-  TEST_ASSERT_EQUAL_UINT16(2U, out.eventCode);
-  TEST_ASSERT_EQUAL_UINT8(0U, EventLogReadNext(&port, &out));
 }
 
 void test_persistence_port_read_write_round_trip(void)
@@ -203,7 +179,6 @@ int main(void)
   RUN_TEST(test_control_bus_port_round_trip);
   RUN_TEST(test_field_bus_port_returns_snapshot);
   RUN_TEST(test_status_led_port_set_state);
-  RUN_TEST(test_event_log_port_fifo);
   RUN_TEST(test_persistence_port_read_write_round_trip);
   RUN_TEST(test_realtime_clock_port_get_set);
   RUN_TEST(test_system_monitor_port_reads);

@@ -78,7 +78,7 @@ static inline void SignalOutputFlush(ISignalOutputPort_t *p)
 }
 ```
 
-**Naming convention — PascalCase throughout:**
+**Naming convention (port-specific examples — full rules in root `CLAUDE.md` § "Naming Conventions (system-wide)"):**
 - Port structs: `IFeaturePort_t`
 - Function pointer members: `PascalCase` verbs (`SetLampState`, `Flush`)
 - Inline dispatch helpers: `FeatureVerb()` — no underscore separators (`SignalOutputSetLamp`)
@@ -138,7 +138,8 @@ SNMP traps emitted by domain code via `ISNMPNotifierPort` on lamp failures, dete
 - **C11** throughout — no C++ for embedded compatibility
 - **No global mutable state** in `App/Domain/` — all state in `Context_t` structs passed by pointer
 - **No `malloc`** in `App/Domain/` — all pools are statically-sized arrays
-- **No Hungarian notation** in new code — descriptive names with unit comments (`uint8_t minGreenTime; /* seconds */`)
+- **Naming** — follow the system-wide rules in the root `CLAUDE.md` § "Naming Conventions (system-wide)":
+  `PascalCase_t` types, `camelCase` variables/fields/params, `SCREAMING_SNAKE_CASE` macros, `g_` / `s_` for scope, **no Hungarian prefixes**. CP is **not yet fully migrated**; rename opportunistically as files are touched.
 - `-Wall -Wextra -Werror -Wpedantic` enforced for `App/Domain/` and `App/Ports/` on all targets
 - Legacy Keil project at `~/workspace/teknotel/C0502-P250514-CPU4/CP` is the reference implementation for domain logic being ported
 
@@ -192,3 +193,24 @@ Additional formatting rules enforced by the Uncrustify configuration:
 - **Braces on new line** — opening `{` goes on its own line (Allman style) for all control structures and function definitions
 - **Spaces around operators** — `a = b + c`, not `a=b+c`; no space inside `()` or `[]`
 - **Pointer star** — attached to the variable name: `uint8_t *ptr`, not `uint8_t* ptr`
+
+## Vendor MIB Maintenance (1.3.6.1.4.1.59748)
+
+`Docs/TEKNOTEL-CPU4-MIB.mib` (module `TEKNOTEL-CPU4-MIB`, vendor "Teknotel Elektronik", IANA PEN 59748) is the single source-of-truth for every OID under the Teknotel enterprise arc. **Update it in the same commit** as any code change that:
+
+- Adds, removes, or renumbers an OID (scalar, table, or table column)
+- Changes the `SYNTAX`, `ACCESS`, or enumerated values of an existing object
+- Adds or removes a specific-trap number emitted from `LWIP/App/snmp_client.c`
+- Touches the enums in `../Libs/CpMpProtocolShared.h` referenced by the MIB (`CpMpConfigState_t`, `CpMpSafetyAction_t`, `CpMpFaultGlobalFlags_t`, `CpMpFaultChannelFlags_t`)
+
+OID arc shape (mirrors NTCIP 8004/1202): `teknotel .59748 → transportation .4 → devices .2 → cpu4 .1 → { unit .3, channel .8, cpMpLink .20, driverModule .21 }`. `unit` and `channel` reuse NTCIP 1202's asc.* slot numbers; vendor-only groups live at 20+ to stay clear of any future NTCIP assignment.
+
+Authoritative C sources, one file per functional group:
+- `App/Domain/NTCIP/MibVendor59748/UnitObjects.c` — `unit` (`.3`)
+- `App/Domain/NTCIP/MibVendor59748/ChannelFaultObjects.c` — `channel` (`.8`)
+- `App/Domain/NTCIP/MibVendor59748/CpMpLinkObjects.c` — `cpMpLink` (`.20`)
+- `App/Domain/NTCIP/MibVendor59748/DriverModuleObjects.c` — `driverModule` (`.21`)
+- `App/Adapters/STM32/LWIPSNMPRootMibs.c` — one-stop LwIP subtree registration for every `cpu4.*` group (extend `kTeknotelNodes[]` when adding a new group)
+- `LWIP/App/snmp_client.c` — enterprise-specific traps (`.59748.0.{1,2,3}`); trap varbinds point into the arc defined above
+
+Keep the "OID Quick Reference" block at the bottom of the `.mib` in sync with the body. `/review-pr` should block any change to the files above that does not also touch the `.mib`.

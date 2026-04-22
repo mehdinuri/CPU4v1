@@ -14,87 +14,87 @@
 #define PERSISTENCE_JOURNAL_COMMIT  0xA5U
 
 #define PERSISTENCE_JOURNAL_CRC_SPAN \
-        ((uint16_t) offsetof(tSPersistenceJournalRecord, lCrc32))
+        ((uint16_t) offsetof(PersistenceJournalRecord_t, crc32))
 
-uint8_t PersistenceJournal_RecordBuild(tSPersistenceJournalRecord *pRecord,
-                                       uint32_t lSequence,
-                                       const void *pPayload,
-                                       uint16_t sPayloadSize)
+uint8_t PersistenceJournal_RecordBuild(PersistenceJournalRecord_t *record,
+                                       uint32_t sequence,
+                                       const void *payload,
+                                       uint16_t payloadSize)
 {
-  if ((pRecord == 0)
-      || (pPayload == 0)
-      || (sPayloadSize == 0U)
-      || (sPayloadSize > PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE))
+  if ((record == 0)
+      || (payload == 0)
+      || (payloadSize == 0U)
+      || (payloadSize > PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE))
   {
     return 0U;
   }
 
-  memset(pRecord, 0, sizeof(*pRecord));
-  pRecord->lMagic = PERSISTENCE_JOURNAL_MAGIC;
-  pRecord->lSequence = lSequence;
-  pRecord->sPayloadSize = sPayloadSize;
-  pRecord->bVersion = PERSISTENCE_JOURNAL_VERSION;
-  pRecord->bCommit = PERSISTENCE_JOURNAL_COMMIT;
-  memcpy(pRecord->abPayload, pPayload, sPayloadSize);
-  pRecord->lCrc32 = Crc32_Compute(pRecord, PERSISTENCE_JOURNAL_CRC_SPAN);
+  memset(record, 0, sizeof(*record));
+  record->magic = PERSISTENCE_JOURNAL_MAGIC;
+  record->sequence = sequence;
+  record->payloadSize = payloadSize;
+  record->version = PERSISTENCE_JOURNAL_VERSION;
+  record->commit = PERSISTENCE_JOURNAL_COMMIT;
+  memcpy(record->payload, payload, payloadSize);
+  record->crc32 = Crc32_Compute(record, PERSISTENCE_JOURNAL_CRC_SPAN);
 
   return 1U;
 }
 
 uint8_t PersistenceJournal_RecordIsValid(
-  const tSPersistenceJournalRecord *pRecord,
-  uint16_t sMaxPayloadSize)
+  const PersistenceJournalRecord_t *record,
+  uint16_t maxPayloadSize)
 {
-  if (pRecord == 0)
+  if (record == 0)
   {
     return 0U;
   }
 
-  if ((pRecord->lMagic != PERSISTENCE_JOURNAL_MAGIC)
-      || (pRecord->bVersion != PERSISTENCE_JOURNAL_VERSION)
-      || (pRecord->bCommit != PERSISTENCE_JOURNAL_COMMIT))
+  if ((record->magic != PERSISTENCE_JOURNAL_MAGIC)
+      || (record->version != PERSISTENCE_JOURNAL_VERSION)
+      || (record->commit != PERSISTENCE_JOURNAL_COMMIT))
   {
     return 0U;
   }
 
-  if ((pRecord->sPayloadSize == 0U)
-      || (pRecord->sPayloadSize > sMaxPayloadSize)
-      || (pRecord->sPayloadSize > PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE))
+  if ((record->payloadSize == 0U)
+      || (record->payloadSize > maxPayloadSize)
+      || (record->payloadSize > PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE))
   {
     return 0U;
   }
 
-  return (Crc32_Compute(pRecord, PERSISTENCE_JOURNAL_CRC_SPAN)
-          == pRecord->lCrc32) ? 1U : 0U;
+  return (Crc32_Compute(record, PERSISTENCE_JOURNAL_CRC_SPAN)
+          == record->crc32) ? 1U : 0U;
 }
 
-const tSPersistenceJournalRecord *PersistenceJournal_SelectLatest(
-  const tSPersistenceJournalRecord *pA,
+const PersistenceJournalRecord_t *PersistenceJournal_SelectLatest(
+  const PersistenceJournalRecord_t *pA,
   const
-  tSPersistenceJournalRecord
+  PersistenceJournalRecord_t
   *pB,
   uint16_t
-  sMaxPayloadSize)
+  maxPayloadSize)
 {
-  uint8_t bAValid = PersistenceJournal_RecordIsValid(pA, sMaxPayloadSize);
-  uint8_t bBValid = PersistenceJournal_RecordIsValid(pB, sMaxPayloadSize);
+  uint8_t aValid = PersistenceJournal_RecordIsValid(pA, maxPayloadSize);
+  uint8_t bValid = PersistenceJournal_RecordIsValid(pB, maxPayloadSize);
 
-  if ((bAValid == 0U) && (bBValid == 0U))
+  if ((aValid == 0U) && (bValid == 0U))
   {
     return 0;
   }
 
-  if (bAValid == 0U)
+  if (aValid == 0U)
   {
     return pB;
   }
 
-  if (bBValid == 0U)
+  if (bValid == 0U)
   {
     return pA;
   }
 
-  return ((uint32_t) (pB->lSequence - pA->lSequence) < 0x80000000U) ? pB : pA;
+  return ((uint32_t) (pB->sequence - pA->sequence) < 0x80000000U) ? pB : pA;
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

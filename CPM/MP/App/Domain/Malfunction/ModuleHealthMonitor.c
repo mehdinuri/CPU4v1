@@ -14,7 +14,7 @@ static void EmitMissing(const FaultEmit_t *emit,
   FaultEvent_t event;
 
   event.code = code;
-  event.severity = FAULT_SEVERITY_ERROR;
+  event.severity = FAULT_SEVERITY_CRITICAL;
   event.source = source;
   event.timestampTicks = timestampTicks;
   event.param = staleTicks;

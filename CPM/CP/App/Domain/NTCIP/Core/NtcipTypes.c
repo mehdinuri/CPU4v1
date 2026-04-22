@@ -81,6 +81,43 @@ NtcipError_t NtcipValueSetOctetString(NtcipValue_t *value,
   return NTCIP_ERROR_OK;
 }
 
+NtcipError_t NtcipValueSetOpaque(NtcipValue_t *value,
+                                 const uint8_t *bytes,
+                                 uint16_t length)
+{
+  if ((value == NULL) || ((bytes == NULL) && (length != 0U))
+      || (length > NTCIP_OCTET_STRING_MAX_LENGTH))
+  {
+    return NTCIP_ERROR_BAD_VALUE;
+  }
+
+  NtcipValueClear(value);
+  value->type = NTCIP_VALUE_TYPE_OPAQUE;
+  value->data.opaque.length = length;
+
+  if (length != 0U)
+  {
+    memcpy(value->data.opaque.bytes, bytes, length);
+  }
+
+  return NTCIP_ERROR_OK;
+}
+
+NtcipError_t NtcipValueSetIpAddress(NtcipValue_t *value,
+                                    const uint8_t *bytes)
+{
+  if ((value == NULL) || (bytes == NULL))
+  {
+    return NTCIP_ERROR_BAD_VALUE;
+  }
+
+  NtcipValueClear(value);
+  value->type = NTCIP_VALUE_TYPE_IP_ADDRESS;
+  memcpy(value->data.ipAddress.bytes, bytes, sizeof(value->data.ipAddress.bytes));
+
+  return NTCIP_ERROR_OK;
+}
+
 NtcipError_t NtcipValueSetCString(NtcipValue_t *value, const char *text)
 {
   size_t length;

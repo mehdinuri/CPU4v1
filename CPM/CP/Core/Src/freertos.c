@@ -29,13 +29,11 @@
 /* USER CODE BEGIN Includes */
 #include <freertos_mpool.h>
 
-#include "CanMsgParser.h"
+#include "FieldCanTxTask.h"
 #include "MLM.h"
 #include "MSM.h"
 #include "PPPOSAsynch.h"
 #include "comm.h"
-#include "cpmpcomm.h"
-#include "data.h"
 #include "defs.h"
 #include "dma.h"
 #include "ethernetif.h"
@@ -50,7 +48,7 @@
 #include "MCS.h"
 #include "rng.h"
 #include "rtc.h"
-#include "signalCardDrv.h"
+#include "SystemRuntime.h"
 #include "tim.h"
 #include "time.h"
 #include "ui.h"
@@ -77,11 +75,8 @@ typedef enum
   APP_TASK_NONE = 0,
   APP_TASK_START,
   APP_TASK_TIME,
-  APP_TASK_CAN_MSG_PARSER,
-  APP_TASK_CAN_MSG_SENDER,
-  APP_TASK_SIGNAL_CARD_DRIVE,
+  APP_TASK_FIELD_CAN_TX,
   APP_TASK_INTERSECTION_CONTROL,
-  APP_TASK_CPMP_COMM,
   APP_TASK_GPS_MSG_PARSER,
   APP_TASK_GPS,
   APP_TASK_MCS,
@@ -108,19 +103,6 @@ typedef enum
 /* USER CODE BEGIN Variables */
 __attribute__((section(".itcm_bss"), aligned(32)))
 uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
-
-/* Definitions for FDCANRxReqsMemPool */
-osMemoryPoolId_t FDCANRxReqsMemPoolHandle;
-__attribute__((section(".dtcm_bss"), aligned(32)))
-uint8_t FDCANRxReqsMemPoolBuf[32 * sizeof(tSFDCANRxMsg)];
-osStaticMemPoolDef_t FDCANRxReqsMemPoolCtrlBlk;
-const osMemoryPoolAttr_t FDCANRxReqsMemPool_attributes = {
-  .name = "FDCANRxReqsMemPool",
-  .cb_mem = &FDCANRxReqsMemPoolCtrlBlk,
-  .cb_size = sizeof(FDCANRxReqsMemPoolCtrlBlk),
-  .mp_mem = &FDCANRxReqsMemPoolBuf,
-  .mp_size = sizeof(FDCANRxReqsMemPoolBuf)
-};
 
 /* Definitions for FDCANTxReqsMemPool */
 osMemoryPoolId_t FDCANTxReqsMemPoolHandle;
@@ -264,40 +246,16 @@ const osThreadAttr_t TimeTask_attributes = {
   .stack_size = sizeof(TimeTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for CANMsgParserTask */
-osThreadId_t CANMsgParserTaskHandle;
-uint32_t CANMsgParserTaskBuf[ 512 ];
-osStaticThreadDef_t CANMsgParserTaskCtrlBlk;
-const osThreadAttr_t CANMsgParserTask_attributes = {
-  .name = "CANMsgParserTask",
-  .cb_mem = &CANMsgParserTaskCtrlBlk,
-  .cb_size = sizeof(CANMsgParserTaskCtrlBlk),
-  .stack_mem = &CANMsgParserTaskBuf[0],
-  .stack_size = sizeof(CANMsgParserTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for CANMsgSenderTask */
-osThreadId_t CANMsgSenderTaskHandle;
-uint32_t CANMsgSenderTaskBuf[ 128 ];
-osStaticThreadDef_t CANMsgSenderTaskCtrlBlk;
-const osThreadAttr_t CANMsgSenderTask_attributes = {
-  .name = "CANMsgSenderTask",
-  .cb_mem = &CANMsgSenderTaskCtrlBlk,
-  .cb_size = sizeof(CANMsgSenderTaskCtrlBlk),
-  .stack_mem = &CANMsgSenderTaskBuf[0],
-  .stack_size = sizeof(CANMsgSenderTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for SignalCardDriveTask */
-osThreadId_t SignalCardDriveTaskHandle;
-uint32_t SignalCardDriveTaskBuf[ 512 ];
-osStaticThreadDef_t SignalCardDriveTaskCtrlBlk;
-const osThreadAttr_t SignalCardDriveTask_attributes = {
-  .name = "SignalCardDriveTask",
-  .cb_mem = &SignalCardDriveTaskCtrlBlk,
-  .cb_size = sizeof(SignalCardDriveTaskCtrlBlk),
-  .stack_mem = &SignalCardDriveTaskBuf[0],
-  .stack_size = sizeof(SignalCardDriveTaskBuf),
+/* Definitions for FieldCanTxTask */
+osThreadId_t FieldCanTxTaskHandle;
+uint32_t FieldCanTxTaskBuf[ 128 ];
+osStaticThreadDef_t FieldCanTxTaskCtrlBlk;
+const osThreadAttr_t FieldCanTxTask_attributes = {
+  .name = "FieldCanTxTask",
+  .cb_mem = &FieldCanTxTaskCtrlBlk,
+  .cb_size = sizeof(FieldCanTxTaskCtrlBlk),
+  .stack_mem = &FieldCanTxTaskBuf[0],
+  .stack_size = sizeof(FieldCanTxTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for IntersectionControlTask */
@@ -310,18 +268,6 @@ const osThreadAttr_t IntersectionControlTask_attributes = {
   .cb_size = sizeof(IntersectionControlTaskCtrlBlk),
   .stack_mem = &IntersectionControlTaskBuf[0],
   .stack_size = sizeof(IntersectionControlTaskBuf),
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for CPMPComTask */
-osThreadId_t CPMPComTaskHandle;
-uint32_t CPMPComTaskBuf[ 256 ];
-osStaticThreadDef_t CPMPComTaskCtrlBlk;
-const osThreadAttr_t CPMPComTask_attributes = {
-  .name = "CPMPComTask",
-  .cb_mem = &CPMPComTaskCtrlBlk,
-  .cb_size = sizeof(CPMPComTaskCtrlBlk),
-  .stack_mem = &CPMPComTaskBuf[0],
-  .stack_size = sizeof(CPMPComTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for GPSMsgParserTask */
@@ -456,17 +402,6 @@ const osThreadAttr_t MaintenanceTask_attributes = {
   .stack_size = sizeof(MaintenanceTaskBuf),
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for FDCANRxReqsQue */
-osMessageQueueId_t FDCANRxReqsQueHandle;
-uint8_t FDCANRxReqsQueBuf[ 32 * sizeof( tpSFDCANRxMsg ) ];
-osStaticMessageQDef_t FDCANRxReqsQueCtrlBlk;
-const osMessageQueueAttr_t FDCANRxReqsQue_attributes = {
-  .name = "FDCANRxReqsQue",
-  .cb_mem = &FDCANRxReqsQueCtrlBlk,
-  .cb_size = sizeof(FDCANRxReqsQueCtrlBlk),
-  .mq_mem = &FDCANRxReqsQueBuf,
-  .mq_size = sizeof(FDCANRxReqsQueBuf)
-};
 /* Definitions for FDCANTxReqsQue */
 osMessageQueueId_t FDCANTxReqsQueHandle;
 uint8_t FDCANTxReqsQueBuf[ 32 * sizeof( tpSFDCANTxMsg ) ];
@@ -574,14 +509,6 @@ const osMutexAttr_t TimeMutex_attributes = {
   .cb_mem = &TimeMutexCtrlBlk,
   .cb_size = sizeof(TimeMutexCtrlBlk),
 };
-/* Definitions for SignalGroupsMutex */
-osMutexId_t SignalGroupsMutexHandle;
-osStaticMutexDef_t SignalGroupsMutexCtrlBlk;
-const osMutexAttr_t SignalGroupsMutex_attributes = {
-  .name = "SignalGroupsMutex",
-  .cb_mem = &SignalGroupsMutexCtrlBlk,
-  .cb_size = sizeof(SignalGroupsMutexCtrlBlk),
-};
 /* Definitions for LogMutex */
 osMutexId_t LogMutexHandle;
 osStaticMutexDef_t LogMutexCtrlBlk;
@@ -662,11 +589,7 @@ extern void MainApplication_Init(void);
 
 void DefaultTaskFunc(void *argument);
 extern void TimeTaskFunc(void *argument);
-extern void CANMsgParserTaskFunc(void *argument);
-extern void CANMsgSenderTaskFunc(void *argument);
-extern void SignalCardDriveTaskFunc(void *argument);
 extern void IntersectionControlTaskFunc(void *argument);
-extern void CPMPComTaskFunc(void *argument);
 extern void GPSMsgParserTaskFunc(void *argument);
 extern void GPSTaskFunc(void *argument);
 extern void MCSTaskFunc(void *argument);
@@ -704,25 +627,13 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
   {
     eTask = APP_TASK_TIME;
   }
-  else if (xTask == CANMsgParserTaskHandle)
+  else if (xTask == FieldCanTxTaskHandle)
   {
-    eTask = APP_TASK_CAN_MSG_PARSER;
-  }
-  else if (xTask == CANMsgSenderTaskHandle)
-  {
-    eTask = APP_TASK_CAN_MSG_SENDER;
-  }
-  else if (xTask == SignalCardDriveTaskHandle)
-  {
-    eTask = APP_TASK_SIGNAL_CARD_DRIVE;
+    eTask = APP_TASK_FIELD_CAN_TX;
   }
   else if (xTask == IntersectionControlTaskHandle)
   {
     eTask = APP_TASK_INTERSECTION_CONTROL;
-  }
-  else if (xTask == CPMPComTaskHandle)
-  {
-    eTask = APP_TASK_CPMP_COMM;
   }
   else if (xTask == GPSMsgParserTaskHandle)
   {
@@ -785,9 +696,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of TimeMutex */
   TimeMutexHandle = osMutexNew(&TimeMutex_attributes);
 
-  /* creation of SignalGroupsMutex */
-  SignalGroupsMutexHandle = osMutexNew(&SignalGroupsMutex_attributes);
-
   /* creation of LogMutex */
   LogMutexHandle = osMutexNew(&LogMutex_attributes);
 
@@ -796,11 +704,6 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_MUTEX */
   if (TimeMutexHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (SignalGroupsMutexHandle == NULL)
   {
     Error_Handler();
   }
@@ -827,9 +730,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
-  /* creation of FDCANRxReqsQue */
-  FDCANRxReqsQueHandle = osMessageQueueNew (32, sizeof(tpSFDCANRxMsg), &FDCANRxReqsQue_attributes);
-
   /* creation of FDCANTxReqsQue */
   FDCANTxReqsQueHandle = osMessageQueueNew (32, sizeof(tpSFDCANTxMsg), &FDCANTxReqsQue_attributes);
 
@@ -858,11 +758,6 @@ void MX_FREERTOS_Init(void) {
   PPPOSAsyTxReqsQueHandle = osMessageQueueNew (4, sizeof(tpSPPPOSAsynchRxTxMsg), &PPPOSAsyTxReqsQue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  if (FDCANRxReqsQueHandle == NULL)
-  {
-    Error_Handler();
-  }
-
   if (FDCANTxReqsQueHandle == NULL)
   {
     Error_Handler();
@@ -909,11 +804,6 @@ void MX_FREERTOS_Init(void) {
   }
 
   /* add queues, ... */
-  /* creation of FDCANRxReqsMemPool */
-  FDCANRxReqsMemPoolHandle = osMemoryPoolNew(32,
-                                             sizeof(tSFDCANRxMsg),
-                                             &FDCANRxReqsMemPool_attributes);
-
   /* creation of FDCANTxReqsMemPool */
   FDCANTxReqsMemPoolHandle = osMemoryPoolNew(32,
                                              sizeof(tSFDCANTxMsg),
@@ -958,11 +848,6 @@ void MX_FREERTOS_Init(void) {
   PPPOSAsyTxReqsMemPoolHandle = osMemoryPoolNew(4,
                                               sizeof(tSPPPOSAsynchRxTxMsg),
                                               &PPPOSAsyTxReqsMemPool_attributes);
-
-  if (FDCANRxReqsMemPoolHandle == NULL)
-  {
-    Error_Handler();
-  }
 
   if (FDCANTxReqsMemPoolHandle == NULL)
   {
@@ -1023,23 +908,11 @@ void MX_FREERTOS_Init(void) {
   /* creation of TimeTask */
   TimeTaskHandle = osThreadNew(TimeTaskFunc, NULL, &TimeTask_attributes);
 
-  /* creation of CANMsgParserTask */
-  CANMsgParserTaskHandle = osThreadNew(CANMsgParserTaskFunc, NULL, &CANMsgParserTask_attributes);
-
-  /* creation of CANMsgSenderTask */
-  CANMsgSenderTaskHandle = osThreadNew(CANMsgSenderTaskFunc, NULL, &CANMsgSenderTask_attributes);
-
-  /* legacy signal-card task intentionally disabled:
-   * the clean FieldOutputCanAdapter on IntersectionControlTask owns
-   * FDCAN1 SSM/PSM publishing now. */
-  SignalCardDriveTaskHandle = NULL;
+  /* creation of FieldCanTxTask */
+  FieldCanTxTaskHandle = osThreadNew(FieldCanTxTaskFunc, NULL, &FieldCanTxTask_attributes);
 
   /* creation of IntersectionControlTask */
   IntersectionControlTaskHandle = osThreadNew(IntersectionControlTaskFunc, NULL, &IntersectionControlTask_attributes);
-
-  /* legacy CP<->MP comm task intentionally disabled:
-   * the clean CpMpLinkService on FDCAN2 owns this path now. */
-  CPMPComTaskHandle = NULL;
 
   /* creation of GPSMsgParserTask */
   GPSMsgParserTaskHandle = osThreadNew(GPSMsgParserTaskFunc, NULL, &GPSMsgParserTask_attributes);
@@ -1085,12 +958,7 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  if (CANMsgParserTaskHandle == NULL)
-  {
-    Error_Handler();
-  }
-
-  if (CANMsgSenderTaskHandle == NULL)
+  if (FieldCanTxTaskHandle == NULL)
   {
     Error_Handler();
   }

@@ -14,9 +14,9 @@
 
 typedef struct
 {
-  uint8_t  aLEDStates[MOCK_LED_COUNT]; /* current state per LED ID */
-  uint32_t lSetCallCount;              /* total SetState calls      */
-  uint32_t lToggleCallCount;           /* total Toggle calls        */
+  uint8_t  ledStates[MOCK_LED_COUNT]; /* current state per LED ID */
+  uint32_t setCallCount;              /* total SetState calls      */
+  uint32_t toggleCallCount;           /* total Toggle calls        */
 } MockIndicatorLEDAdapterCtx_t;
 
 void                 MockIndicatorLEDAdapterInit(MockIndicatorLEDAdapterCtx_t *ctx);

@@ -13,7 +13,7 @@
 
 typedef struct
 {
-  ControlBusFrame_t txFrames[16];
+  ControlBusFrame_t txFrames[64];
   uint8_t txCount;
   ControlBusRxCallback_t rxCallback;
   void *rxCallbackCtx;
@@ -25,19 +25,31 @@ typedef struct
   MmuControlAction_t safetyAction;
 } FakeMmuCtx_t;
 
+typedef struct
+{
+  uint8_t count;
+  uint8_t eventCode;
+  uint8_t eventParam;
+  uint16_t eventShortParam;
+  uint32_t eventLongParam;
+} FakeLogCtx_t;
+
 static CpMpLinkService_t s_service;
 static ConfigurationService_t s_configurationService;
 static IntersectionController_t s_controller;
+static RelayControlService_t s_relayControlService;
 static FakeControlBusCtx_t s_controlBusCtx;
 static FakeMmuCtx_t s_mmuCtx;
+static FakeLogCtx_t s_logCtx;
 static IControlBusPort_t s_controlBusPort;
 static IMmuPort_t s_mmuPort;
+static ILogEventPort_t s_logPort;
 
 static uint8_t FakeControlBusSendFrame(void *ctx, const ControlBusFrame_t *frame)
 {
   FakeControlBusCtx_t *bus = (FakeControlBusCtx_t *) ctx;
 
-  if ((bus == NULL) || (frame == NULL) || (bus->txCount >= 16U))
+  if ((bus == NULL) || (frame == NULL) || (bus->txCount >= 64U))
   {
     return 0U;
   }
@@ -134,6 +146,28 @@ static uint8_t FakeMmuFilter(void *ctx,
   return 1U;
 }
 
+static uint8_t FakeLogAppend(void *ctx,
+                             uint8_t eventCode,
+                             uint8_t eventParam,
+                             uint16_t eventShortParam,
+                             uint32_t eventLongParam)
+{
+  FakeLogCtx_t *logCtx = (FakeLogCtx_t *) ctx;
+
+  if (logCtx == NULL)
+  {
+    return 0U;
+  }
+
+  logCtx->count++;
+  logCtx->eventCode = eventCode;
+  logCtx->eventParam = eventParam;
+  logCtx->eventShortParam = eventShortParam;
+  logCtx->eventLongParam = eventLongParam;
+
+  return 1U;
+}
+
 static void ReplicateSequencePlansFromBase(IntersectionConfig_t *config)
 {
   uint8_t sequenceIndex;
@@ -207,6 +241,17 @@ static IntersectionConfig_t MakeConfig(void)
   config.channels[0].controlType =
     INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
   config.channels[0].controlSource = 1U;
+  config.channels[0].flashMask = 0x04U;
+  config.channels[1].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  config.channels[1].controlSource = 1U;
+  config.channels[2].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+  config.channels[2].controlSource = 2U;
+  config.overlaps[0].type = (uint8_t) INTERSECTION_OVERLAP_TYPE_NORMAL;
+  config.overlaps[0].includedPhases.length = 1U;
+  config.overlaps[0].includedPhases.values[0] = 3U;
+  config.overlaps[0].trailYellowDs = 4U;
+  config.overlaps[0].trailRedDs = 6U;
   config.ioMap.outputs[0].deviceType = (uint8_t) INTERSECTION_IO_MAP_DEVICE_FIO;
   config.ioMap.outputs[0].devicePin = 1U;
   config.ioMap.outputs[0].function =
@@ -215,8 +260,26 @@ static IntersectionConfig_t MakeConfig(void)
   config.unit.startUpFlashSeconds = 5U;
   config.unit.startUpFlashMode =
     INTERSECTION_UNIT_STARTUP_FLASH_MODE_ALL_RED_CONTROLLER_FLASH;
+  config.unit.failureFlashPeriodDs =
+    INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS;
 
   return config;
+}
+
+static void DrainConfigTransferToIdle(void)
+{
+  uint8_t stepCount;
+
+  for (stepCount = 0U; stepCount < 32U; ++stepCount)
+  {
+    CpMpLinkServiceStep(&s_service);
+    if (s_service.txState == CPMP_TX_STATE_IDLE)
+    {
+      return;
+    }
+  }
+
+  TEST_FAIL_MESSAGE("config transfer did not reach idle");
 }
 
 void setUp(void)
@@ -225,8 +288,10 @@ void setUp(void)
 
   memset(&s_service, 0, sizeof(s_service));
   memset(&s_configurationService, 0, sizeof(s_configurationService));
+  RelayControlServiceInit(&s_relayControlService);
   memset(&s_controlBusCtx, 0, sizeof(s_controlBusCtx));
   memset(&s_mmuCtx, 0, sizeof(s_mmuCtx));
+  memset(&s_logCtx, 0, sizeof(s_logCtx));
 
   s_configurationService.activeConfig = config;
   s_configurationService.activeGeneration = 7U;
@@ -243,10 +308,15 @@ void setUp(void)
   s_controlBusPort.SendFrame = FakeControlBusSendFrame;
   s_controlBusPort.RegisterRxCallback = FakeControlBusRegisterRx;
 
+  s_logPort.ctx = &s_logCtx;
+  s_logPort.Append = FakeLogAppend;
+
   CpMpLinkServiceInit(&s_service,
                       &s_controlBusPort,
+                      &s_logPort,
                       &s_configurationService,
-                      &s_controller);
+                      &s_controller,
+                      &s_relayControlService);
 }
 
 void tearDown(void)
@@ -255,12 +325,18 @@ void tearDown(void)
 
 void test_link_service_sends_heartbeat_and_config_transfer_frames(void)
 {
+  RelayControlServiceSetLocalState(&s_relayControlService,
+                                   1U,
+                                   0U,
+                                   1U,
+                                   MMU_CONTROL_ACTION_NORMAL);
   TEST_ASSERT_EQUAL_UINT8(0U, s_controlBusCtx.txCount);
 
   CpMpLinkServiceStep(&s_service);
   TEST_ASSERT_EQUAL_UINT8(2U, s_controlBusCtx.txCount);
   TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_HEARTBEAT,
                            s_controlBusCtx.txFrames[0].standardId);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_controlBusCtx.txFrames[0].data[12]);
   TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_CFG_BEGIN,
                            s_controlBusCtx.txFrames[1].standardId);
 
@@ -274,11 +350,28 @@ void test_link_service_sends_heartbeat_and_config_transfer_frames(void)
                           s_controlBusCtx.txFrames[3].data[0]);
 }
 
+void test_link_service_builds_explicit_channel_monitoring_profile(void)
+{
+  TEST_ASSERT_EQUAL_UINT32((uint32_t) (1UL << 2U),
+                           s_service.configImage.channelConflictMask[0]);
+  TEST_ASSERT_EQUAL_UINT32((uint32_t) (1UL << 2U),
+                           s_service.configImage.channelConflictMask[1]);
+  TEST_ASSERT_EQUAL_UINT32((uint32_t) ((1UL << 0U) | (1UL << 1U)),
+                           s_service.configImage.channelConflictMask[2]);
+  TEST_ASSERT_EQUAL_UINT8(30U, s_service.configImage.channelMinYellowDs[0]);
+  TEST_ASSERT_EQUAL_UINT8(4U, s_service.configImage.channelMinYellowDs[1]);
+  TEST_ASSERT_EQUAL_UINT8(20U, s_service.configImage.channelRedClearDs[0]);
+  TEST_ASSERT_EQUAL_UINT8(6U, s_service.configImage.channelRedClearDs[1]);
+  TEST_ASSERT_EQUAL_UINT8(0x04U, s_service.configImage.channelFlashMask[0]);
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS,
+                          s_service.configImage.failureFlashPeriodDs);
+}
+
 void test_link_service_applies_mp_safety_and_caches_fault_status(void)
 {
   ControlBusFrame_t frame;
   uint16_t activeSetId = ConfigurationServiceGetActiveSetId(&s_configurationService);
-  CpMpFaultStatusImageV1_t faultStatus;
+  CpMpFaultStatusImage_t faultStatus;
 
   memset(&frame, 0, sizeof(frame));
   frame.standardId = CPMP_FRAME_ID_MP_SAFETY;
@@ -307,7 +400,7 @@ void test_link_service_applies_mp_safety_and_caches_fault_status(void)
   TEST_ASSERT_EQUAL(MMU_CONTROL_ACTION_DARK, s_mmuCtx.safetyAction);
 
   frame.standardId = CPMP_FRAME_ID_MP_FAULTS;
-  frame.length = 44U;
+  frame.length = 48U;
   frame.data[0] = CPMP_PROTOCOL_VERSION;
   frame.data[1] = 0x78U;
   frame.data[2] = 0x56U;
@@ -317,25 +410,56 @@ void test_link_service_applies_mp_safety_and_caches_fault_status(void)
   frame.data[6] = 0xCDU;
   frame.data[7] = 0xABU;
   frame.data[8] = 0x90U;
-  frame.data[9] = 0x34U;
-  frame.data[10] = 0x12U;
-  frame.data[11] = 0x78U;
-  frame.data[12] = 0x56U;
-  frame.data[41] = CPMP_SAFETY_ACTION_DARK;
-  frame.data[42] = 0x2AU;
-  frame.data[43] = CPMP_CONFIG_STATE_APPLIED;
+  frame.data[9] = 0x01U;
+  frame.data[17] = 0x02U;
+  frame.data[45] = CPMP_SAFETY_ACTION_DARK;
+  frame.data[46] = 0x2AU;
+  frame.data[47] = CPMP_CONFIG_STATE_APPLIED;
   FakeControlBusInjectRx(&frame);
 
   TEST_ASSERT_TRUE(CpMpLinkServiceGetFaultStatus(&s_service, &faultStatus));
   TEST_ASSERT_EQUAL_HEX32(0x12345678UL, faultStatus.sequence);
   TEST_ASSERT_EQUAL_HEX32(0x90ABCDEFUL, faultStatus.globalFlags);
-  TEST_ASSERT_EQUAL_HEX16(0x1234U, faultStatus.channelFlags[0]);
-  TEST_ASSERT_EQUAL_HEX16(0x5678U, faultStatus.channelFlags[1]);
+  TEST_ASSERT_EQUAL_HEX16(CPMP_FAULT_CHANNEL_FLAG_CONFLICT,
+                          faultStatus.channelFlags[0]);
+  TEST_ASSERT_EQUAL_HEX16(CPMP_FAULT_CHANNEL_FLAG_RED_FAIL,
+                          faultStatus.channelFlags[1]);
   TEST_ASSERT_EQUAL_UINT8(CPMP_SAFETY_ACTION_DARK, faultStatus.safetyAction);
   TEST_ASSERT_EQUAL_UINT8(0x2AU, faultStatus.safetyReasonCode);
   TEST_ASSERT_EQUAL_UINT8(CPMP_CONFIG_STATE_APPLIED, faultStatus.configState);
   TEST_ASSERT_EQUAL_UINT8(0x2AU,
                           CpMpLinkServiceGetLastSafetyReasonCode(&s_service));
+}
+
+void test_link_service_acks_and_logs_mp_fault_events_once(void)
+{
+  ControlBusFrame_t frame;
+
+  memset(&frame, 0, sizeof(frame));
+  frame.standardId = CPMP_FRAME_ID_MP_EVENT;
+  frame.length = 17U;
+  frame.data[0] = CPMP_PROTOCOL_VERSION;
+  frame.data[1] = 3U;
+  frame.data[5] = 9U;
+  frame.data[9] = 0xAAU;
+  frame.data[10] = 0xBBU;
+  frame.data[13] = 0x34U;
+  frame.data[14] = 0x12U;
+  frame.data[15] = 42U;
+  frame.data[16] = 3U;
+
+  FakeControlBusInjectRx(&frame);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_logCtx.count);
+  TEST_ASSERT_EQUAL_UINT8(120U, s_logCtx.eventCode);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t) ((3U << 6U) | 42U), s_logCtx.eventParam);
+  TEST_ASSERT_EQUAL_UINT16(0x1234U, s_logCtx.eventShortParam);
+  TEST_ASSERT_EQUAL_UINT32(0x0000BBAAUL, s_logCtx.eventLongParam);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_EVENT_ACK,
+                           s_controlBusCtx.txFrames[0].standardId);
+
+  FakeControlBusInjectRx(&frame);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_logCtx.count);
+  TEST_ASSERT_EQUAL_UINT8(2U, s_controlBusCtx.txCount);
 }
 
 void test_link_service_keeps_flash_until_mp_reports_matching_config(void)
@@ -373,6 +497,11 @@ void test_link_service_reports_peer_and_authority_state(void)
   ControlBusFrame_t frame;
   uint16_t activeSetId = ConfigurationServiceGetActiveSetId(&s_configurationService);
 
+  RelayControlServiceSetLocalState(&s_relayControlService,
+                                   1U,
+                                   0U,
+                                   1U,
+                                   MMU_CONTROL_ACTION_NORMAL);
   TEST_ASSERT_FALSE(CpMpLinkServicePeerHealthy(&s_service));
   TEST_ASSERT_FALSE(CpMpLinkServiceAuthorityReady(&s_service));
   TEST_ASSERT_EQUAL_UINT8(CPMP_SAFETY_ACTION_FLASH,
@@ -384,15 +513,27 @@ void test_link_service_reports_peer_and_authority_state(void)
   frame.data[0] = CPMP_PROTOCOL_VERSION;
   frame.data[1] = CPMP_CONFIG_STATE_APPLIED;
   frame.data[2] = CPMP_SAFETY_ACTION_NORMAL;
+  frame.data[3] = 1U;
   frame.data[4] = (uint8_t) (activeSetId & 0xFFU);
   frame.data[5] = (uint8_t) ((activeSetId >> 8U) & 0xFFU);
   frame.data[6] = 7U;
   FakeControlBusInjectRx(&frame);
 
+  CpMpLinkServiceStep(&s_service);
+
   TEST_ASSERT_TRUE(CpMpLinkServicePeerHealthy(&s_service));
   TEST_ASSERT_TRUE(CpMpLinkServiceAuthorityReady(&s_service));
   TEST_ASSERT_EQUAL_UINT8(CPMP_SAFETY_ACTION_NORMAL,
                           CpMpLinkServiceGetEffectiveSafetyAction(&s_service));
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          RelayControlServiceGetPeerPermitValid(
+                            &s_relayControlService));
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          RelayControlServiceGetPeerPermitOutputPower(
+                            &s_relayControlService));
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          RelayControlServiceGetEffectivePermitOutputPower(
+                            &s_relayControlService));
 }
 
 void test_link_service_falls_back_to_flash_on_mp_timeout(void)
@@ -401,12 +542,18 @@ void test_link_service_falls_back_to_flash_on_mp_timeout(void)
   uint16_t activeSetId = ConfigurationServiceGetActiveSetId(&s_configurationService);
   uint8_t i;
 
+  RelayControlServiceSetLocalState(&s_relayControlService,
+                                   1U,
+                                   0U,
+                                   1U,
+                                   MMU_CONTROL_ACTION_NORMAL);
   memset(&frame, 0, sizeof(frame));
   frame.standardId = CPMP_FRAME_ID_MP_HEARTBEAT;
   frame.length = 10U;
   frame.data[0] = CPMP_PROTOCOL_VERSION;
   frame.data[1] = CPMP_CONFIG_STATE_APPLIED;
   frame.data[2] = CPMP_SAFETY_ACTION_NORMAL;
+  frame.data[3] = 1U;
   frame.data[4] = (uint8_t) (activeSetId & 0xFFU);
   frame.data[5] = (uint8_t) ((activeSetId >> 8U) & 0xFFU);
   frame.data[6] = 7U;
@@ -417,6 +564,9 @@ void test_link_service_falls_back_to_flash_on_mp_timeout(void)
 
   CpMpLinkServiceStep(&s_service);
   TEST_ASSERT_EQUAL(MMU_CONTROL_ACTION_NORMAL, s_mmuCtx.safetyAction);
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          RelayControlServiceGetEffectivePermitOutputPower(
+                            &s_relayControlService));
 
   for (i = 0U; i <= CPMP_PEER_TIMEOUT_TICKS; ++i)
   {
@@ -424,15 +574,94 @@ void test_link_service_falls_back_to_flash_on_mp_timeout(void)
   }
 
   TEST_ASSERT_EQUAL(MMU_CONTROL_ACTION_FLASH, s_mmuCtx.safetyAction);
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          RelayControlServiceGetLocalPermitOutputPower(
+                            &s_relayControlService));
+  TEST_ASSERT_EQUAL_UINT8(0U,
+                          RelayControlServiceGetPeerPermitValid(
+                            &s_relayControlService));
+  TEST_ASSERT_EQUAL_UINT8(0U,
+                          RelayControlServiceGetEffectivePermitOutputPower(
+                            &s_relayControlService));
+}
+
+void test_link_service_restarts_config_transfer_until_mp_matches_active_config(void)
+{
+  uint8_t txCountAfterFirstTransfer;
+
+  DrainConfigTransferToIdle();
+  txCountAfterFirstTransfer = s_controlBusCtx.txCount;
+
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT8((uint8_t) (txCountAfterFirstTransfer + 2U),
+                          s_controlBusCtx.txCount);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_HEARTBEAT,
+                           s_controlBusCtx.txFrames[txCountAfterFirstTransfer]
+                             .standardId);
+  TEST_ASSERT_EQUAL_UINT16(
+    CPMP_FRAME_ID_CP_CFG_BEGIN,
+    s_controlBusCtx.txFrames[txCountAfterFirstTransfer + 1U].standardId);
+}
+
+void test_link_service_restarts_config_transfer_after_mp_reports_invalid_config(void)
+{
+  ControlBusFrame_t frame;
+  uint16_t activeSetId = ConfigurationServiceGetActiveSetId(
+    &s_configurationService);
+
+  memset(&frame, 0, sizeof(frame));
+  frame.standardId = CPMP_FRAME_ID_MP_HEARTBEAT;
+  frame.length = 10U;
+  frame.data[0] = CPMP_PROTOCOL_VERSION;
+  frame.data[1] = CPMP_CONFIG_STATE_APPLIED;
+  frame.data[2] = CPMP_SAFETY_ACTION_NORMAL;
+  frame.data[4] = (uint8_t) (activeSetId & 0xFFU);
+  frame.data[5] = (uint8_t) ((activeSetId >> 8U) & 0xFFU);
+  frame.data[6] = 7U;
+  FakeControlBusInjectRx(&frame);
+
+  DrainConfigTransferToIdle();
+  s_controlBusCtx.txCount = 0U;
+  FakeControlBusInjectRx(&frame);
+
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_controlBusCtx.txCount);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_HEARTBEAT,
+                           s_controlBusCtx.txFrames[0].standardId);
+
+  memset(&frame, 0, sizeof(frame));
+  frame.standardId = CPMP_FRAME_ID_MP_HEARTBEAT;
+  frame.length = 10U;
+  frame.data[0] = CPMP_PROTOCOL_VERSION;
+  frame.data[1] = CPMP_CONFIG_STATE_INVALID;
+  frame.data[2] = CPMP_SAFETY_ACTION_FLASH;
+  frame.data[4] = (uint8_t) (activeSetId & 0xFFU);
+  frame.data[5] = (uint8_t) ((activeSetId >> 8U) & 0xFFU);
+  frame.data[6] = 7U;
+  FakeControlBusInjectRx(&frame);
+
+  s_controlBusCtx.txCount = 0U;
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT8(2U, s_controlBusCtx.txCount);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_HEARTBEAT,
+                           s_controlBusCtx.txFrames[0].standardId);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_CP_CFG_BEGIN,
+                           s_controlBusCtx.txFrames[1].standardId);
 }
 
 int main(void)
 {
   UNITY_BEGIN();
   RUN_TEST(test_link_service_sends_heartbeat_and_config_transfer_frames);
+  RUN_TEST(test_link_service_builds_explicit_channel_monitoring_profile);
   RUN_TEST(test_link_service_applies_mp_safety_and_caches_fault_status);
+  RUN_TEST(test_link_service_acks_and_logs_mp_fault_events_once);
   RUN_TEST(test_link_service_keeps_flash_until_mp_reports_matching_config);
   RUN_TEST(test_link_service_reports_peer_and_authority_state);
   RUN_TEST(test_link_service_falls_back_to_flash_on_mp_timeout);
+  RUN_TEST(
+    test_link_service_restarts_config_transfer_until_mp_matches_active_config);
+  RUN_TEST(
+    test_link_service_restarts_config_transfer_after_mp_reports_invalid_config);
   return UNITY_END();
 }

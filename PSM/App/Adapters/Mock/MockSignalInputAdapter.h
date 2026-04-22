@@ -15,7 +15,7 @@
 typedef struct
 {
   /* Pre-set these before calling service methods to simulate hardware state */
-  uint8_t aInputStates[MOCK_INPUT_COUNT]; /* indexed by SignalInputId_t */
+  uint8_t inputStates[MOCK_INPUT_COUNT]; /* indexed by SignalInputId_t */
 } MockSignalInputAdapterCtx_t;
 
 void               MockSignalInputAdapterInit(MockSignalInputAdapterCtx_t *ctx);

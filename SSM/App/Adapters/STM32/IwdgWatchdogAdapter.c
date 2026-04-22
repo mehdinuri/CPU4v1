@@ -8,26 +8,26 @@
 #include "Adapters/STM32/IwdgWatchdogAdapter.h"
 #include "iwdg.h"
 
-static void AdapterRefresh(void *pCtx)
+static void AdapterRefresh(void *ctx)
 {
-  (void) pCtx;
+  (void) ctx;
   IWDGRefresh();
 }
 
-void IwdgWatchdogAdapter_Init(tSIwdgWatchdogAdapterCtx *pCtx)
+void IwdgWatchdogAdapter_Init(IwdgWatchdogAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 
   /* MX_IWDG_Init() is called from main() before the scheduler starts;
    * this adapter does not initialise the peripheral itself.
    */
 }
 
-IWatchdogPort_t IwdgWatchdogAdapter_CreatePort(tSIwdgWatchdogAdapterCtx *pCtx)
+IWatchdogPort_t IwdgWatchdogAdapter_CreatePort(IwdgWatchdogAdapterCtx_t *ctx)
 {
   IWatchdogPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Refresh = AdapterRefresh;
 
   return port;

@@ -14,22 +14,22 @@
 static uint8_t AdapterRead(void *ctx, uint32_t address, void *dst, uint32_t size)
 {
   MockEepromAdapterCtx_t *c = (MockEepromAdapterCtx_t *) ctx;
-  c->lReadCount++;
-  if (c->bReadResult == 0U)                        { return 0U; }
+  c->readCount++;
+  if (c->readResult == 0U)                        { return 0U; }
   if (dst == NULL)                                 { return 0U; }
   if ((address + size) > (uint32_t) MOCK_EEPROM_SIZE) { return 0U; }
-  memcpy(dst, &c->aBuf[address], size);
+  memcpy(dst, &c->buf[address], size);
   return 1U;
 }
 
 static uint8_t AdapterWrite(void *ctx, uint32_t address, const void *src, uint32_t size)
 {
   MockEepromAdapterCtx_t *c = (MockEepromAdapterCtx_t *) ctx;
-  c->lWriteCount++;
-  if (c->bWriteResult == 0U)                       { return 0U; }
+  c->writeCount++;
+  if (c->writeResult == 0U)                       { return 0U; }
   if (src == NULL)                                 { return 0U; }
   if ((address + size) > (uint32_t) MOCK_EEPROM_SIZE) { return 0U; }
-  memcpy(&c->aBuf[address], src, size);
+  memcpy(&c->buf[address], src, size);
   return 1U;
 }
 
@@ -39,8 +39,8 @@ static uint8_t AdapterWrite(void *ctx, uint32_t address, const void *src, uint32
 void MockEepromAdapterInit(MockEepromAdapterCtx_t *ctx)
 {
   memset(ctx, 0, sizeof(*ctx));
-  ctx->bReadResult  = 1U;
-  ctx->bWriteResult = 1U;
+  ctx->readResult  = 1U;
+  ctx->writeResult = 1U;
 }
 
 IEepromPort_t MockEepromAdapterCreatePort(MockEepromAdapterCtx_t *ctx)

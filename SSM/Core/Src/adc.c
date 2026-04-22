@@ -38,7 +38,7 @@
  * since the reader snapshots into a local before use and doesn't care which
  * specific half it sees — only that it's the latest one the ISR produced.
  */
-static volatile uint8_t s_LatestReadyHalf = 0xFFU;
+static volatile uint8_t latestReadyHalf = 0xFFU;
 
 #define MP_MAX_CURRENT_MS 1024.0f
 
@@ -66,12 +66,12 @@ static volatile uint8_t s_LatestReadyHalf = 0xFFU;
 #define SIGNAL_GROUP_CURRENT_DEADZONE_OFFSET_MA 5.5f
 #define SIGNAL_GROUP_NO_LOAD_THRESHOLD_MA 4.0f  /* Safely below 1W (~4mA) but above ambient noise */
 
-uint16_t saADC1ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC1_MAX_CHANNELS];
-uint16_t saADC2ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC2_MAX_CHANNELS];
+uint16_t adc1ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC1_MAX_CHANNELS];
+uint16_t adc2ConvVals[SAMPLES_PER_CHANNEL_BUF_LEN * ADC2_MAX_CHANNELS];
 
-float faSGP[SIGNAL_GROUPS_PER_SSM_MAX];
-float faSGH[SIGNAL_GROUPS_PER_SSM_MAX];
-float faSGCurrentRMS[SIGNAL_GROUPS_PER_SSM_MAX];
+float sgP[SIGNAL_GROUPS_PER_SSM_MAX];
+float sgH[SIGNAL_GROUPS_PER_SSM_MAX];
+float sgCurrentRms[SIGNAL_GROUPS_PER_SSM_MAX];
 /* USER CODE END 0 */
 
 ADC_HandleTypeDef hadc1;
@@ -87,7 +87,7 @@ void MX_ADC1_Init(void)
   /* USER CODE END ADC1_Init 0 */
 
   ADC_MultiModeTypeDef multimode = { 0 };
-  ADC_ChannelConfTypeDef sConfig = { 0 };
+  ADC_ChannelConfTypeDef config = { 0 };
 
   /* USER CODE BEGIN ADC1_Init 1 */
 
@@ -131,40 +131,40 @@ void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_3;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
-  sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.OffsetNumber = ADC_OFFSET_NONE;
-  sConfig.Offset = 0;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_3;
+  config.Rank = ADC_REGULAR_RANK_1;
+  config.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
+  config.SingleDiff = ADC_SINGLE_ENDED;
+  config.OffsetNumber = ADC_OFFSET_NONE;
+  config.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_4;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_4;
+  config.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_12;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_12;
+  config.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_15;
-  sConfig.Rank = ADC_REGULAR_RANK_4;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_15;
+  config.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc1, &config) != HAL_OK)
   {
     Error_Handler();
   }
@@ -185,7 +185,7 @@ void MX_ADC2_Init(void)
 
   /* USER CODE END ADC2_Init 0 */
 
-  ADC_ChannelConfTypeDef sConfig = { 0 };
+  ADC_ChannelConfTypeDef config = { 0 };
 
   /* USER CODE BEGIN ADC2_Init 1 */
 
@@ -221,40 +221,40 @@ void MX_ADC2_Init(void)
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_5;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
-  sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.OffsetNumber = ADC_OFFSET_NONE;
-  sConfig.Offset = 0;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_5;
+  config.Rank = ADC_REGULAR_RANK_1;
+  config.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
+  config.SingleDiff = ADC_SINGLE_ENDED;
+  config.OffsetNumber = ADC_OFFSET_NONE;
+  config.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc2, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_11;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_11;
+  config.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc2, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_13;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_13;
+  config.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc2, &config) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Regular Channel
    */
-  sConfig.Channel = ADC_CHANNEL_17;
-  sConfig.Rank = ADC_REGULAR_RANK_4;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  config.Channel = ADC_CHANNEL_17;
+  config.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc2, &config) != HAL_OK)
   {
     Error_Handler();
   }
@@ -467,7 +467,7 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef *adcHandle)
 static void ADC1StartDMA(void)
 {
   if (HAL_ADC_Start_DMA(&hadc1,
-                        (uint32_t *) saADC1ConvVals,
+                        (uint32_t *) adc1ConvVals,
                         SAMPLES_PER_CHANNEL_BUF_LEN * ADC1_MAX_CHANNELS)
       != HAL_OK)
   {
@@ -478,7 +478,7 @@ static void ADC1StartDMA(void)
 static void ADC2StartDMA(void)
 {
   if (HAL_ADC_Start_DMA(&hadc2,
-                        (uint32_t *) saADC2ConvVals,
+                        (uint32_t *) adc2ConvVals,
                         SAMPLES_PER_CHANNEL_BUF_LEN * ADC2_MAX_CHANNELS)
       != HAL_OK)
   {
@@ -486,49 +486,49 @@ static void ADC2StartDMA(void)
   }
 }
 
-static float SGCurrentRMSCalculate(uint16_t *saConvVals,
-                                   uint8_t bOffset,
-                                   uint8_t bStride,
-                                   uint16_t sLength)
+static float SGCurrentRMSCalculate(uint16_t *convVals,
+                                   uint8_t offset,
+                                   uint8_t stride,
+                                   uint16_t length)
 {
-  uint64_t lSumSquares = 0;
-  uint16_t sIdx = 0;
+  uint64_t sumSquares = 0;
+  uint16_t idx = 0;
 
   /* Accumulate Squares */
-  for (sIdx = 0; sIdx < sLength; sIdx++)
+  for (idx = 0; idx < length; idx++)
   {
-    float fVal = (float) saConvVals[bOffset + (sIdx * bStride)];
+    float val = (float) convVals[offset + (idx * stride)];
 
-    lSumSquares += (uint64_t) (fVal * fVal);
+    sumSquares += (uint64_t) (val * val);
   }
 
-  return sqrtf((float) lSumSquares / sLength);
+  return sqrtf((float) sumSquares / length);
 }
 
-static float SGOptimalCurrentGet(float fRMSRawP,
-                                 float fRMSRawH,
-                                 float fScalingFactorP,
-                                 float fScalingFactorH)
+static float SGOptimalCurrentGet(float rmsRawP,
+                                 float rmsRawH,
+                                 float scalingFactorP,
+                                 float scalingFactorH)
 {
-  if (fRMSRawP > ((ADC_MAX / 2.0f) * 0.50f))
+  if (rmsRawP > ((ADC_MAX / 2.0f) * 0.50f))
   {
-    return (fRMSRawH * (V_REF / ADC_MAX)) * fScalingFactorH; /* Use High Channel */
+    return (rmsRawH * (V_REF / ADC_MAX)) * scalingFactorH; /* Use High Channel */
   }
   else
   {
-    return (fRMSRawP * (V_REF / ADC_MAX)) * fScalingFactorP; /* Use Precision Channel */
+    return (rmsRawP * (V_REF / ADC_MAX)) * scalingFactorP; /* Use Precision Channel */
   }
 }
 
-static void SGCurrentProcess(uint8_t bBufferHalf)
+static void SGCurrentProcess(uint8_t bufferHalf)
 {
-  uint16_t *psADC1ConvValPtr = (bBufferHalf
-                                == 0) ? &saADC1ConvVals[0]
-                               : &saADC1ConvVals[SAMPLES_PER_MAINS_CYCLE
+  uint16_t *adc1ConvValPtr = (bufferHalf
+                                == 0) ? &adc1ConvVals[0]
+                               : &adc1ConvVals[SAMPLES_PER_MAINS_CYCLE
                                                  * ADC1_MAX_CHANNELS];
-  uint16_t *psADC2ConvValPtr = (bBufferHalf
-                                == 0) ? &saADC2ConvVals[0]
-                               : &saADC2ConvVals[SAMPLES_PER_MAINS_CYCLE
+  uint16_t *adc2ConvValPtr = (bufferHalf
+                                == 0) ? &adc2ConvVals[0]
+                               : &adc2ConvVals[SAMPLES_PER_MAINS_CYCLE
                                                  * ADC2_MAX_CHANNELS];
 
   /* Extract RMS for all 8 Channel */
@@ -538,19 +538,19 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
   /* Rank2: SG4_P */
   /* Rank1: SG1_H */
   /* Rank2: SG2_H */
-  faSGP[SIGNAL_GROUP3_INDEX] = SGCurrentRMSCalculate(psADC1ConvValPtr,
+  sgP[SIGNAL_GROUP3_INDEX] = SGCurrentRMSCalculate(adc1ConvValPtr,
                                                      0,
                                                      ADC1_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGP[SIGNAL_GROUP4_INDEX] = SGCurrentRMSCalculate(psADC1ConvValPtr,
+  sgP[SIGNAL_GROUP4_INDEX] = SGCurrentRMSCalculate(adc1ConvValPtr,
                                                      1,
                                                      ADC1_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGH[SIGNAL_GROUP1_INDEX] = SGCurrentRMSCalculate(psADC1ConvValPtr,
+  sgH[SIGNAL_GROUP1_INDEX] = SGCurrentRMSCalculate(adc1ConvValPtr,
                                                      2,
                                                      ADC1_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGH[SIGNAL_GROUP2_INDEX] = SGCurrentRMSCalculate(psADC1ConvValPtr,
+  sgH[SIGNAL_GROUP2_INDEX] = SGCurrentRMSCalculate(adc1ConvValPtr,
                                                      3,
                                                      ADC1_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
@@ -560,52 +560,52 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
   /* Rank2: SG4_H */
   /* Rank3: SG2_P */
   /* Rank4: SG1_P */
-  faSGH[SIGNAL_GROUP3_INDEX] = SGCurrentRMSCalculate(psADC2ConvValPtr,
+  sgH[SIGNAL_GROUP3_INDEX] = SGCurrentRMSCalculate(adc2ConvValPtr,
                                                      0,
                                                      ADC2_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGH[SIGNAL_GROUP4_INDEX] = SGCurrentRMSCalculate(psADC2ConvValPtr,
+  sgH[SIGNAL_GROUP4_INDEX] = SGCurrentRMSCalculate(adc2ConvValPtr,
                                                      1,
                                                      ADC2_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGP[SIGNAL_GROUP2_INDEX] = SGCurrentRMSCalculate(psADC2ConvValPtr,
+  sgP[SIGNAL_GROUP2_INDEX] = SGCurrentRMSCalculate(adc2ConvValPtr,
                                                      2,
                                                      ADC2_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
-  faSGP[SIGNAL_GROUP1_INDEX] = SGCurrentRMSCalculate(psADC2ConvValPtr,
+  sgP[SIGNAL_GROUP1_INDEX] = SGCurrentRMSCalculate(adc2ConvValPtr,
                                                      3,
                                                      ADC2_MAX_CHANNELS,
                                                      SAMPLES_PER_MAINS_CYCLE);
 
-  uint8_t bSGIdx = 0;
-  uint8_t bMeasurementStatus = 0U;
+  uint8_t sgIdx = 0;
+  uint8_t measurementStatus = 0U;
 
-  for (bSGIdx = 0; bSGIdx < SIGNAL_GROUPS_PER_SSM_MAX; bSGIdx++)
+  for (sgIdx = 0; sgIdx < SIGNAL_GROUPS_PER_SSM_MAX; sgIdx++)
   {
     /* Auto-Range Selection */
-    faSGCurrentRMS[bSGIdx] = SGOptimalCurrentGet(faSGP[bSGIdx],
-                                                 faSGH[bSGIdx],
+    sgCurrentRms[sgIdx] = SGOptimalCurrentGet(sgP[sgIdx],
+                                                 sgH[sgIdx],
                                                  SCALING_FACTOR_P,
                                                  SCALING_FACTOR_H) * 1000.0f;
 
     /* Apply hardware dead-zone compensation */
     #ifndef DEBUG
-    if (faSGCurrentRMS[bSGIdx] < SIGNAL_GROUP_NO_LOAD_THRESHOLD_MA)
+    if (sgCurrentRms[sgIdx] < SIGNAL_GROUP_NO_LOAD_THRESHOLD_MA)
     {
-      faSGCurrentRMS[bSGIdx] = 0.0f;
+      sgCurrentRms[sgIdx] = 0.0f;
     }
 
     /*else
     *  {
-    *  faSGCurrentRMS[bSGIdx] += SIGNAL_GROUP_CURRENT_DEADZONE_OFFSET_MA;
+    *  sgCurrentRms[sgIdx] += SIGNAL_GROUP_CURRENT_DEADZONE_OFFSET_MA;
     *  }*/
 
     #endif /* ifndef DEBUG */
 
-    if (faSGCurrentRMS[bSGIdx] >= MP_MAX_CURRENT_MS)
+    if (sgCurrentRms[sgIdx] >= MP_MAX_CURRENT_MS)
     {
-      faSGCurrentRMS[bSGIdx] = MP_MAX_CURRENT_MS - 1.0f;
-      bMeasurementStatus = (uint8_t) (bMeasurementStatus
+      sgCurrentRms[sgIdx] = MP_MAX_CURRENT_MS - 1.0f;
+      measurementStatus = (uint8_t) (measurementStatus
                                       | CURRENT_MEASUREMENT_STATUS_SATURATED);
     }
   }
@@ -615,7 +615,7 @@ static void SGCurrentProcess(uint8_t bBufferHalf)
    * __DMB + atomic swap also works from ISR, so the primitive is future-
    * proof if this ever needs to move back.
    */
-  AdcCurrentAdapter_Publish(&g_AdcCurrentCtx, faSGCurrentRMS, bMeasurementStatus);
+  AdcCurrentAdapter_Publish(&g_adcCurrentCtx, sgCurrentRms, measurementStatus);
 } /* SGCurrentProcess */
 
 /* ISR now does the minimum: remember which half is fresh and wake the
@@ -627,7 +627,7 @@ void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
 {
   if (hadc->Instance == ADC2)
   {
-    s_LatestReadyHalf = 0U;
+    latestReadyHalf = 0U;
     MeasurementThreadFlagSet();
   }
 }
@@ -636,21 +636,21 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   if (hadc->Instance == ADC2)
   {
-    s_LatestReadyHalf = 1U;
+    latestReadyHalf = 1U;
     MeasurementThreadFlagSet();
   }
 }
 
 void ADCSGCurrentProcessLatestHalf(void)
 {
-  uint8_t bHalf = s_LatestReadyHalf;
+  uint8_t half = latestReadyHalf;
 
-  if (bHalf == 0xFFU)
+  if (half == 0xFFU)
   {
     return;
   }
 
-  SGCurrentProcess(bHalf);
+  SGCurrentProcess(half);
 }
 
 void ADCSGCurrentMeasurementStart(void)

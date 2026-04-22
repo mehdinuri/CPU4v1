@@ -3,8 +3,7 @@
 
 add_library(mp_adapters_stm32 STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ControlBusAdapter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/EventLogAdapter.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/FieldBusAdapter.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/FieldBusRxAdapter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/PersistenceAdapter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/RTCAdapter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/SafetyRelayAdapter.c

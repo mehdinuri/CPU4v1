@@ -7,36 +7,36 @@
 #include <string.h>
 #include "Adapters/Mock/MockCanBusAdapter.h"
 
-static uint8_t MockSendStd(void *pCtx, tECanBusId eBus,
-                           const tSCanFrame *pFrame)
+static uint8_t MockSendStd(void *ctx, CanBusId_e eBus,
+                           const CanFrame_t *frame)
 {
-  tSMockCanBusAdapterCtx *pC = (tSMockCanBusAdapterCtx *) pCtx;
+  MockCanBusAdapterCtx_t *pC = (MockCanBusAdapterCtx_t *) ctx;
 
-  if (pC->bForceSendFail != 0U)
+  if (pC->forceSendFail != 0U)
   {
     return 0U;
   }
 
-  if (pC->bSentCount < MOCK_CAN_MAX_RECORDED)
+  if (pC->sentCount < MOCK_CAN_MAX_RECORDED)
   {
-    pC->aSent[pC->bSentCount].eBus = eBus;
-    pC->aSent[pC->bSentCount].SFrame = *pFrame;
-    pC->bSentCount++;
+    pC->sent[pC->sentCount].eBus = eBus;
+    pC->sent[pC->sentCount].frame = *frame;
+    pC->sentCount++;
   }
 
   return 1U;
 }
 
-void MockCanBusAdapter_Init(tSMockCanBusAdapterCtx *pCtx)
+void MockCanBusAdapter_Init(MockCanBusAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
-ICanBusPort_t MockCanBusAdapter_CreatePort(tSMockCanBusAdapterCtx *pCtx)
+ICanBusPort_t MockCanBusAdapter_CreatePort(MockCanBusAdapterCtx_t *ctx)
 {
   ICanBusPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.SendStd = MockSendStd;
 
   return port;

@@ -40,6 +40,9 @@ static uint8_t AdapterReadSnapshot(void *ctx, RtcSnapshot_t *snapshot)
 {
   RTC_TimeTypeDef halTime = { 0 };
   RTC_DateTypeDef halDate = { 0 };
+  uint32_t secondFraction;
+  uint32_t subSeconds;
+  uint32_t elapsedTicks;
 
   (void) ctx;
 
@@ -66,6 +69,26 @@ static uint8_t AdapterReadSnapshot(void *ctx, RtcSnapshot_t *snapshot)
   snapshot->Hours = halTime.Hours;
   snapshot->Minutes = halTime.Minutes;
   snapshot->Seconds = halTime.Seconds;
+  snapshot->Milliseconds = 0U;
+
+  secondFraction = halTime.SecondFraction;
+  subSeconds = halTime.SubSeconds;
+  if ((secondFraction + 1U) != 0U)
+  {
+    if (subSeconds > secondFraction)
+    {
+      subSeconds = secondFraction;
+    }
+
+    elapsedTicks = secondFraction - subSeconds;
+    snapshot->Milliseconds =
+      (uint16_t) (((elapsedTicks * 1000UL) + ((secondFraction + 1U) / 2U))
+                  / (secondFraction + 1U));
+    if (snapshot->Milliseconds > 999U)
+    {
+      snapshot->Milliseconds = 999U;
+    }
+  }
 
   return 1U;
 }
@@ -90,6 +113,7 @@ static uint8_t AdapterWriteSnapshot(void *ctx, const RtcSnapshot_t *snapshot)
   halTime.Hours = snapshot->Hours;
   halTime.Minutes = snapshot->Minutes;
   halTime.Seconds = snapshot->Seconds;
+  halTime.SubSeconds = 0U;
   halTime.TimeFormat = RTC_HOURFORMAT_24;
   halTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
   halTime.StoreOperation = RTC_STOREOPERATION_RESET;

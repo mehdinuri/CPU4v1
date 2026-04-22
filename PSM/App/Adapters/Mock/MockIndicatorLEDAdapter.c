@@ -16,9 +16,9 @@ static void AdapterSetState(void *ctx, IndicatorLEDId_t id, uint8_t on)
   MockIndicatorLEDAdapterCtx_t *c = (MockIndicatorLEDAdapterCtx_t *) ctx;
   if ((uint8_t) id < MOCK_LED_COUNT)
   {
-    c->aLEDStates[(uint8_t) id] = (on != 0U) ? 1U : 0U;
+    c->ledStates[(uint8_t) id] = (on != 0U) ? 1U : 0U;
   }
-  c->lSetCallCount++;
+  c->setCallCount++;
 }
 
 static void AdapterToggle(void *ctx, IndicatorLEDId_t id)
@@ -26,9 +26,9 @@ static void AdapterToggle(void *ctx, IndicatorLEDId_t id)
   MockIndicatorLEDAdapterCtx_t *c = (MockIndicatorLEDAdapterCtx_t *) ctx;
   if ((uint8_t) id < MOCK_LED_COUNT)
   {
-    c->aLEDStates[(uint8_t) id] ^= 1U;
+    c->ledStates[(uint8_t) id] ^= 1U;
   }
-  c->lToggleCallCount++;
+  c->toggleCallCount++;
 }
 
 /* ---------------------------------------------------------------------------

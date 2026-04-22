@@ -9,7 +9,7 @@
 #include "Domain/SignalSampleAccumulator.h"
 #include "Adapters/Mock/MockSignalInputAdapter.h"
 
-static tSSignalSampleAccumulator acc;
+static SignalSampleAccumulator_t acc;
 
 void setUp(void)
 {
@@ -28,93 +28,93 @@ void test_reset_zeros_all_counters(void)
 
   for (uint8_t i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    TEST_ASSERT_EQUAL_UINT8(0U, acc.aOnCntr[i]);
-    TEST_ASSERT_EQUAL_UINT8(0U, acc.aOffCntr[i]);
+    TEST_ASSERT_EQUAL_UINT8(0U, acc.onCntr[i]);
+    TEST_ASSERT_EQUAL_UINT8(0U, acc.offCntr[i]);
   }
 }
 
 void test_observe_accumulates_on_counts(void)
 {
-  tSSignalInputSnapshot snap;
+  SignalInputSnapshot_t snap;
 
   memset(&snap, 0, sizeof(snap));
-  snap.aChannels[3] = 1U;
+  snap.channels[3] = 1U;
 
   SignalSampleAccumulator_Observe(&acc, &snap);
   SignalSampleAccumulator_Observe(&acc, &snap);
   SignalSampleAccumulator_Observe(&acc, &snap);
 
-  TEST_ASSERT_EQUAL_UINT8(3U, acc.aOnCntr[3]);
-  TEST_ASSERT_EQUAL_UINT8(0U, acc.aOffCntr[3]);
-  TEST_ASSERT_EQUAL_UINT8(0U, acc.aOnCntr[4]);
-  TEST_ASSERT_EQUAL_UINT8(3U, acc.aOffCntr[4]);
+  TEST_ASSERT_EQUAL_UINT8(3U, acc.onCntr[3]);
+  TEST_ASSERT_EQUAL_UINT8(0U, acc.offCntr[3]);
+  TEST_ASSERT_EQUAL_UINT8(0U, acc.onCntr[4]);
+  TEST_ASSERT_EQUAL_UINT8(3U, acc.offCntr[4]);
 }
 
 void test_counters_saturate_at_ff(void)
 {
-  tSSignalInputSnapshot snap;
+  SignalInputSnapshot_t snap;
 
   memset(&snap, 0, sizeof(snap));
-  snap.aChannels[0] = 1U;
+  snap.channels[0] = 1U;
 
   for (uint16_t i = 0U; i < 300U; i++)
   {
     SignalSampleAccumulator_Observe(&acc, &snap);
   }
 
-  TEST_ASSERT_EQUAL_UINT8(0xFFU, acc.aOnCntr[0]);
-  TEST_ASSERT_EQUAL_UINT8(0xFFU, acc.aOffCntr[1]);
+  TEST_ASSERT_EQUAL_UINT8(0xFFU, acc.onCntr[0]);
+  TEST_ASSERT_EQUAL_UINT8(0xFFU, acc.offCntr[1]);
 }
 
 void test_summary_uses_strict_majority(void)
 {
-  tSSignalOutputImage image;
+  SignalOutputImage_t image;
 
-  acc.aOnCntr[0] = 5U; acc.aOffCntr[0] = 3U;      /* on > off → 1 */
-  acc.aOnCntr[1] = 3U; acc.aOffCntr[1] = 5U;      /* off > on → 0 */
-  acc.aOnCntr[2] = 4U; acc.aOffCntr[2] = 4U;      /* tie → 0 */
+  acc.onCntr[0] = 5U; acc.offCntr[0] = 3U;      /* on > off → 1 */
+  acc.onCntr[1] = 3U; acc.offCntr[1] = 5U;      /* off > on → 0 */
+  acc.onCntr[2] = 4U; acc.offCntr[2] = 4U;      /* tie → 0 */
 
   SignalSampleAccumulator_Summary(&acc, &image);
 
-  TEST_ASSERT_EQUAL_UINT8(1U, image.aChannels[0]);
-  TEST_ASSERT_EQUAL_UINT8(0U, image.aChannels[1]);
-  TEST_ASSERT_EQUAL_UINT8(0U, image.aChannels[2]);
+  TEST_ASSERT_EQUAL_UINT8(1U, image.channels[0]);
+  TEST_ASSERT_EQUAL_UINT8(0U, image.channels[1]);
+  TEST_ASSERT_EQUAL_UINT8(0U, image.channels[2]);
 }
 
 void test_observe_via_mock_input_port(void)
 {
-  tSMockSignalInputAdapterCtx mockCtx;
+  MockSignalInputAdapterCtx_t mockCtx;
   ISignalInputPort_t port;
-  tSSignalInputSnapshot active;
-  tSSignalInputSnapshot quiet;
-  tSSignalOutputImage image;
+  SignalInputSnapshot_t active;
+  SignalInputSnapshot_t quiet;
+  SignalOutputImage_t image;
 
   MockSignalInputAdapter_Init(&mockCtx);
   port = MockSignalInputAdapter_CreatePort(&mockCtx);
 
   memset(&active, 0, sizeof(active));
-  active.aChannels[0] = 1U;
+  active.channels[0] = 1U;
   memset(&quiet, 0, sizeof(quiet));
 
   /* Four "active" samples + one "quiet" → on=4, off=1 → majority → active */
   for (uint8_t i = 0U; i < 4U; i++)
   {
     MockSignalInputAdapter_SetSnapshot(&mockCtx, &active);
-    tSSignalInputSnapshot captured;
+    SignalInputSnapshot_t captured;
 
     SignalInput_Sample(&port, &captured);
     SignalSampleAccumulator_Observe(&acc, &captured);
   }
 
   MockSignalInputAdapter_SetSnapshot(&mockCtx, &quiet);
-  tSSignalInputSnapshot captured;
+  SignalInputSnapshot_t captured;
 
   SignalInput_Sample(&port, &captured);
   SignalSampleAccumulator_Observe(&acc, &captured);
 
   SignalSampleAccumulator_Summary(&acc, &image);
-  TEST_ASSERT_EQUAL_UINT32(5U, mockCtx.lSampleCount);
-  TEST_ASSERT_EQUAL_UINT8(1U, image.aChannels[0]);
+  TEST_ASSERT_EQUAL_UINT32(5U, mockCtx.sampleCount);
+  TEST_ASSERT_EQUAL_UINT8(1U, image.channels[0]);
 }
 
 int main(void)

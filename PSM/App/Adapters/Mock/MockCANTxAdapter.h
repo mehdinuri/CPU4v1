@@ -14,11 +14,11 @@
 
 typedef struct
 {
-  uint32_t lLastID;                     /* CAN ID of last call        */
-  uint8_t  aLastData[MOCK_CAN_BUF_SIZE]; /* payload of last call       */
-  uint8_t  bLastLen;                    /* length of last call        */
-  uint32_t lSendCount;                  /* total Send calls           */
-  uint8_t  bMockOverflow;               /* simulated overflow state   */
+  uint32_t lastID;                     /* CAN ID of last call        */
+  uint8_t  lastData[MOCK_CAN_BUF_SIZE]; /* payload of last call       */
+  uint8_t  lastLen;                    /* length of last call        */
+  uint32_t sendCount;                  /* total Send calls           */
+  uint8_t  mockOverflow;               /* simulated overflow state   */
 } MockCANTxAdapterCtx_t;
 
 void          MockCANTxAdapterInit(MockCANTxAdapterCtx_t *ctx);

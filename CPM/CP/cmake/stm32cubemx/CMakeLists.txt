@@ -52,7 +52,6 @@ set(MX_Include_Dirs
     ${CMAKE_SOURCE_DIR}/App/Adapters/STM32
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Bootstrap
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Tasks
-    ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Control/Legacy
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Persistence
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Time
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Comms

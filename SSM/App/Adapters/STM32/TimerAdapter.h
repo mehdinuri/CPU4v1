@@ -1,7 +1,7 @@
 /**
  ******************************************************************************
  * @file    Adapters/STM32/TimerAdapter.h
- * @brief   STM32 adapter for ITimerPort. Each tETimerId maps to one of the
+ * @brief   STM32 adapter for ITimerPort. Each TimerId_e maps to one of the
  *          existing Tim*Start* wrappers from Core/Src/tim.c.
  ******************************************************************************
  */
@@ -14,11 +14,11 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSTimerAdapterCtx;
+  uint8_t reserved;
+} TimerAdapterCtx_t;
 
-void TimerAdapter_Init(tSTimerAdapterCtx *pCtx);
-ITimerPort_t TimerAdapter_CreatePort(tSTimerAdapterCtx *pCtx);
+void TimerAdapter_Init(TimerAdapterCtx_t *ctx);
+ITimerPort_t TimerAdapter_CreatePort(TimerAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_TIMER_ADAPTER_H */
 

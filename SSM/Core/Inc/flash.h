@@ -165,8 +165,8 @@
 /* Public types -------------------------------------------------------------*/
 
 /* Public function prototypes -----------------------------------------------*/
-extern uint8_t FlashWrite(uint32_t lAddress, const void * pvData, uint32_t lDataSize);
-extern uint8_t FlashRead(uint32_t lAddress, void * pvData, uint32_t lDataSize);
+extern uint8_t FlashWrite(uint32_t address, const void * data, uint32_t dataSize);
+extern uint8_t FlashRead(uint32_t address, void * data, uint32_t dataSize);
 
 #endif /* __FLASH_H__ */
 

@@ -12,31 +12,31 @@
 /* ---------------------------------------------------------------------------
  * Private adapter implementation
  * ---------------------------------------------------------------------------*/
-static void AdapterRestart(void *ctx, uint32_t lNowMs)
+static void AdapterRestart(void *ctx, uint32_t nowMs)
 {
   FrequencyCaptureAdapterCtx_t *c = (FrequencyCaptureAdapterCtx_t *) ctx;
-  FrequencyCaptureFSM_Init(&c->state, lNowMs);
+  FrequencyCaptureFSM_Init(&c->state, nowMs);
 }
 
-static void AdapterOnEdge(void *ctx, uint32_t lCaptureValue, uint32_t lNowMs)
+static void AdapterOnEdge(void *ctx, uint32_t captureValue, uint32_t nowMs)
 {
   FrequencyCaptureAdapterCtx_t *c = (FrequencyCaptureAdapterCtx_t *) ctx;
 
-  if (FrequencyCaptureFSM_OnEdge(&c->state, &c->config, lCaptureValue, lNowMs)
+  if (FrequencyCaptureFSM_OnEdge(&c->state, &c->config, captureValue, nowMs)
       != 0U)
   {
     if (c->publish != NULL)
     {
-      c->publish(c->state.bMeasuredFreqHz);
+      c->publish(c->state.measuredFreqHz);
     }
   }
 }
 
-static uint8_t AdapterEvaluate(void *ctx, uint32_t lNowMs)
+static uint8_t AdapterEvaluate(void *ctx, uint32_t nowMs)
 {
   FrequencyCaptureAdapterCtx_t *c = (FrequencyCaptureAdapterCtx_t *) ctx;
-  tEFrequencyCaptureFSMVerdict v =
-      FrequencyCaptureFSM_Evaluate(&c->state, &c->config, lNowMs);
+  FrequencyCaptureFSMVerdict_e v =
+      FrequencyCaptureFSM_Evaluate(&c->state, &c->config, nowMs);
 
   /* Port enum values match the FSM enum values 1:1 — same integer codes,
    * kept in sync by the port-interface unit tests (and, trivially, by these
@@ -48,13 +48,13 @@ static uint8_t AdapterEvaluate(void *ctx, uint32_t lNowMs)
  * Public adapter API
  * ---------------------------------------------------------------------------*/
 void FrequencyCaptureAdapterInit(FrequencyCaptureAdapterCtx_t *ctx,
-                                  const tSFrequencyCaptureFSMConfig *pCfg,
+                                  const FrequencyCaptureFSMConfig_t *cfg,
                                   FrequencyPublishCb_t publish,
-                                  uint32_t lNowMs)
+                                  uint32_t nowMs)
 {
-  ctx->config  = *pCfg;
+  ctx->config  = *cfg;
   ctx->publish = publish;
-  FrequencyCaptureFSM_Init(&ctx->state, lNowMs);
+  FrequencyCaptureFSM_Init(&ctx->state, nowMs);
 }
 
 IFrequencyCapturePort_t FrequencyCaptureAdapterCreatePort(

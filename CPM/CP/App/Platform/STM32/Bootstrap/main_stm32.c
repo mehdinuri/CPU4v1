@@ -27,18 +27,18 @@
 #include "Adapters/STM32/KeypadAdapter.h"
 #include "Adapters/STM32/LCDAdapter.h"
 #include "Adapters/STM32/RTCAdapter.h"
+#include "Adapters/STM32/SnmpSecurityAdapter.h"
 #include "Adapters/STM32/UnitAlarmAdapter.h"
 #include "Adapters/STM32/UnitClockAdapter.h"
 #include "Adapters/STM32/UnitInputAdapter.h"
-#include "Adapters/STM32/FieldOutputCanAdapter.h"
+#include "Adapters/STM32/FieldBusTxAdapter.h"
 #include "Adapters/STM32/ControlBusAdapter.h"
 #include "Adapters/STM32/MmiCanAdapter.h"
 #include "Adapters/STM32/CommsStatusAdapter.h"
 #include "Adapters/STM32/ControllerModeControlAdapter.h"
 #include "Adapters/STM32/FactoryResetAdapter.h"
 #include "Adapters/STM32/MmuAdapter.h"
-#include "Adapters/STM32/FieldInputCanAdapter.h"
-#include "Adapters/STM32/CompositeModuleBusPort.h"
+#include "Adapters/STM32/FieldBusRxAdapter.h"
 #include "Adapters/STM32/BrokenInputSettingsAdapter.h"
 #include "Adapters/STM32/FlashStorageAdapter.h"
 #include "Adapters/STM32/EepromStorageAdapter.h"
@@ -59,6 +59,7 @@
 #include "MCS.h"
 #include "MSM.h"
 #include "fdcan.h"
+#include "snmp_client.h"
 #include "usart.h"
 
 /* ------------------------------------------------------------------
@@ -97,18 +98,18 @@ static CommLEDAdapterCtx_t s_commLEDCtx;
 static KeypadAdapterCtx_t s_keypadCtx;
 static LCDAdapterCtx_t s_lcdCtx;
 static RTCAdapterCtx_t s_rtcCtx;
+static SnmpSecurityAdapterCtx_t s_snmpSecurityCtx;
 static UnitAlarmAdapterCtx_t s_unitAlarmCtx;
 static UnitClockAdapterCtx_t s_unitClockCtx;
 static UnitInputAdapterCtx_t s_unitInputCtx;
-static FieldOutputCanAdapterCtx_t s_fieldOutputCanCtx;
+static FieldBusTxAdapterCtx_t s_fieldBusTxCtx;
 static ControlBusAdapterCtx_t s_controlBusCtx;
 static MmiCanAdapterCtx_t s_mmiCanCtx;
 static CommsStatusAdapterCtx_t s_commsStatusCtx;
 static ControllerModeControlAdapterCtx_t s_controllerModeCtx;
 static FactoryResetAdapterCtx_t s_factoryResetCtx;
 static MmuAdapterCtx_t s_mmuCtx;
-static FieldInputCanAdapterCtx_t s_fieldInputCanCtx;
-static CompositeModuleBusPortCtx_t s_compositeModuleBusCtx;
+static FieldBusRxAdapterCtx_t s_fieldBusRxCtx;
 static BrokenInputSettingsAdapterCtx_t s_brokenInputSettingsCtx;
 static FlashStorageAdapterCtx_t s_flashStorageCtx;
 static EepromStorageAdapterCtx_t s_eepromStorageCtx;
@@ -145,6 +146,7 @@ IRealtimeClockPort_t g_rtcPort;
 IUnitAlarmPort_t g_unitAlarmPort;
 IUnitClockPort_t g_unitClockPort;
 IUnitInputPort_t g_unitInputPort;
+ISnmpSecurityPort_t g_snmpSecurityPort;
 IOutputDriverPort_t g_outputDriverPort;
 IMmuPort_t g_mmuPort;
 IModuleBusPort_t g_moduleBusPort;
@@ -161,7 +163,6 @@ IModemPort_t g_modemDriverPort;         /* active modem driver           */
 static IFlashStoragePort_t s_flashStoragePort;
 static IEepromStoragePort_t s_eepromStoragePort;
 static IModuleBusPort_t s_fieldInputModuleBusPort;
-static IModuleBusPort_t s_internalModuleBusPort;
 static IControlBusPort_t s_controlBusPort;
 static ICommsStatusPort_t s_commsStatusPort;
 static IControllerModeControlPort_t s_controllerModePort;
@@ -182,6 +183,7 @@ IntersectionController_t g_intersectionController;
 DetectorReportService_t g_detectorReportService;
 GlobalTimeManagementService_t g_globalTimeManagementService;
 IntersectionOutputDispatcher_t g_intersectionOutputDispatcher;
+__attribute__((section(".ram_d1_bss"))) EventReportService_t g_eventReportService;
 UserAuthService_t g_userAuthService;
 UiPowerService_t g_uiPowerService;
 UiLanguageService_t g_uiLanguageService;
@@ -256,6 +258,9 @@ void MainApplication_Init(void)
   RTCAdapterInit(&s_rtcCtx);
   g_rtcPort = RTCAdapterCreatePort(&s_rtcCtx);
 
+  SnmpSecurityAdapterInit(&s_snmpSecurityCtx);
+  g_snmpSecurityPort = SnmpSecurityAdapterCreatePort(&s_snmpSecurityCtx);
+
   UnitAlarmAdapterInit(&s_unitAlarmCtx);
   g_unitAlarmPort = UnitAlarmAdapterCreatePort(&s_unitAlarmCtx);
 
@@ -321,31 +326,28 @@ void MainApplication_Init(void)
   (void) IntersectionEngineLoadConfig(&g_intersectionEngine,
                                       ConfigurationServiceGetActiveConfig(
                                         &g_configurationService));
-  FieldInputCanAdapterInit(&s_fieldInputCanCtx,
-                           ConfigurationServiceGetActiveSetId(
-                             &g_configurationService),
-                           &g_uiPowerService);
+  FieldBusRxAdapterInit(&s_fieldBusRxCtx,
+                        ConfigurationServiceGetActiveSetId(
+                          &g_configurationService),
+                        &g_uiPowerService,
+                        &g_configurationService);
   s_fieldInputModuleBusPort =
-    FieldInputCanAdapterCreatePort(&s_fieldInputCanCtx);
-  (void) memset(&s_internalModuleBusPort, 0, sizeof(s_internalModuleBusPort));
-  CompositeModuleBusPortInit(&s_compositeModuleBusCtx,
-                             &s_fieldInputModuleBusPort,
-                             &s_internalModuleBusPort);
-  g_moduleBusPort = CompositeModuleBusPortCreatePort(&s_compositeModuleBusCtx);
-  FieldOutputCanAdapterInit(&s_fieldOutputCanCtx,
-                            &g_configurationService,
-                            &g_rtcPort,
-                            ConfigurationServiceGetActiveSetId(
-                              &g_configurationService));
-  g_outputDriverPort = FieldOutputCanAdapterCreatePort(&s_fieldOutputCanCtx);
+    FieldBusRxAdapterCreatePort(&s_fieldBusRxCtx);
+  g_moduleBusPort = s_fieldInputModuleBusPort;
+  FieldBusTxAdapterInit(&s_fieldBusTxCtx,
+                        &g_configurationService,
+                        &g_rtcPort,
+                        ConfigurationServiceGetActiveSetId(
+                          &g_configurationService));
+  g_outputDriverPort = FieldBusTxAdapterCreatePort(&s_fieldBusTxCtx);
   ControlBusAdapterInit(&s_controlBusCtx, &hfdcan2);
   s_controlBusPort = ControlBusAdapterCreatePort(&s_controlBusCtx);
 
   MmuAdapterInit(&s_mmuCtx);
-  MmuAdapterBindRelayPort(&s_mmuCtx, &g_relayPort);
   MmuAdapterBindRelayControlService(&s_mmuCtx, &g_relayControlService);
   MmuAdapterSetRelayTopology(&s_mmuCtx,
-                             MMU_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE);
+                             MMU_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP);
+  MmuAdapterBindRelayPort(&s_mmuCtx, &g_relayPort);
   g_mmuPort = MmuAdapterCreatePort(&s_mmuCtx);
 
   IntersectionOutputDispatcherInit(&g_intersectionOutputDispatcher);
@@ -369,8 +371,10 @@ void MainApplication_Init(void)
     ConfigurationServiceGetActiveSetId(&g_configurationService));
   CpMpLinkServiceInit(&g_cpMpLinkService,
                       &s_controlBusPort,
+                      NULL,
                       &g_configurationService,
-                      &g_intersectionController);
+                      &g_intersectionController,
+                      &g_relayControlService);
   DetectorReportServiceInit(&g_detectorReportService);
   DetectorReportServiceBind(&g_detectorReportService,
                             &g_intersectionEngine,
@@ -380,6 +384,12 @@ void MainApplication_Init(void)
   GlobalTimeManagementServiceBind(&g_globalTimeManagementService,
                                   &g_intersectionEngine,
                                   &g_rtcPort);
+  LogRepositoryAdapterInit(&s_logRepositoryCtx, &s_eepromStoragePort);
+  g_logRepositoryPort = LogRepositoryAdapterCreatePort(&s_logRepositoryCtx);
+  EventReportServiceInit(&g_eventReportService);
+  EventReportServiceBindLogRepository(&g_eventReportService, &g_logRepositoryPort);
+  EventReportServiceBindGlobalTimeManagementService(&g_eventReportService,
+                                                    &g_globalTimeManagementService);
   MmiServiceInit(&g_mmiService);
   MmiServiceBind(&g_mmiService,
                  &g_configurationService,
@@ -455,19 +465,21 @@ void MainApplication_Init(void)
   DetectorReportServiceStep(&g_detectorReportService);
   GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
   (void) MmiSnapshotCacheRefresh(&g_mmiSnapshotCache);
-
-  LogRepositoryAdapterInit(&s_logRepositoryCtx, &s_eepromStoragePort);
-  g_logRepositoryPort = LogRepositoryAdapterCreatePort(&s_logRepositoryCtx);
   LogEventAdapterInit(&s_logEventCtx);
+  LogEventAdapterBindEventReportService(&s_logEventCtx, &g_eventReportService);
   s_logEventPort = LogEventAdapterCreatePort(&s_logEventCtx);
+  g_cpMpLinkService.logEventPort = &s_logEventPort;
   MmiEventLogServiceInit(&g_mmiEventLogService);
-  MmiEventLogServiceBind(&g_mmiEventLogService, &g_logRepositoryPort);
+  MmiEventLogServiceBind(&g_mmiEventLogService, &g_eventReportService);
   UiDoorServiceBind(&g_uiDoorService,
                     &g_doorPort,
                     &s_logEventPort,
                     &g_mmiEventLogService);
-  UiDoorServiceRefreshLatestLogIndices(&g_uiDoorService);
   MmiCanAdapterBindEventLogService(&s_mmiCanCtx, &g_mmiEventLogService);
+  SNMPClientBindDomainServices();
+  EventReportServiceLoadPersistedLog(&g_eventReportService);
+  EventReportServicePrime(&g_eventReportService);
+  UiDoorServiceRefreshLatestLogIndices(&g_uiDoorService);
 
   /* Serial adapters — init order matches UART numbering for clarity.
    * SerialAdapterInit arms the first ReceiveToIdle_DMA and creates

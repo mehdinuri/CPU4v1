@@ -13,7 +13,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } EepromAdapterCtx_t;
 
 void          EepromAdapterInit(EepromAdapterCtx_t *ctx);

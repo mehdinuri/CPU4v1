@@ -7,31 +7,31 @@
 #include <string.h>
 #include "Adapters/Mock/MockSignalInputAdapter.h"
 
-static void MockSample(void *pCtx, tSSignalInputSnapshot *pOut)
+static void MockSample(void *ctx, SignalInputSnapshot_t *out)
 {
-  tSMockSignalInputAdapterCtx *pC = (tSMockSignalInputAdapterCtx *) pCtx;
+  MockSignalInputAdapterCtx_t *pC = (MockSignalInputAdapterCtx_t *) ctx;
 
-  *pOut = pC->SCanned;
-  pC->lSampleCount++;
+  *out = pC->canned;
+  pC->sampleCount++;
 }
 
-void MockSignalInputAdapter_Init(tSMockSignalInputAdapterCtx *pCtx)
+void MockSignalInputAdapter_Init(MockSignalInputAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
-void MockSignalInputAdapter_SetSnapshot(tSMockSignalInputAdapterCtx *pCtx,
-                                        const tSSignalInputSnapshot *pSnap)
+void MockSignalInputAdapter_SetSnapshot(MockSignalInputAdapterCtx_t *ctx,
+                                        const SignalInputSnapshot_t *snap)
 {
-  pCtx->SCanned = *pSnap;
+  ctx->canned = *snap;
 }
 
 ISignalInputPort_t MockSignalInputAdapter_CreatePort(
-  tSMockSignalInputAdapterCtx *pCtx)
+  MockSignalInputAdapterCtx_t *ctx)
 {
   ISignalInputPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Sample = MockSample;
 
   return port;

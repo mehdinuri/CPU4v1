@@ -18,6 +18,19 @@
 #define SIGNAL_GROUP_COMBINATIONS 8U
 #define SIGNAL_GROUP_COUNT        4U
 
+/* Tie the three constants together: combinations must be the power set of
+ * the per-group output count, and channels must distribute evenly across
+ * groups. Without these checks, silently renumbering SIGNAL_OUTPUT_CHANNEL_COUNT
+ * or SIGNAL_GROUP_COUNT would leave baselineCurrentMa[][] mis-sized.
+ */
+_Static_assert((SIGNAL_OUTPUT_CHANNEL_COUNT % SIGNAL_GROUP_COUNT) == 0U,
+               "SIGNAL_OUTPUT_CHANNEL_COUNT must divide evenly by "
+               "SIGNAL_GROUP_COUNT");
+_Static_assert(SIGNAL_GROUP_COMBINATIONS
+               == (1U << (SIGNAL_OUTPUT_CHANNEL_COUNT / SIGNAL_GROUP_COUNT)),
+               "SIGNAL_GROUP_COMBINATIONS must equal "
+               "2^(outputs per group)");
+
 /* Threshold: if measured current is < 50% of learned baseline, it's a fault. */
 #define SIGNAL_DIAGNOSTICS_FAULT_PERCENT 50U
 
@@ -27,29 +40,29 @@
 typedef struct
 {
   /* 4 groups, each has 8 possible ON/OFF combinations (2^3).
-   * aBaselineCurrent_mA[group][mask] == 0 means not yet learned. */
-  uint16_t aBaselineCurrent_mA[SIGNAL_GROUP_COUNT][SIGNAL_GROUP_COMBINATIONS];
+   * baselineCurrentMa[group][mask] == 0 means not yet learned. */
+  uint16_t baselineCurrentMa[SIGNAL_GROUP_COUNT][SIGNAL_GROUP_COMBINATIONS];
 
   /* Sticky fault flags per group. Once a lamp-out is detected, it stays set. */
-  uint8_t aLampOutFault[SIGNAL_GROUP_COUNT];
-} tSSignalDiagnosticsState;
+  uint8_t lampOutFault[SIGNAL_GROUP_COUNT];
+} SignalDiagnosticsState_t;
 
 /**
  * @brief Zero the diagnostics state.
  */
-void SignalDiagnostics_Reset(tSSignalDiagnosticsState *pState);
+void SignalDiagnostics_Reset(SignalDiagnosticsState_t *state);
 
 /**
  * @brief Perform one cycle of diagnostics.
  *
- * @param pState      Diagnostics state (mutable)
- * @param pObserved   Observed voltage image (12 channels)
- * @param pSnap       Current measurement snapshot (4 groups)
+ * @param state      Diagnostics state (mutable)
+ * @param observed   Observed voltage image (12 channels)
+ * @param snap       Current measurement snapshot (4 groups)
  * @return 1 if any NEW fault was latched this cycle, 0 otherwise.
  */
-uint8_t SignalDiagnostics_Step(tSSignalDiagnosticsState *pState,
-                               const tSSignalOutputImage *pObserved,
-                               const tSCurrentMeasurementSnapshot *pSnap);
+uint8_t SignalDiagnostics_Step(SignalDiagnosticsState_t *state,
+                               const SignalOutputImage_t *observed,
+                               const CurrentMeasurementSnapshot_t *snap);
 
 #endif /* DOMAIN_SIGNAL_DIAGNOSTICS_H */
 

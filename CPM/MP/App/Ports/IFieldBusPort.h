@@ -2,8 +2,8 @@
  *
  * Port interface for the shared field bus (FDCAN1). MP is a read-only
  * witness on this bus: it observes the same commanded load-switch
- * image CP broadcasts to SSMs (0x040/0x041, 0x0B0/0x0B1) plus raw SSM
- * telemetry (0x050..0x057) and PSM telemetry (0x05A/0x05B).
+ * image CP broadcasts to SSMs (0x040/0x041) plus raw SSM telemetry
+ * (0x050..0x057) and PSM telemetry (0x05A/0x05B).
  *
  * The adapter decodes wire frames into a FieldBusSnapshot_t; the
  * domain pulls the latest snapshot per MalfunctionEngine tick, so
@@ -49,8 +49,6 @@ typedef struct
 typedef struct
 {
   FieldBusLoadSwitchImage_t commandedLoadSwitches;
-  FieldBusLoadSwitchImage_t flashChannels;
-  uint8_t flashPeriodDs;
   uint16_t cpuImageSequence;
   uint8_t cpAlive;
 } FieldBusCpuImage_t;

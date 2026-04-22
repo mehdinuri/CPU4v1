@@ -31,73 +31,75 @@
  * ---------------------------------------------------------------------------*/
 typedef struct __attribute__((packed))
 {
-  uint8_t bACLow           : 8;
-  uint8_t b24V1Low         : 8;
-  uint8_t b24V2Low         : 8;
-  uint8_t b5V1Low          : 8;
-  uint8_t b5V2Low          : 8;
-  uint8_t bACHigh          : 2;
-  uint8_t b24V1High        : 2;
-  uint8_t b24V2High        : 2;
-  uint8_t b5V1High         : 2;
-  uint8_t b5V2High         : 2;
-  uint8_t bIsolatedVoltage : 1;
-  uint8_t bFlashActive     : 1;
-  uint8_t bGridFault       : 1;
-  uint8_t bCanOverflow     : 1;
-  uint8_t bReserved        : 2;
-  uint8_t bFrequency       : 8;
-} tSMeasurementFrame;
+  uint8_t acLow : 8;
+  uint8_t dc24V1Low : 8;
+  uint8_t dc24V2Low : 8;
+  uint8_t dc5V1Low : 8;
+  uint8_t dc5V2Low : 8;
+  uint8_t acHigh : 2;
+  uint8_t dc24V1High : 2;
+  uint8_t dc24V2High : 2;
+  uint8_t dc5V1High : 2;
+  uint8_t dc5V2High : 2;
+  uint8_t isolatedVoltage : 1;
+  uint8_t flashActive : 1;
+  uint8_t gridFault : 1;
+  uint8_t canOverflow : 1;
+  uint8_t reserved : 2;
+  uint8_t frequency : 8;
+} MeasurementFrame_t;
 
 typedef struct __attribute__((packed))
 {
-  uint8_t bFlashSync : 1;
-  uint8_t bReserved  : 7;
-  uint8_t baReserved[7];
-} tSFlashSyncFrame;
+  uint8_t flashSync : 1;
+  uint8_t reserved : 7;
+  uint8_t padding[7];
+} FlashSyncFrame_t;
 
 /* Compile-time guards: classic CAN frames carry at most 8 bytes of payload.
  * If struct layout changes and grows beyond that, the FDCAN TX FIFO silently
  * rejects the frame.  These assertions catch the problem at build time. */
-_Static_assert(sizeof(tSMeasurementFrame) <= 8U,
-               "tSMeasurementFrame exceeds CAN frame payload limit (8 bytes)");
-_Static_assert(sizeof(tSFlashSyncFrame) <= 8U,
-               "tSFlashSyncFrame exceeds CAN frame payload limit (8 bytes)");
+_Static_assert(sizeof(MeasurementFrame_t) <= 8U,
+               "MeasurementFrame_t exceeds CAN frame payload limit (8 bytes)");
+_Static_assert(sizeof(FlashSyncFrame_t) <= 8U,
+               "FlashSyncFrame_t exceeds CAN frame payload limit (8 bytes)");
 
 /* ---------------------------------------------------------------------------
  * Runtime state (was static SPSMRuntime in App/Platform/STM32/Tasks/Measurement.c)
  * ---------------------------------------------------------------------------*/
 typedef struct
 {
-  tSMeasurementOffset SOffset;
+  MeasurementOffset_t offset;
 
-  uint8_t  bFlashState;
-  uint32_t lFlashPeriod;
-  uint32_t lLastFlashTick;
-  uint16_t sFlashStateCntr;
-  uint16_t sCommErrorCntr;
+  uint8_t flashState;
+  uint32_t flashPeriod;
+  uint32_t lastFlashTick;
+  uint8_t midCycleSent;    /* 1 after mid-cycle sync frame has been sent
+                            * in the current flash cycle; cleared at the
+                            * start of the next half-period */
+  uint16_t commErrorCntr;
 
-  uint8_t  bCommLedCntr;
+  uint8_t commLedCntr;
 
-  uint8_t  bNetFrequency;
-  uint16_t sNetVoltage;
-  uint16_t sRegVIn;
-  uint16_t sRegVOut;
-} tSPSMRuntime;
+  uint8_t netFrequency;
+  uint16_t netVoltage;
+  uint16_t regVIn;
+  uint16_t regVOut;
+} PsmRuntime_t;
 
 /* ---------------------------------------------------------------------------
  * Service context — one instance per task
  * ---------------------------------------------------------------------------*/
 typedef struct
 {
-  IIndicatorLEDPort_t    *pLEDPort;
-  ISignalInputPort_t     *pInputPort;
-  ICANTxPort_t           *pCANPort;
-  IVoltageSensorPort_t   *pVoltagePort;
-  IFrequencySensorPort_t *pFreqPort;
-  IEepromPort_t          *pEepromPort;
+  IIndicatorLEDPort_t    *ledPort;
+  ISignalInputPort_t     *inputPort;
+  ICANTxPort_t           *canPort;
+  IVoltageSensorPort_t   *voltagePort;
+  IFrequencySensorPort_t *freqPort;
+  IEepromPort_t          *eepromPort;
 
-  tSPSMRuntime SRuntime;
+  PsmRuntime_t runtime;
 } MeasurementServiceCtx_t;
 
 /* ---------------------------------------------------------------------------
@@ -106,12 +108,12 @@ typedef struct
  *   period and calibration offset from EEPROM, writes defaults if invalid.
  * ---------------------------------------------------------------------------*/
 void MeasurementService_Init(MeasurementServiceCtx_t  *ctx,
-                              IIndicatorLEDPort_t      *pLEDPort,
-                              ISignalInputPort_t       *pInputPort,
-                              ICANTxPort_t             *pCANPort,
-                              IVoltageSensorPort_t     *pVoltagePort,
-                              IFrequencySensorPort_t   *pFreqPort,
-                              IEepromPort_t            *pEepromPort);
+                             IIndicatorLEDPort_t      *ledPort,
+                             ISignalInputPort_t       *inputPort,
+                             ICANTxPort_t             *canPort,
+                             IVoltageSensorPort_t     *voltagePort,
+                             IFrequencySensorPort_t   *freqPort,
+                             IEepromPort_t            *eepromPort);
 
 /* ---------------------------------------------------------------------------
  * Per-tick operations (called from MeasurementTaskFunc after flag is set)
@@ -128,7 +130,8 @@ void MeasurementService_UpdateLEDs(MeasurementServiceCtx_t *ctx);
 void MeasurementService_SendMeasurements(MeasurementServiceCtx_t *ctx);
 
 /* Advance the flash-sync counter and send sync CAN frames at period edges. */
-void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx, uint32_t lNowMs);
+void MeasurementService_FlashSync(MeasurementServiceCtx_t *ctx,
+                                  uint32_t nowMs);
 
 /* Returns 1 if flash state is active (suppress normal measurement send). */
 uint8_t MeasurementService_IsFlash(const MeasurementServiceCtx_t *ctx);
@@ -137,34 +140,47 @@ uint8_t MeasurementService_IsFlash(const MeasurementServiceCtx_t *ctx);
  * Validation and runtime-apply helpers
  * ---------------------------------------------------------------------------*/
 
-uint8_t MeasurementService_PeriodIsValid(uint8_t bPeriod);
-uint8_t MeasurementService_OffsetOpIsValid(uint8_t bOp);
+uint8_t MeasurementService_PeriodIsValid(uint8_t period);
+uint8_t MeasurementService_OffsetOpIsValid(uint8_t op);
 
 /* Apply already-validated settings to runtime state only.
  * Persistence is the caller's responsibility. */
 void MeasurementService_PeriodApply(MeasurementServiceCtx_t *ctx,
-                                     uint8_t bPeriod);
+                                    uint8_t period);
 
 void MeasurementService_OffsetApply(MeasurementServiceCtx_t *ctx,
-                                     uint8_t bOp,
-                                     uint8_t bVal);
+                                    uint8_t op,
+                                    uint8_t val);
+
+/* ---------------------------------------------------------------------------
+ * Persistence helpers — validate + write EEPROM, no runtime touch.
+ * Shared between the task-layer wrappers (which queue the apply) and the
+ * domain-level Set entry points (which apply immediately).  Return non-zero
+ * on success, zero on validation failure or EEPROM write failure.
+ * ---------------------------------------------------------------------------*/
+uint8_t MeasurementService_PeriodPersist(IEepromPort_t *eepromPort,
+                                         uint8_t period);
+
+uint8_t MeasurementService_OffsetPersist(IEepromPort_t *eepromPort,
+                                         uint8_t op,
+                                         uint8_t val);
 
 /* ---------------------------------------------------------------------------
  * Command handlers — validate, persist, then update runtime state
  * ---------------------------------------------------------------------------*/
 void MeasurementService_FlashStateSet(MeasurementServiceCtx_t *ctx,
-                                       uint8_t fState);
+                                      uint8_t state);
 
 void MeasurementService_CommCheck(MeasurementServiceCtx_t *ctx);
 
 void MeasurementService_CommCntrReset(MeasurementServiceCtx_t *ctx);
 
 void MeasurementService_PeriodSet(MeasurementServiceCtx_t *ctx,
-                                   uint8_t bPeriod);
+                                  uint8_t period);
 
 void MeasurementService_OffsetSet(MeasurementServiceCtx_t *ctx,
-                                   uint8_t bOp,
-                                   uint8_t bVal);
+                                  uint8_t op,
+                                  uint8_t val);
 
 #endif /* DOMAIN_MEASUREMENTSERVICE_H */
 

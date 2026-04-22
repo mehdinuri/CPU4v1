@@ -25,9 +25,8 @@
 #include <string.h>
 #include "cmsis_os.h"
 #include "Adapters/STM32/ControlBusAdapter.h"
-#include "Adapters/STM32/FieldInputCanAdapter.h"
+#include "Adapters/STM32/FieldBusRxAdapter.h"
 #include "Adapters/STM32/MmiCanAdapter.h"
-#include "LegacyCanIngress.h"
 
 extern ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void);
 /* USER CODE END 0 */
@@ -63,7 +62,7 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.DataTimeSeg2 = 1;
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
-  hfdcan1.Init.ExtFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 0;
   hfdcan1.Init.RxFifo0ElmtsNbr = 32;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 0;
@@ -87,17 +86,6 @@ void MX_FDCAN1_Init(void)
   SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
   SFilterConfig.FilterID1 = 0x000;
   SFilterConfig.FilterID2 = 0x7FF;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  SFilterConfig.IdType = FDCAN_EXTENDED_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = LEGACY_CAN_CPMP_EXT_ID_FIRST;
-  SFilterConfig.FilterID2 = LEGACY_CAN_CPMP_EXT_ID_LAST;
   if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
   {
     Error_Handler();
@@ -383,18 +371,12 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
       Error_Handler();
     }
 
-    SRxMsg.RxHeader.DataLength = LegacyCanIngressDlcToLength(
-      SRxMsg.RxHeader.DataLength);
-    FieldInputCanAdapterOnRxIsr(&SRxMsg.RxHeader, &SRxMsg.Data[0]);
+    FieldBusRxAdapterOnRxIsr(&SRxMsg.RxHeader, &SRxMsg.Data[0]);
 
     if ((SRxMsg.RxHeader.Identifier >= MMI_PROTOCOL_V2_CAN_ID_ACK)
         && (SRxMsg.RxHeader.Identifier <= MMI_PROTOCOL_V2_CAN_ID_HELLO_REQ))
     {
       MmiCanAdapterOnRxIsr(&SRxMsg.RxHeader, &SRxMsg.Data[0]);
-    }
-    else
-    {
-      LegacyCanIngressOnRxFrame(&SRxMsg);
     }
   }
   else if (hfdcan->Instance == FDCAN2)

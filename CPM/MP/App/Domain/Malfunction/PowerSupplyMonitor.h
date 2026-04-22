@@ -2,7 +2,7 @@
  *
  * Monitors PSM telemetry (line voltage, line frequency, +24 V rails,
  * +5 V rails) against configurable bounds with symmetric hysteresis.
- * Default limits mirror the legacy MP values from data.h (-20 % /
+ * Default limits mirror the legacy MP values (-20 % /
  * +20 % of nominal line voltage at 220 V, ±4 % frequency).
  */
 #ifndef POWER_SUPPLY_MONITOR_H

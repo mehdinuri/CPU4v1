@@ -13,11 +13,11 @@
 
 typedef struct
 {
-  uint8_t bReserved;
-} tSGpioInputAdapterCtx;
+  uint8_t reserved;
+} GpioInputAdapterCtx_t;
 
-void GpioInputAdapter_Init(tSGpioInputAdapterCtx *pCtx);
-ISignalInputPort_t GpioInputAdapter_CreatePort(tSGpioInputAdapterCtx *pCtx);
+void GpioInputAdapter_Init(GpioInputAdapterCtx_t *ctx);
+ISignalInputPort_t GpioInputAdapter_CreatePort(GpioInputAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_STM32_GPIO_INPUT_ADAPTER_H */
 

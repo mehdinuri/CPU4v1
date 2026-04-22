@@ -182,7 +182,8 @@ void tearDown(void)
 
 void test_phase_options_roundtrip_full_bitmask(void)
 {
-  NtcipRequestContext_t request = { 0x1000U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1000U, 0U, 0U);
   uint32_t options =
     (uint32_t) (PHASE_OPTIONS_ENABLED
                 | PHASE_OPTIONS_MIN_RECALL
@@ -198,7 +199,8 @@ void test_phase_options_roundtrip_full_bitmask(void)
 
 void test_extended_phase_columns_roundtrip_in_mib_units(void)
 {
-  NtcipRequestContext_t request = { 0x1001U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1001U, 0U, 0U);
 
   BeginTx(&request, 2U);
   SetPhaseUnsigned32(kPhaseMaximum2Oid, &request, 55U);
@@ -258,7 +260,8 @@ void test_extended_phase_columns_roundtrip_in_mib_units(void)
 
 void test_phase_startup_configuration_is_applied_on_engine_reset(void)
 {
-  NtcipRequestContext_t request = { 0x1002U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1002U, 0U, 0U);
 
   BeginTx(&request, 3U);
   SetPhaseUnsigned32(kPhaseStartupOid,
@@ -275,7 +278,8 @@ void test_phase_startup_configuration_is_applied_on_engine_reset(void)
 
 void test_phase_concurrency_roundtrips_octet_string(void)
 {
-  NtcipRequestContext_t request = { 0x1003U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1003U, 0U, 0U);
   NtcipValue_t value;
   const uint8_t concurrency[] = { 5U, 6U };
 
@@ -306,7 +310,8 @@ void test_phase_concurrency_roundtrips_octet_string(void)
 
 void test_phase_range_checks_reject_invalid_extended_values(void)
 {
-  NtcipRequestContext_t request = { 0x1004U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1004U, 0U, 0U);
   NtcipValue_t value;
   uint8_t invalidConcurrency[INTERSECTION_PHASE_COUNT_MAX + 1U];
 
@@ -362,7 +367,8 @@ void test_phase_range_checks_reject_invalid_extended_values(void)
 
 void test_phase_ring_zero_disables_phase_and_phase_startup_reads_other(void)
 {
-  NtcipRequestContext_t request = { 0x1005U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x1005U, 0U, 0U);
 
   BeginTx(&request, 6U);
   SetPhaseUnsigned32(kPhaseStartupOid,

@@ -10,50 +10,53 @@
 #include <math.h>
 #include <stddef.h>
 
-float VoltageRMS_ComputeAC(const uint16_t *pSamples,
+float VoltageRMS_ComputeAC(const uint16_t *samples,
                            size_t sampleCount,
-                           float fVRef,
-                           float fAdcMax,
-                           float fScaling)
+                           float vRef,
+                           float adcMax,
+                           float scaling)
 {
-  if ((pSamples == NULL) || (sampleCount == 0U) || (fAdcMax <= 0.0f))
+  if ((samples == NULL) || (sampleCount == 0U) || (adcMax <= 0.0f))
   {
     return 0.0f;
   }
 
   /* First pass — integer mean (keeps full 12-bit precision). */
-  uint32_t lSum = 0U;
+  uint32_t sum = 0U;
+
   for (size_t i = 0U; i < sampleCount; i++)
   {
-    lSum += (uint32_t) pSamples[i];
+    sum += (uint32_t) samples[i];
   }
 
-  float fMean = (float) lSum / (float) sampleCount;
+  float mean = (float) sum / (float) sampleCount;
 
   /* Second pass — sum of squared AC components. */
-  float fSumSquares = 0.0f;
+  float sumSquares = 0.0f;
+
   for (size_t i = 0U; i < sampleCount; i++)
   {
-    float fAC = (float) pSamples[i] - fMean;
-    fSumSquares += fAC * fAC;
+    float ac = (float) samples[i] - mean;
+
+    sumSquares += ac * ac;
   }
 
-  float fRawRMS = sqrtf(fSumSquares / (float) sampleCount);
+  float rawRms = sqrtf(sumSquares / (float) sampleCount);
 
-  return fRawRMS * (fVRef / fAdcMax) * fScaling;
+  return rawRms * (vRef / adcMax) * scaling;
 }
 
-float VoltageRMS_ConvertDC(uint16_t sSample,
-                           float fVRef,
-                           float fAdcMax,
-                           float fScaling)
+float VoltageRMS_ConvertDC(uint16_t sample,
+                           float vRef,
+                           float adcMax,
+                           float scaling)
 {
-  if (fAdcMax <= 0.0f)
+  if (adcMax <= 0.0f)
   {
     return 0.0f;
   }
 
-  return (float) sSample * (fVRef / fAdcMax) * fScaling;
+  return (float) sample * (vRef / adcMax) * scaling;
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

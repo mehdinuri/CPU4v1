@@ -23,8 +23,9 @@
 
 /* USER CODE BEGIN 0 */
 #include "defs.h"
-#include "data.h"
 #include "gpio.h"
+#include "SettingsStorage.h"
+#include "SystemRuntime.h"
 
 #define TARGET_FREQ_HZ 100
 #define FREQ_TOLERANCE_HZ 5

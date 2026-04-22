@@ -29,13 +29,13 @@
 
 /* Public function prototypes -----------------------------------------------*/
 extern uint8_t CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
-                            uint32_t lIDType,
-                            uint32_t lID,
-                            uint32_t lFrameType,
-                            uint32_t lBitRateSwitch,
-                            uint32_t lFDFormat,
-                            const uint8_t *baData,
-                            uint8_t bDataLen);
+                            uint32_t idType,
+                            uint32_t id,
+                            uint32_t frameType,
+                            uint32_t bitRateSwitch,
+                            uint32_t fdFormat,
+                            const uint8_t *data,
+                            uint8_t dataLen);
 extern uint8_t CANTxFaultLatched(void);
 
 #endif /* __CAN_MSG_SENDER_H__ */

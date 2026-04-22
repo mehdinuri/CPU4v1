@@ -29,12 +29,6 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32g4xx_hal.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include "cmsis_os.h"
-
-/* USER CODE END Includes */
-
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
@@ -88,39 +82,6 @@ void Error_Handler(void);
 #endif
 
 //#define TRACE
-
-#define EVENT_FLAGS_I2C4_ERROR 0x01
-#define EVENT_FLAGS_I2C4_RX_COMPLETE 0x02
-#define EVENT_FLAGS_I2C4_TX_COMPLETE 0x04
-#define EVENT_FLAGS_I2C4_ADDR_ACKNOWLEDGED 0x04
-#define EVENT_FLAGS_I2C4_LISTEN_COMPLETE 0x08
-
-#define EVENT_FLAGS_ALL_TASKS_ACTIVE 0x00000007
-#define EVENT_FLAGS_SIGNAL_CHECK_TASK_ACTIVE 0x00000001
-#define EVENT_FLAGS_SIGNAL_OUTPUT_CATCH_TASK_ACTIVE 0x00000002
-#define EVENT_FLAGS_DEFAULT_TASK_ACTIVE 0x00000004
-
-extern osThreadId_t DefaultTaskHandle;
-extern osThreadId_t SOCatchTaskHandle;
-extern osThreadId_t CANMsgParserTaskHandle;
-extern osThreadId_t CANMsgSenderTaskHandle;
-extern osThreadId_t SignalCheckTaskHandle;
-
-extern osMemoryPoolId_t CANRxReqsMemPoolHandle;
-extern osMemoryPoolId_t CANTxReqsMemPoolHandle;
-extern osMemoryPoolId_t NewMeasurementsMemPoolHandle;
-extern osMemoryPoolId_t BatteryRuntimeMemPoolHandle;
-extern osMemoryPoolId_t LogReqsMemPoolHandle;
-
-extern osMessageQueueId_t CANRxReqsQueueHandle;
-extern osMessageQueueId_t CANTxReqsQueueHandle;
-extern osMessageQueueId_t NewMeasurementsQueueHandle;
-extern osMessageQueueId_t BatteryRuntimeQueueHandle;
-extern osMessageQueueId_t LogReqsQueueHandle;
-
-extern osEventFlagsId_t I2C4EventHandle;
-extern osEventFlagsId_t I2C3EventHandle;
-extern osEventFlagsId_t MaintenanceEventHandle;
 
 void SystemReset(void);
 

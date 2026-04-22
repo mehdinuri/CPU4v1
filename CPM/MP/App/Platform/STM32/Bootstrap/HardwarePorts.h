@@ -9,7 +9,6 @@
 #define HARDWARE_PORTS_H
 
 #include "Ports/IControlBusPort.h"
-#include "Ports/IEventLogPort.h"
 #include "Ports/IFieldBusPort.h"
 #include "Ports/IPersistencePort.h"
 #include "Ports/IRealtimeClockPort.h"
@@ -23,7 +22,6 @@ extern IControlBusPort_t g_controlBusPort;
 extern IFieldBusPort_t g_fieldBusPort;
 extern ISafetyRelayPort_t g_safetyRelayPort;
 extern IStatusLEDPort_t g_statusLEDPort;
-extern IEventLogPort_t g_eventLogPort;
 extern IPersistencePort_t g_persistencePort;
 extern IRealtimeClockPort_t g_rtcPort;
 extern ISystemMonitorPort_t g_systemMonitorPort;

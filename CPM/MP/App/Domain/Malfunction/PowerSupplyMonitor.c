@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <string.h>
 
-/* From legacy MP data.h:
+/* From the legacy MP thresholds:
  *   VOLTAGE_VALUE_LOWER_BOUND = 241 (176 V)
  *   VOLTAGE_VALUE_UPPER_BOUND = 364 (265 V)
  *   Hysteresis 14 (10 V)

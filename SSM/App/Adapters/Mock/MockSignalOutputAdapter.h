@@ -13,14 +13,14 @@
 
 typedef struct
 {
-  uint32_t lApplyCount;
-  uint32_t lAllOffCount;
-  tSSignalOutputImage SLastImage;
-} tSMockSignalOutputAdapterCtx;
+  uint32_t applyCount;
+  uint32_t allOffCount;
+  SignalOutputImage_t lastImage;
+} MockSignalOutputAdapterCtx_t;
 
-void MockSignalOutputAdapter_Init(tSMockSignalOutputAdapterCtx *pCtx);
+void MockSignalOutputAdapter_Init(MockSignalOutputAdapterCtx_t *ctx);
 ISignalOutputPort_t MockSignalOutputAdapter_CreatePort(
-  tSMockSignalOutputAdapterCtx *pCtx);
+  MockSignalOutputAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_SIGNAL_OUTPUT_ADAPTER_H */
 

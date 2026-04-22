@@ -49,9 +49,9 @@ typedef struct
   uint8_t mmuStatus;
   uint8_t sequence;
   uint16_t configEpoch;
-  uint16_t loadSwitchReds;
-  uint16_t loadSwitchYellows;
-  uint16_t loadSwitchGreens;
+  uint32_t loadSwitchReds;
+  uint32_t loadSwitchYellows;
+  uint32_t loadSwitchGreens;
   uint8_t vehicleDetectorAlarms[INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX];
   uint8_t vehicleDetectorReportedAlarms[
     INTERSECTION_VEHICLE_DETECTOR_COUNT_MAX];
@@ -269,7 +269,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsRed(
   const ModuleBusSnapshot_t *snapshot,
   uint8_t channelNumber)
 {
-  uint16_t mask;
+  uint32_t mask;
 
   if ((snapshot == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -277,7 +277,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsRed(
     return 0U;
   }
 
-  mask = (uint16_t) (1U << (uint16_t) (channelNumber - 1U));
+  mask = (uint32_t) (1UL << (uint32_t) (channelNumber - 1U));
 
   return (uint8_t) ((snapshot->loadSwitchReds & mask) != 0U);
 }
@@ -287,7 +287,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsYellow(
   uint8_t
   channelNumber)
 {
-  uint16_t mask;
+  uint32_t mask;
 
   if ((snapshot == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -295,7 +295,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsYellow(
     return 0U;
   }
 
-  mask = (uint16_t) (1U << (uint16_t) (channelNumber - 1U));
+  mask = (uint32_t) (1UL << (uint32_t) (channelNumber - 1U));
 
   return (uint8_t) ((snapshot->loadSwitchYellows & mask) != 0U);
 }
@@ -305,7 +305,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsGreen(
   uint8_t
   channelNumber)
 {
-  uint16_t mask;
+  uint32_t mask;
 
   if ((snapshot == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -313,7 +313,7 @@ static inline uint8_t ModuleBusSnapshotLoadSwitchShowsGreen(
     return 0U;
   }
 
-  mask = (uint16_t) (1U << (uint16_t) (channelNumber - 1U));
+  mask = (uint32_t) (1UL << (uint32_t) (channelNumber - 1U));
 
   return (uint8_t) ((snapshot->loadSwitchGreens & mask) != 0U);
 }

@@ -8,8 +8,8 @@
 
 #include "main.h"
 #include "defs.h"
-#include "data.h"
 #include "MLM.h"
+#include "SystemRuntime.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  members */
@@ -51,6 +51,13 @@ TaskStatus_t pxTaskStatusArray[APP_THREADS_MAX];
 #endif /* ifdef FREERTOS_TRACE */
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  methods */
+void SignalMaintenanceTask(uint32_t flags)
+{
+  if (MaintenanceEventHandle != NULL)
+  {
+    (void) osEventFlagsSet(MaintenanceEventHandle, flags);
+  }
+}
 
 #ifdef FREERTOS_TRACE
 
@@ -138,7 +145,6 @@ void CheckMessageQueueUsage(void)
 
   tSQueueInfo SaQueues[] =
   {
-    { "FDCANRxReqsQue", FDCANRxReqsQueHandle },
     { "FDCANTxReqsQue", FDCANTxReqsQueHandle },
     { "GPSRxReqsQue", GPSRxReqsQueHandle },
 

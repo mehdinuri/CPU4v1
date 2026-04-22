@@ -2,7 +2,7 @@
  *
  * Owns MP's copy of the active intersection configuration plus MP-only
  * derived tables: the output-to-channel mapping and the per-pair
- * channel conflict matrix (computed from phase concurrency lists).
+ * channel monitoring profile used by malfunction monitors.
  *
  * Receives updates from the control-bus adapter as CP streams packets;
  * downstream monitors consume the service via read-only accessors.
@@ -34,6 +34,9 @@ typedef struct
   IntersectionConfig_t config;
   ChannelOutputMapping_t outputMapping;
   ChannelConflictMatrix_t conflictMatrix;
+  uint32_t channelConflictMask[MP_CHANNEL_COUNT_MAX];
+  uint8_t channelMinYellowDs[MP_CHANNEL_COUNT_MAX];
+  uint8_t channelRedClearDs[MP_CHANNEL_COUNT_MAX];
   ConfigurationState_t state;
   uint16_t configEpoch;
   IPersistencePort_t *persistencePort;
@@ -46,6 +49,11 @@ uint8_t ConfigurationServiceSetConfig(ConfigurationService_t *service,
 uint8_t ConfigurationServiceSetOutputMapping(ConfigurationService_t *service,
                                              const ChannelOutputMapping_t *
                                              mapping);
+uint8_t ConfigurationServiceSetMonitoringProfile(
+  ConfigurationService_t *service,
+  const uint32_t *channelConflictMask,
+  const uint8_t *channelMinYellowDs,
+  const uint8_t *channelRedClearDs);
 uint8_t ConfigurationServiceValidate(ConfigurationService_t *service);
 ConfigurationState_t ConfigurationServiceGetState(
   const ConfigurationService_t *service);
@@ -59,5 +67,11 @@ uint8_t ConfigurationServiceChannelsConflict(
   const ConfigurationService_t *service,
   uint8_t channelA,
   uint8_t channelB);
+uint8_t ConfigurationServiceGetChannelMinYellowDs(
+  const ConfigurationService_t *service,
+  uint8_t channelIndex);
+uint8_t ConfigurationServiceGetChannelRedClearDs(
+  const ConfigurationService_t *service,
+  uint8_t channelIndex);
 
 #endif /* CONFIGURATION_SERVICE_H */

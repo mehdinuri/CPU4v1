@@ -46,6 +46,10 @@ uint8_t GlobalTimeManagementServiceGetControllerLocalTime(
 uint8_t GlobalTimeManagementServiceGetGlobalTime(
   GlobalTimeManagementService_t *service,
   uint32_t *globalTimeSeconds);
+uint8_t GlobalTimeManagementServiceGetGlobalTimeWithMilliseconds(
+  GlobalTimeManagementService_t *service,
+  uint32_t *globalTimeSeconds,
+  uint16_t *globalTimeMilliseconds);
 uint8_t GlobalTimeManagementServiceGetGlobalLocalTimeDifferential(
   GlobalTimeManagementService_t *service,
   int32_t *globalLocalTimeDifferentialSeconds);

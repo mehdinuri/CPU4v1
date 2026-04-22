@@ -65,23 +65,23 @@ void MX_FDCAN1_Init(void);
 void MX_FDCAN2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-typedef struct _tSFDCANRxMsg
+typedef struct
 {
 	FDCAN_HandleTypeDef	*hfdcan;
-  FDCAN_RxHeaderTypeDef SRxHeader;
-  uint8_t baData[FDCAN_MAX_DATA_LEN];
+  FDCAN_RxHeaderTypeDef rxHeader;
+  uint8_t data[FDCAN_MAX_DATA_LEN];
 	
-} tSFDCANRxMsg, *tpSFDCANRxMsg;
+} FdcanRxMsg_t;
 
-typedef struct _tSFDCANTxMsg
+typedef struct
 {
 	FDCAN_HandleTypeDef	*hfdcan;
-  FDCAN_TxHeaderTypeDef STxHeader;
-  uint8_t baData[FDCAN_MAX_DATA_LEN];
+  FDCAN_TxHeaderTypeDef txHeader;
+  uint8_t data[FDCAN_MAX_DATA_LEN];
 	
-} tSFDCANTxMsg, *tpSFDCANTxMsg;
+} FdcanTxMsg_t;
 
-/* NOTE: the former tSBitFlags16, tSVoltageCurrent_t, and tUOutputs types
+/* NOTE: the former BitFlags16_t, VoltageCurrent_t, and Outputs_t types
  * were deleted once the outgoing CAN telemetry path moved to the byte-
  * explicit Domain/VoltageCurrentFrame encoder. They were the main source
  * of GCC's "'packed' attribute ignored" warnings (nested __packed unions).
@@ -92,41 +92,41 @@ typedef struct _tSFDCANTxMsg
  * field order we use.
  */
 
-typedef struct _tSSignalOutput
+typedef struct
 {
-	uint8_t bOnCntr;
-	uint8_t bOffCntr;
+	uint8_t onCntr;
+	uint8_t offCntr;
 
-	uint8_t fIsActive : 1;
-	uint8_t fIsOn : 1;
-	uint8_t fIsFlashing : 1;
-	uint8_t bReserved : 5;
+	uint8_t isActive : 1;
+	uint8_t isOn : 1;
+	uint8_t isFlashing : 1;
+	uint8_t reserved : 5;
 
-} tSSignalOutput, *tpSSignalOutput;
+} SignalOutput_t;
 
-typedef struct _tSOutputGroup
+typedef struct
 {
-	tSSignalOutput SaSignalOutputs[SIGNAL_OUTPUTS_PER_SIGNAL_GROUP];
-	uint16_t sCurrent;
+	SignalOutput_t signalOutputs[SIGNAL_OUTPUTS_PER_SIGNAL_GROUP];
+	uint16_t current;
 
-} tSOutputGroup, *tpSOutputGroup;
+} OutputGroup_t;
 
-typedef struct _tSSignalOutputStateCntr
+typedef struct
 {
-	uint8_t bOnCntr;
-	uint8_t bOffCntr;
+	uint8_t onCntr;
+	uint8_t offCntr;
 
-} tSSignalOutputStateCntr, *tpSSignalOutputStateCntr;
+} SignalOutputStateCntr_t;
 
-extern uint8_t CANGetRxDataLength(uint32_t lCode);
-extern uint32_t CANGetTxDataLengthCode(uint8_t bLen);
+extern uint8_t CANGetRxDataLength(uint32_t lenCode);
+extern uint32_t CANGetTxDataLengthCode(uint8_t len);
 extern void CANStart(FDCAN_HandleTypeDef* hfdcan);
 extern void CANStop(FDCAN_HandleTypeDef* hfdcan);
 extern void CANDeInit(FDCAN_HandleTypeDef* hfdcan);
-extern uint8_t CANSendMessage(tpSFDCANTxMsg pSMsg);
+extern uint8_t CANSendMessage(FdcanTxMsg_t * msg);
 extern uint8_t CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan,
-                                 uint32_t lTxBufferIndex,
-                                 uint32_t lTimeout_ms);
+                                 uint32_t txBufferIndex,
+                                 uint32_t timeoutMs);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

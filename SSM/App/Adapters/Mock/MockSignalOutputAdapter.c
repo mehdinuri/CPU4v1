@@ -8,33 +8,33 @@
 #include <string.h>
 #include "Adapters/Mock/MockSignalOutputAdapter.h"
 
-static void MockApply(void *pCtx, const tSSignalOutputImage *pImage)
+static void MockApply(void *ctx, const SignalOutputImage_t *image)
 {
-  tSMockSignalOutputAdapterCtx *pC = (tSMockSignalOutputAdapterCtx *) pCtx;
+  MockSignalOutputAdapterCtx_t *pC = (MockSignalOutputAdapterCtx_t *) ctx;
 
-  pC->SLastImage = *pImage;
-  pC->lApplyCount++;
+  pC->lastImage = *image;
+  pC->applyCount++;
 }
 
-static void MockAllOff(void *pCtx)
+static void MockAllOff(void *ctx)
 {
-  tSMockSignalOutputAdapterCtx *pC = (tSMockSignalOutputAdapterCtx *) pCtx;
+  MockSignalOutputAdapterCtx_t *pC = (MockSignalOutputAdapterCtx_t *) ctx;
 
-  memset(&pC->SLastImage, 0, sizeof(pC->SLastImage));
-  pC->lAllOffCount++;
+  memset(&pC->lastImage, 0, sizeof(pC->lastImage));
+  pC->allOffCount++;
 }
 
-void MockSignalOutputAdapter_Init(tSMockSignalOutputAdapterCtx *pCtx)
+void MockSignalOutputAdapter_Init(MockSignalOutputAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
 ISignalOutputPort_t MockSignalOutputAdapter_CreatePort(
-  tSMockSignalOutputAdapterCtx *pCtx)
+  MockSignalOutputAdapterCtx_t *ctx)
 {
   ISignalOutputPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Apply = MockApply;
   port.AllOff = MockAllOff;
 

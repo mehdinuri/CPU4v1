@@ -7,36 +7,36 @@
 #include <string.h>
 #include "Domain/OutputVerify.h"
 
-void OutputVerify_Reset(tSOutputVerifyState *pState)
+void OutputVerify_Reset(OutputVerifyState_t *state)
 {
-  memset(pState, 0, sizeof(*pState));
+  memset(state, 0, sizeof(*state));
 }
 
-void OutputVerify_Step(tSOutputVerifyState *pState,
-                       const tSSignalOutputImage *pCommanded,
-                       const tSSignalOutputImage *pObserved)
+void OutputVerify_Step(OutputVerifyState_t *state,
+                       const SignalOutputImage_t *commanded,
+                       const SignalOutputImage_t *observed)
 {
   uint8_t i;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    uint8_t bCmd = (pCommanded->aChannels[i] != 0U) ? 1U : 0U;
-    uint8_t bObs = (pObserved->aChannels[i] != 0U) ? 1U : 0U;
+    uint8_t cmd = (commanded->channels[i] != 0U) ? 1U : 0U;
+    uint8_t obs = (observed->channels[i] != 0U) ? 1U : 0U;
 
-    if (bCmd == bObs)
+    if (cmd == obs)
     {
-      pState->aMismatchCount[i] = 0U;
+      state->mismatchCount[i] = 0U;
     }
     else
     {
-      if (pState->aMismatchCount[i] < 0xFFU)
+      if (state->mismatchCount[i] < 0xFFU)
       {
-        pState->aMismatchCount[i]++;
+        state->mismatchCount[i]++;
       }
 
-      if (pState->aMismatchCount[i] >= OUTPUT_VERIFY_FAULT_THRESHOLD)
+      if (state->mismatchCount[i] >= OUTPUT_VERIFY_FAULT_THRESHOLD)
       {
-        pState->bFaultActive = 1U;
+        state->faultActive = 1U;
       }
     }
   }

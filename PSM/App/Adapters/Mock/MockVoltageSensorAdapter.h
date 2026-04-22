@@ -12,9 +12,9 @@
 
 typedef struct
 {
-  float fNetVoltage; /* pre-set by test to simulate AC grid voltage  */
-  float fRegVIn;     /* pre-set by test to simulate DC Vin           */
-  float fRegVOut;    /* pre-set by test to simulate DC Vout          */
+  float netVoltage; /* pre-set by test to simulate AC grid voltage  */
+  float regVIn;     /* pre-set by test to simulate DC Vin           */
+  float regVOut;    /* pre-set by test to simulate DC Vout          */
 } MockVoltageSensorAdapterCtx_t;
 
 void                   MockVoltageSensorAdapterInit(MockVoltageSensorAdapterCtx_t *ctx);

@@ -18,9 +18,9 @@ Add_Unity_Domain_Test(Test_SharedIntersectionTypes
 # --- Domain integration (engine + monitors + services end-to-end) ---
 Add_Unity_Domain_Test(Test_MalfunctionEngineEndToEnd
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_MalfunctionEngineEndToEnd.c
-    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockEventLogAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockFieldBusAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockSafetyRelayAdapter.c
+    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockSystemMonitorAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockUnitAlarmAdapter.c
 )
 
@@ -47,7 +47,6 @@ Add_Unity_Domain_Test(Test_CpMpLinkService
 Add_Unity_Test(Test_AllPortsAndMocks
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_AllPortsAndMocks.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockControlBusAdapter.c
-    ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockEventLogAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockFieldBusAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockPersistenceAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Adapters/Mock/MockRealtimeClockAdapter.c

@@ -12,7 +12,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } IndicatorLEDAdapterCtx_t;
 
 void                 IndicatorLEDAdapterInit(IndicatorLEDAdapterCtx_t *ctx);

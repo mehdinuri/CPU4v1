@@ -46,6 +46,8 @@ extern uint8_t SNMPClientStart(ip_addr_t *pSTargetIp);
 extern void SNMPClientStop(void);
 extern tESNMPClientState SNMPClientGetState(void);
 extern uint8_t SNMPClientIsStarted(void);
+extern void SNMPClientBindDomainServices(void);
+extern void SNMPClientProcessEventReportTrap(void);
 extern void SNMPClientSendPowerOffTrap(void);
 extern void SNMPSendColdStartTrap(void);
 extern uint8_t SNMPSendPowerDownTrap(void);

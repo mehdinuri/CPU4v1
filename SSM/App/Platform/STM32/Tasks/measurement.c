@@ -49,27 +49,27 @@
 #define FLASH_SYNC_STALE_TIMEOUT_MS     1500U
 
 /* Private variables ---------------------------------------------------------*/
-static uint8_t bCommLedToggleCntr = 0;
+static uint8_t commLedToggleCntr = 0;
 
-static tSSignalOutputStateCntr SaSignalOutputStateCntrs[SIGNAL_OUTPUTS_PER_SSM];
+static SignalOutputStateCntr_t signalOutputStateCntrs[SIGNAL_OUTPUTS_PER_SSM];
 
 /* OutputVerify plumbing. Each cycle commands the 12 outputs via
- * SignalGroupSwitchStatesSet (captured into SPendingCommandedImage), then
+ * SignalGroupSwitchStatesSet (captured into pendingCommandedImage), then
  * observes what actually happened via SignalOutputStatesCheck (into
- * SObservedImage). Because the ISR-accumulated counters reflect the period
+ * observedImage). Because the ISR-accumulated counters reflect the period
  * *before* the most recent command took effect, the verify compares the
- * *previous* command (SLastCommandedImage) against the current observation,
+ * *previous* command (lastCommandedImage) against the current observation,
  * then promotes pending → last.
  *
- * SObservedImage is also the voltage-side input to the outgoing CAN frame
+ * observedImage is also the voltage-side input to the outgoing CAN frame
  * (VoltageCurrentFrame_Encode), so it serves double duty.
  */
-static tSSignalOutputImage SPendingCommandedImage;
-static tSSignalOutputImage SLastCommandedImage;
-static tSSignalOutputImage SObservedImage;
-static tSOutputVerifyState SOutputVerify;
-static tSSignalDiagnosticsState SDiagnostics;
-static uint8_t bVerifyArmed = 0U;   /* first cycle has no "last" yet */
+static SignalOutputImage_t pendingCommandedImage;
+static SignalOutputImage_t lastCommandedImage;
+static SignalOutputImage_t observedImage;
+static OutputVerifyState_t outputVerify;
+static SignalDiagnosticsState_t diagnostics;
+static uint8_t verifyArmed = 0U;   /* first cycle has no "last" yet */
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -84,19 +84,19 @@ static uint8_t bVerifyArmed = 0U;   /* first cycle has no "last" yet */
 /* Private application code --------------------------------------------------*/
 static void SignalOutputStateCntrsInit(void)
 {
-  memset(SaSignalOutputStateCntrs, 0, sizeof(SaSignalOutputStateCntrs));
+  memset(signalOutputStateCntrs, 0, sizeof(signalOutputStateCntrs));
 }
 
 static void TaskInit(void)
 {
-  bCommLedToggleCntr = 0;
+  commLedToggleCntr = 0;
 
-  memset(&SPendingCommandedImage, 0, sizeof(SPendingCommandedImage));
-  memset(&SLastCommandedImage, 0, sizeof(SLastCommandedImage));
-  memset(&SObservedImage, 0, sizeof(SObservedImage));
-  OutputVerify_Reset(&SOutputVerify);
-  SignalDiagnostics_Reset(&SDiagnostics);
-  bVerifyArmed = 0U;
+  memset(&pendingCommandedImage, 0, sizeof(pendingCommandedImage));
+  memset(&lastCommandedImage, 0, sizeof(lastCommandedImage));
+  memset(&observedImage, 0, sizeof(observedImage));
+  OutputVerify_Reset(&outputVerify);
+  SignalDiagnostics_Reset(&diagnostics);
+  verifyArmed = 0U;
 
   SignalOutputStateCntrsInit();
 }
@@ -120,196 +120,196 @@ static void GridFreqMeasurementStart(void)
 
 static void SignalOutputStatesCheck(void)
 {
-  tSSignalOutputStateCntr SSnapshot[SIGNAL_OUTPUTS_PER_SSM];
+  SignalOutputStateCntr_t snapshot[SIGNAL_OUTPUTS_PER_SSM];
   uint8_t i;
 
   /* Snapshot the counters under a brief critical section. The TIM4 OC ISR
-   * (MeasurementSGStatesCntrsSet) writes to SaSignalOutputStateCntrs every
+   * (MeasurementSGStatesCntrsSet) writes to signalOutputStateCntrs every
    * ~1 ms; we must stop it from racing us between the read and the zero.
    * taskENTER_CRITICAL masks the ISR via BASEPRI for the few μs this takes —
    * correct primitive for task-vs-ISR shared counters (osMutex would have
    * been UB from the ISR side).
    */
   taskENTER_CRITICAL();
-  memcpy(SSnapshot, SaSignalOutputStateCntrs, sizeof(SSnapshot));
+  memcpy(snapshot, signalOutputStateCntrs, sizeof(snapshot));
   SignalOutputStateCntrsInit();
   taskEXIT_CRITICAL();
 
   for (i = 0U; i < SIGNAL_OUTPUTS_PER_SSM; i++)
   {
-    SObservedImage.aChannels[i] =
-      SignalOutput_IsActive(SSnapshot[i].bOnCntr, SSnapshot[i].bOffCntr);
+    observedImage.channels[i] =
+      SignalOutput_IsActive(snapshot[i].onCntr, snapshot[i].offCntr);
   }
 } /* SignalOutputStatesCheck */
 
 static void OutputVerifyStep(void)
 {
-  /* The counters we just folded into SObservedImage were accumulated while
-   * SLastCommandedImage was the active command (the *previous* cycle's).
-   * Verify against that; then promote SPendingCommandedImage → "last" so
+  /* The counters we just folded into observedImage were accumulated while
+   * lastCommandedImage was the active command (the *previous* cycle's).
+   * Verify against that; then promote pendingCommandedImage → "last" so
    * the next cycle's verify uses the right reference.
    *
-   * Skip the very first cycle: SLastCommandedImage is all-zeros then, but
-   * so is SObservedImage (no samples yet), so technically it would match —
-   * the bVerifyArmed guard keeps the semantics explicit regardless.
+   * Skip the very first cycle: lastCommandedImage is all-zeros then, but
+   * so is observedImage (no samples yet), so technically it would match —
+   * the verifyArmed guard keeps the semantics explicit regardless.
    */
-  if (bVerifyArmed != 0U)
+  if (verifyArmed != 0U)
   {
-    OutputVerify_Step(&SOutputVerify, &SLastCommandedImage, &SObservedImage);
-    if (SOutputVerify.bFaultActive != 0U)
+    OutputVerify_Step(&outputVerify, &lastCommandedImage, &observedImage);
+    if (outputVerify.faultActive != 0U)
     {
       /* Hardened Fault Handling: Bypass task latency and immediately drop
        * all signals to Dark. External MMU will trip on Red Fail/Loss of Signal.
        */
-      SignalOutput_AllOff(&g_SignalOutputPort);
+      SignalOutput_AllOff(&g_signalOutputPort);
       MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT);
     }
   }
 
-  SLastCommandedImage = SPendingCommandedImage;
-  bVerifyArmed = 1U;
+  lastCommandedImage = pendingCommandedImage;
+  verifyArmed = 1U;
 }
 
 static void SignalGroupSwitchStatesSet(void)
 {
-  tSSignalOutputBuildInputs SInputs;
-  uint8_t bGroup;
-  uint8_t bOutput;
-  uint8_t bIdx;
+  SignalOutputBuildInputs_t inputs;
+  uint8_t group;
+  uint8_t output;
+  uint8_t idx;
 
   /* Refuse to command signals if a hardware fault has been latched. */
-  if (SOutputVerify.bFaultActive != 0U)
+  if (outputVerify.faultActive != 0U)
   {
-    SignalOutput_AllOff(&g_SignalOutputPort);
-    memset(&SPendingCommandedImage, 0, sizeof(SPendingCommandedImage));
+    SignalOutput_AllOff(&g_signalOutputPort);
+    memset(&pendingCommandedImage, 0, sizeof(pendingCommandedImage));
 
     return;
   }
 
-  SInputs.bFlashActive = CANFlashStatusGet();
-  SInputs.bFlashSyncActive = CANFlashSyncStatusGet();
+  inputs.flashActive = CANFlashStatusGet();
+  inputs.flashSyncActive = CANFlashSyncStatusGet();
 
   /* Flash-sync deadman: if we're in flash mode but the PSM sync source has
    * gone silent, collapse to the safe (all-off) state instead of trusting a
-   * stale fFlashSyncStatus. Raise a maintenance fault bit so the condition
+   * stale flashSyncStatus. Raise a maintenance fault bit so the condition
    * is recorded before the hardware watchdog eventually resets the board.
    *
    * In non-flash mode the deadman doesn't apply — the sync frames aren't
    * expected to arrive at all in that mode.
    */
-  if ((SInputs.bFlashActive != 0U)
-      && FlashSyncWatchdog_IsStale(&g_FlashSyncWatchdog,
-                                   Tick_Now_ms(&g_TickPort),
+  if ((inputs.flashActive != 0U)
+      && FlashSyncWatchdog_IsStale(&g_flashSyncWatchdog,
+                                   Tick_Now_ms(&g_tickPort),
                                    FLASH_SYNC_STALE_TIMEOUT_MS))
   {
-    SignalOutput_AllOff(&g_SignalOutputPort);
+    SignalOutput_AllOff(&g_signalOutputPort);
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_FLASHSYNC_STALE);
-    memset(&SPendingCommandedImage, 0, sizeof(SPendingCommandedImage));
+    memset(&pendingCommandedImage, 0, sizeof(pendingCommandedImage));
 
     return;
   }
 
-  for (bGroup = 0U; bGroup < SIGNAL_GROUPS_PER_SSM; bGroup++)
+  for (group = 0U; group < SIGNAL_GROUPS_PER_SSM; group++)
   {
-    for (bOutput = 0U; bOutput < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP; bOutput++)
+    for (output = 0U; output < SIGNAL_OUTPUTS_PER_SIGNAL_GROUP; output++)
     {
-      bIdx = (uint8_t) ((bGroup * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + bOutput);
-      SInputs.aRunChannels[bIdx] = (uint8_t) CANSignalOutputStateGet(bGroup,
-                                                                     bOutput);
-      SInputs.aFlashChannels[bIdx] =
-        (uint8_t) CANSignalOutputFlashStateGet(bGroup,
-                                               bOutput);
+      idx = (uint8_t) ((group * SIGNAL_OUTPUTS_PER_SIGNAL_GROUP) + output);
+      inputs.runChannels[idx] = (uint8_t) CANSignalOutputStateGet(group,
+                                                                  output);
+      inputs.flashChannels[idx] =
+        (uint8_t) CANSignalOutputFlashStateGet(group,
+                                               output);
     }
   }
 
-  SignalOutputImageBuilder_Build(&SInputs, &SPendingCommandedImage);
+  SignalOutputImageBuilder_Build(&inputs, &pendingCommandedImage);
 
-  SignalOutput_Apply(&g_SignalOutputPort, &SPendingCommandedImage);
+  SignalOutput_Apply(&g_signalOutputPort, &pendingCommandedImage);
 } /* SignalGroupSwitchStatesSet */
 
 static uint8_t VoltageCurrentStatusBuild(
-  const tSCurrentMeasurementSnapshot *pSCurSnap)
+  const CurrentMeasurementSnapshot_t *curSnap)
 {
-  uint8_t bStatus = 0U;
-  uint32_t lFaults = MaintenanceTaskFaultsGet();
+  uint8_t status = 0U;
+  uint32_t faults = MaintenanceTaskFaultsGet();
 
   if (CANRxFaultLatched() != 0U)
   {
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
-    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
+    faults = (uint32_t) (faults | EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT);
   }
 
   if (CANTxFaultLatched() != 0U)
   {
-    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
+    faults = (uint32_t) (faults | EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
   }
 
   if (StorageFaultLatched() != 0U)
   {
-    lFaults = (uint32_t) (lFaults | EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT);
+    faults = (uint32_t) (faults | EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_MEASUREMENT_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_MEASUREMENT_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_MEASUREMENT_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_MEASUREMENT_FAULT);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_FLASHSYNC_STALE) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_FLASHSYNC_STALE) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_FLASHSYNC_STALE);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_FLASHSYNC_STALE);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_OUTPUT_VERIFY_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_OUTPUT_VERIFY_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_OUTPUT_VERIFY_FAULT);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CAN_RX_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_CAN_RX_FAULT);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CAN_TX_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_CAN_TX_FAULT);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_STORAGE_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_STORAGE_FAULT);
   }
 
-  if ((pSCurSnap->bStatus & CURRENT_MEASUREMENT_STATUS_SATURATED) != 0U)
+  if ((curSnap->status & CURRENT_MEASUREMENT_STATUS_SATURATED) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_CURRENT_SATURATED);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_CURRENT_SATURATED);
   }
 
-  if ((lFaults & EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT) != 0U)
+  if ((faults & EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT) != 0U)
   {
-    bStatus = (uint8_t) (bStatus | VOLTAGE_CURRENT_STATUS_LAMP_OUT_FAULT);
+    status = (uint8_t) (status | VOLTAGE_CURRENT_STATUS_LAMP_OUT_FAULT);
   }
 
-  return bStatus;
+  return status;
 } /* VoltageCurrentStatusBuild */
 
-static void VoltageCurrentSend(const tSCurrentMeasurementSnapshot *pSCurSnap)
+static void VoltageCurrentSend(const CurrentMeasurementSnapshot_t *curSnap)
 {
-  tSVoltageCurrentFrameInputs SFrameIn;
-  tSCanFrame SFrame;
+  VoltageCurrentFrameInputs_t frameIn;
+  CanFrame_t frame;
 
-  /* pack the 10-bit currents via the domain service. SObservedImage
+  /* pack the 10-bit currents via the domain service. observedImage
    * already holds the 12 voltage-channel states.
    */
-  CurrentMeasurement_Pack(pSCurSnap, &SFrameIn.SCurrentWire);
-  SFrameIn.SVoltageImage = SObservedImage;
-  SFrameIn.bStatus = VoltageCurrentStatusBuild(pSCurSnap);
+  CurrentMeasurement_Pack(curSnap, &frameIn.currentWire);
+  frameIn.voltageImage = observedImage;
+  frameIn.status = VoltageCurrentStatusBuild(curSnap);
 
-  SFrame.sStdId = (uint16_t) (FDCAN_SSM_VOLTAGE_CURRENT_1_STD_ID
-                              + g_bCardId);
-  SFrame.bLen = VOLTAGE_CURRENT_FRAME_BYTES;
-  VoltageCurrentFrame_Encode(&SFrameIn, SFrame.abData);
+  frame.stdId = (uint16_t) (FDCAN_SSM_VOLTAGE_CURRENT_1_STD_ID
+                            + g_cardId);
+  frame.len = VOLTAGE_CURRENT_FRAME_BYTES;
+  VoltageCurrentFrame_Encode(&frameIn, frame.abData);
 
-  if (CanBus_SendStd(&g_CanBusPort, CAN_BUS_FDCAN1, &SFrame) == 0U)
+  if (CanBus_SendStd(&g_canBusPort, CAN_BUS_FDCAN1, &frame) == 0U)
   {
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT);
   }
@@ -329,110 +329,110 @@ void MeasurementSGStatesCntrsSet(void)
 {
   if (!GPIOGetR1_V())
   {
-    SaSignalOutputStateCntrs[0].bOnCntr++;
+    signalOutputStateCntrs[0].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[0].bOffCntr++;
+    signalOutputStateCntrs[0].offCntr++;
   }
 
   if (!GPIOGetY1_V())
   {
-    SaSignalOutputStateCntrs[1].bOnCntr++;
+    signalOutputStateCntrs[1].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[1].bOffCntr++;
+    signalOutputStateCntrs[1].offCntr++;
   }
 
   if (!GPIOGetG1_V())
   {
-    SaSignalOutputStateCntrs[2].bOnCntr++;
+    signalOutputStateCntrs[2].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[2].bOffCntr++;
+    signalOutputStateCntrs[2].offCntr++;
   }
 
   if (!GPIOGetR2_V())
   {
-    SaSignalOutputStateCntrs[3].bOnCntr++;
+    signalOutputStateCntrs[3].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[3].bOffCntr++;
+    signalOutputStateCntrs[3].offCntr++;
   }
 
   if (!GPIOGetY2_V())
   {
-    SaSignalOutputStateCntrs[4].bOnCntr++;
+    signalOutputStateCntrs[4].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[4].bOffCntr++;
+    signalOutputStateCntrs[4].offCntr++;
   }
 
   if (!GPIOGetG2_V())
   {
-    SaSignalOutputStateCntrs[5].bOnCntr++;
+    signalOutputStateCntrs[5].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[5].bOffCntr++;
+    signalOutputStateCntrs[5].offCntr++;
   }
 
   if (!GPIOGetR3_V())
   {
-    SaSignalOutputStateCntrs[6].bOnCntr++;
+    signalOutputStateCntrs[6].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[6].bOffCntr++;
+    signalOutputStateCntrs[6].offCntr++;
   }
 
   if (!GPIOGetY3_V())
   {
-    SaSignalOutputStateCntrs[7].bOnCntr++;
+    signalOutputStateCntrs[7].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[7].bOffCntr++;
+    signalOutputStateCntrs[7].offCntr++;
   }
 
   if (!GPIOGetG3_V())
   {
-    SaSignalOutputStateCntrs[8].bOnCntr++;
+    signalOutputStateCntrs[8].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[8].bOffCntr++;
+    signalOutputStateCntrs[8].offCntr++;
   }
 
   if (!GPIOGetR4_V())
   {
-    SaSignalOutputStateCntrs[9].bOnCntr++;
+    signalOutputStateCntrs[9].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[9].bOffCntr++;
+    signalOutputStateCntrs[9].offCntr++;
   }
 
   if (!GPIOGetY4_V())
   {
-    SaSignalOutputStateCntrs[10].bOnCntr++;
+    signalOutputStateCntrs[10].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[10].bOffCntr++;
+    signalOutputStateCntrs[10].offCntr++;
   }
 
   if (!GPIOGetG4_V())
   {
-    SaSignalOutputStateCntrs[11].bOnCntr++;
+    signalOutputStateCntrs[11].onCntr++;
   }
   else
   {
-    SaSignalOutputStateCntrs[11].bOffCntr++;
+    signalOutputStateCntrs[11].offCntr++;
   }
 } /* MeasurementSGStatesCntrsSet */
 
@@ -444,9 +444,9 @@ void MeasurementThreadFlagSet(void)
 /* Public application code --------------------------------------------------*/
 
 /* USER CODE BEGIN Header_vMeasurementTask */
-uint32_t lMeasurementStart = 0;
-uint32_t lMeasurementFinish = 0;
-uint32_t lMeasurementDuration = 0;
+uint32_t measurementStart = 0;
+uint32_t measurementFinish = 0;
+uint32_t measurementDuration = 0;
 
 /**
  * @brief Function implementing the xSignalMonitorTask thread.
@@ -457,14 +457,14 @@ uint32_t lMeasurementDuration = 0;
 void MeasurementTaskFunc(void *argument)
 {
   /* USER CODE BEGIN vMeasurementTask */
-  uint8_t bConsecutiveTimeouts = 0U;
+  uint8_t consecutiveTimeouts = 0U;
 
   TaskInit();
 
   CANSignalOutputFlashConfigCheck();
 
   GridFreqMeasurementStart();
-  lMeasurementStart = HAL_GetTick();
+  measurementStart = HAL_GetTick();
 
   SignalOutputStatesTimerStart();
   SGCurrentMeasurementStart();
@@ -472,32 +472,32 @@ void MeasurementTaskFunc(void *argument)
   /* Infinite loop */
   while (pdTRUE)
   {
-    uint32_t lFlags = osThreadFlagsWait(THREAD_FLAGS_MEASUREMENT_DONE,
-                                        osFlagsWaitAll,
-                                        MEASUREMENT_CYCLE_TIMEOUT_MS);
+    uint32_t flags = osThreadFlagsWait(THREAD_FLAGS_MEASUREMENT_DONE,
+                                       osFlagsWaitAll,
+                                       MEASUREMENT_CYCLE_TIMEOUT_MS);
 
     /* osThreadFlagsWait returns the flags on success or an error bit
      * (>= 0x80000000) on timeout / parameter / resource error. Timeout is
      * the only expected non-success path here.
      */
-    if ((lFlags & 0x80000000U) != 0U)
+    if ((flags & 0x80000000U) != 0U)
     {
-      bConsecutiveTimeouts++;
-      if (bConsecutiveTimeouts >= MEASUREMENT_MAX_CONSECUTIVE_TIMEOUTS)
+      consecutiveTimeouts++;
+      if (consecutiveTimeouts >= MEASUREMENT_MAX_CONSECUTIVE_TIMEOUTS)
       {
         /* ADC path is wedged. Collapse to a known-safe state and tell the
          * maintenance task. Keep the counter saturated so repeated misses
          * don't wrap; we'll reset on the next good wake.
          */
-        SignalOutput_AllOff(&g_SignalOutputPort);
+        SignalOutput_AllOff(&g_signalOutputPort);
         MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_MEASUREMENT_FAULT);
-        bConsecutiveTimeouts = MEASUREMENT_MAX_CONSECUTIVE_TIMEOUTS;
+        consecutiveTimeouts = MEASUREMENT_MAX_CONSECUTIVE_TIMEOUTS;
       }
 
       continue;
     }
 
-    bConsecutiveTimeouts = 0U;
+    consecutiveTimeouts = 0U;
 
     /* Compute RMS + auto-range + publish the latest ADC half in task
      * context. Used to run inside the DMA ISR (~2 kcycles of float math
@@ -506,28 +506,29 @@ void MeasurementTaskFunc(void *argument)
      */
     ADCSGCurrentProcessLatestHalf();
 
-    lMeasurementFinish = HAL_GetTick();
-    lMeasurementDuration = lMeasurementFinish - lMeasurementStart;
-    lMeasurementStart = lMeasurementFinish;
+    measurementFinish = HAL_GetTick();
+    measurementDuration = measurementFinish - measurementStart;
+    measurementStart = measurementFinish;
 
     SignalGroupSwitchStatesSet();
     SignalOutputStatesCheck();
     OutputVerifyStep();
 
-    tSCurrentMeasurementSnapshot SCurSnap;
+    CurrentMeasurementSnapshot_t curSnap;
 
-    CurrentMeasurement_GetLatest(&g_CurrentMeasurementPort, &SCurSnap);
+    CurrentMeasurement_GetLatest(&g_currentMeasurementPort, &curSnap);
 
-    if (SignalDiagnostics_Step(&SDiagnostics, &SObservedImage, &SCurSnap) != 0U)
+    if (SignalDiagnostics_Step(&diagnostics, &observedImage,
+                               &curSnap) != 0U)
     {
       MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT);
     }
 
-    VoltageCurrentSend(&SCurSnap);
+    VoltageCurrentSend(&curSnap);
 
-    if (bCommLedToggleCntr++ == COMM_LED_PERIOD)
+    if (commLedToggleCntr++ == COMM_LED_PERIOD)
     {
-      bCommLedToggleCntr = 0;
+      commLedToggleCntr = 0;
       GPIOComLEDToggle();
     }
 

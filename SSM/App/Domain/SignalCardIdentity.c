@@ -6,29 +6,29 @@
 
 #include "Domain/SignalCardIdentity.h"
 
-uint8_t SignalCardIdentity_IsValid(uint8_t bCardId)
+uint8_t SignalCardIdentity_IsValid(uint8_t cardId)
 {
-  return (bCardId < SIGNAL_CARD_ID_VALID_COUNT) ? 1U : 0U;
+  return (cardId < SIGNAL_CARD_ID_VALID_COUNT) ? 1U : 0U;
 }
 
-uint8_t SignalCardIdentity_CommandBank(uint8_t bCardId)
+uint8_t SignalCardIdentity_CommandBank(uint8_t cardId)
 {
-  if (SignalCardIdentity_IsValid(bCardId) == 0U)
+  if (SignalCardIdentity_IsValid(cardId) == 0U)
   {
     return 0xFFU;
   }
 
-  return (bCardId < SIGNAL_CARD_MODULES_PER_BANK) ? 0U : 1U;
+  return (cardId < SIGNAL_CARD_MODULES_PER_BANK) ? 0U : 1U;
 }
 
-uint8_t SignalCardIdentity_OutputBitBase(uint8_t bCardId)
+uint8_t SignalCardIdentity_OutputBitBase(uint8_t cardId)
 {
-  if (SignalCardIdentity_IsValid(bCardId) == 0U)
+  if (SignalCardIdentity_IsValid(cardId) == 0U)
   {
     return 0xFFU;
   }
 
-  return (uint8_t) ((bCardId % SIGNAL_CARD_MODULES_PER_BANK)
+  return (uint8_t) ((cardId % SIGNAL_CARD_MODULES_PER_BANK)
                     * SIGNAL_CARD_OUTPUT_CHANNELS_PER_MODULE);
 }
 

@@ -147,18 +147,14 @@ Accessed via I2C through `StorageRequest(bReqId, address, data, size)`. Persiste
 
 ## Naming Conventions
 
-Hungarian-style prefixes used throughout:
+Follow the system-wide rules in the root `CLAUDE.md` § "Naming Conventions (system-wide)":
+`PascalCase_t` types, `PascalCase_e` enums, `camelCase` variables/fields/params, `SCREAMING_SNAKE_CASE` macros, `g_` / `s_` for scope, **no Hungarian prefixes** (`b` / `s` / `l` / `f` / `p` / `tS` / `tE` / `tp` / `S` struct-instance prefix).
 
-| Prefix | Type |
-|---|---|
-| `b` | `uint8_t` / byte / bool flag |
-| `s` | `uint16_t` / short |
-| `l` | `uint32_t` / long |
-| `f` | `float` or boolean flag (context-dependent) |
-| `p` | pointer |
-| `tS` | struct typedef |
-| `tE` | enum typedef |
-| `S` (uppercase) | struct instance |
+**Migration status**: PSM is **fully migrated** — the Hungarian-prefix
+scheme inherited from the prior codebase has been retired. Do not
+reintroduce any of those prefixes in PSM user code. CubeMX-generated
+locals inside `Core/` HAL init blocks (e.g. `sConfig`, `sMasterConfig`) are
+regenerated on each `.ioc` export and are intentionally left alone.
 
 ## GitHub Actions Workflows
 
@@ -175,3 +171,14 @@ Three workflows in `.github/workflows/`:
 - `Core/Src/can_util.c` is **not** included in the CMake build. It references old function names from a prior codebase version and can be ignored or removed.
 - `MAINTENANCE_MAX_TASK_FAILURES = 2` and `MAINTENANCE_TASK_TIMEOUT_MS = 500 ms` — worst-case fault detection latency = 1000 ms (NEMA TS2 compliant). Adjust if tasks legitimately need more time to start.
 - When adding new testable computation to `Tasks/`, extract it into `App/Domain/` first and add Unity tests in `Tests/Unit/`. Each test file must include its own `main()` with `UNITY_BEGIN()`, `RUN_TEST()` calls, and `UNITY_END()`.
+
+## Vendor MIB Maintenance (1.3.6.1.4.1.59748)
+
+PSM does not serve SNMP itself, but PSM-originated signals (AC line loss, rail voltage faults, PSM-missing heartbeats) feed the CP SNMP agent via the MP and surface under the Teknotel enterprise arc `1.3.6.1.4.1.59748`. The canonical `.mib` (vendor "Teknotel Elektronik") lives at `../CPM/CP/Docs/TEKNOTEL-CPU4-MIB.mib`. OID arc shape: `teknotel .59748 → transportation .4 → devices .2 → cpu4 .1 → { unit .3, channel .8, cpMpLink .20, driverModule .21 }`.
+
+**Update that `.mib` in the same commit** whenever PSM work changes:
+
+- The semantics of any `CpMpFaultGlobalFlags_t` bit driven from PSM telemetry (e.g. `AC_LINE`, `RAIL_24V`, `RAIL_5V`, `PSM_MISSING`) — these are mirrored by `cpMpLinkGlobalFlags` at `.59748.4.2.1.20.8`
+- The trigger condition for `teknotelPowerDownTrap` (specific-trap 1, emitted at `.59748.0.1`) in `CPM/CP/LWIP/App/snmp_client.c`
+
+Do not invent new enterprise OIDs from PSM — new objects must be added on the CP side via `CPM/CP/App/Domain/NTCIP/MibVendor59748/` (one file per functional group) and simultaneously in the `.mib`.

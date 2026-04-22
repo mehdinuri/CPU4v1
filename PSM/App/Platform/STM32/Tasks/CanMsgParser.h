@@ -23,7 +23,7 @@
 /* Public type values -------------------------------------------------------------*/
 
 /* Public function prototypes -----------------------------------------------*/
-extern void CANRxRequest(tpSFDCANRxMsg pSRxMsg);
+extern void CANRxRequest(FdcanRxMsg_t *rxMsg);
 
 #endif /* APP_PLATFORM_STM32_TASKS_CAN_MSG_PARSER_H */
 

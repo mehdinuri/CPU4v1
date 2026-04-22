@@ -7,7 +7,7 @@
 #include "cmsis_os.h"
 
 #include "Adapters/STM32/ControlBusAdapter.h"
-#include "Adapters/STM32/FieldBusAdapter.h"
+#include "Adapters/STM32/FieldBusRxAdapter.h"
 #include "Adapters/STM32/StatusLEDAdapter.h"
 #include "Bootstrap/DomainServices.h"
 #include "Bootstrap/HardwarePorts.h"
@@ -18,7 +18,7 @@
 #define MALFUNCTION_TICK_PERIOD_MS 10U
 #define MAINTENANCE_TICK_PERIOD_MS 100U
 
-extern FieldBusAdapterCtx_t *MainApplicationGetFieldBusAdapter(void);
+extern FieldBusRxAdapterCtx_t *MainApplicationGetFieldBusRxAdapter(void);
 extern ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void);
 
 static osThreadId_t s_malfunctionTask;
@@ -44,12 +44,12 @@ static void MalfunctionTaskFunc(void *argument)
 
   for (;;)
   {
-    FieldBusAdapterCtx_t *fieldBus = MainApplicationGetFieldBusAdapter();
+    FieldBusRxAdapterCtx_t *fieldBus = MainApplicationGetFieldBusRxAdapter();
     ControlBusAdapterCtx_t *controlBus = MainApplicationGetControlBusAdapter();
 
     ControlBusAdapterStep(controlBus);
-    FieldBusAdapterStep(fieldBus);
-    FieldBusAdapterCommit(fieldBus, HAL_GetTick());
+    FieldBusRxAdapterStep(fieldBus);
+    FieldBusRxAdapterCommit(fieldBus, HAL_GetTick());
     MalfunctionEngineTick(&g_malfunctionEngine);
     CpMpLinkServiceStep(&g_cpMpLinkService);
     (void) WatchdogFeed(&g_watchdogPort);

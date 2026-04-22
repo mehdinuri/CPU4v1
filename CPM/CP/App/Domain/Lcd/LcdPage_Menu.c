@@ -22,17 +22,17 @@ typedef struct
   uint8_t selectedIndex;
 } MenuCtx_t;
 
-static const char *const pStrMenuEntries[LANGUAGES_MAX][6] = {
+static const char *const pStrMenuEntries[LANGUAGES_MAX][7] = {
   { "GUVENLIK", "CiHAZ LOG", "BAgLANTI LOG", "LOKAL/SUNUCU iP", "AYARLAR",
-    "TEST" },
+    "CIKIS GUCU", "TEST" },
   { "SAFETY", "DEVICE LOG", "CONNECTION LOG", "LOCAL/SERVER IP", "SETTINGS",
-    "TEST" }
+    "OUTPUT POWER", "TEST" }
 };
 
 static uint8_t MenuEntryCount(const MenuCtx_t *ctx)
 {
   return (uint8_t) ((UserGetActiveRole(ctx->services->user) == USER_ROLE_ADMIN)
-                    ? 6U : 4U);
+                    ? 7U : 4U);
 }
 
 static void OnEnter(void *ctx, LcdEngine_t *e)
@@ -136,6 +136,10 @@ static void OnInput(void *ctx, LcdEngine_t *e, uint8_t key)
       LcdEngine_SwitchPage(e, c->pages->settings);
     }
     else if (c->selectedIndex == 5)
+    {
+      LcdEngine_SwitchPage(e, c->pages->outputPower);
+    }
+    else if (c->selectedIndex == 6)
     {
       LcdEngine_SwitchPage(e, c->pages->outputTest);
     }

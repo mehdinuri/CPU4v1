@@ -197,7 +197,7 @@ static uint8_t FindFirstForcedOutput(const MmiRuntimeOutputTestSummaryV2_t *summ
   for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
        channelIndex++)
   {
-    uint16_t mask = (uint16_t) (1U << channelIndex);
+    uint32_t mask = (uint32_t) (1UL << channelIndex);
 
     if ((summary->forcedMask & mask) == 0U)
     {

@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#define CPMP_LOG_EVENT_MP_MMU_FAULT 120U
+
 static uint16_t ReadUint16Le(const uint8_t *bytes)
 {
   if (bytes == NULL)
@@ -25,6 +27,19 @@ static uint32_t ReadUint32Le(const uint8_t *bytes)
          | ((uint32_t) bytes[1] << 8U)
          | ((uint32_t) bytes[2] << 16U)
          | ((uint32_t) bytes[3] << 24U);
+}
+
+static void WriteUint32Le(uint8_t *bytes, uint32_t value)
+{
+  if (bytes == NULL)
+  {
+    return;
+  }
+
+  bytes[0] = (uint8_t) (value & 0xFFU);
+  bytes[1] = (uint8_t) ((value >> 8U) & 0xFFU);
+  bytes[2] = (uint8_t) ((value >> 16U) & 0xFFU);
+  bytes[3] = (uint8_t) ((value >> 24U) & 0xFFU);
 }
 
 static MmuControlAction_t ToControllerSafetyAction(CpMpSafetyAction_t action)
@@ -49,6 +64,306 @@ static MmuControlAction_t ToControllerSafetyAction(CpMpSafetyAction_t action)
   }
 }
 
+static uint8_t PhaseListContains(const IntersectionPhaseReferenceList_t *list,
+                                 uint8_t phaseNumber)
+{
+  uint8_t index;
+
+  if (list == NULL)
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < list->length; index++)
+  {
+    if (list->values[index] == phaseNumber)
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t PhasesAreConcurrent(const IntersectionConfig_t *config,
+                                   uint8_t phaseA,
+                                   uint8_t phaseB)
+{
+  const IntersectionPhaseConfig_t *a;
+  const IntersectionPhaseConfig_t *b;
+
+  if ((config == NULL) || (phaseA == 0U) || (phaseB == 0U))
+  {
+    return 0U;
+  }
+
+  if (phaseA == phaseB)
+  {
+    return 1U;
+  }
+
+  if ((phaseA > config->phaseCount) || (phaseB > config->phaseCount))
+  {
+    return 0U;
+  }
+
+  a = &config->phases[phaseA - 1U];
+  b = &config->phases[phaseB - 1U];
+
+  return (uint8_t) (PhaseListContains(&a->concurrency, phaseB)
+                    || PhaseListContains(&b->concurrency, phaseA));
+}
+
+static uint16_t PhaseMaskFromList(const IntersectionPhaseReferenceList_t *list,
+                                  uint8_t phaseCount)
+{
+  uint16_t mask = 0U;
+  uint8_t index;
+
+  if (list == NULL)
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < list->length; index++)
+  {
+    uint8_t phaseNumber = list->values[index];
+
+    if ((phaseNumber == 0U) || (phaseNumber > phaseCount)
+        || (phaseNumber > INTERSECTION_PHASE_COUNT_MAX))
+    {
+      continue;
+    }
+
+    mask |= (uint16_t) (1U << (phaseNumber - 1U));
+  }
+
+  return mask;
+}
+
+static uint16_t ChannelPhaseMask(const IntersectionConfig_t *config,
+                                 uint8_t channelIndex)
+{
+  const IntersectionChannelConfig_t *channel;
+
+  if ((config == NULL) || (channelIndex >= INTERSECTION_CHANNEL_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  channel = &config->channels[channelIndex];
+
+  switch ((IntersectionChannelControlType_t) channel->controlType)
+  {
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_PEDESTRIAN:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > INTERSECTION_PHASE_COUNT_MAX)
+            || (channel->controlSource > config->phaseCount))
+        {
+          return 0U;
+        }
+
+        return (uint16_t) (1U << (channel->controlSource - 1U));
+      }
+
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > INTERSECTION_OVERLAP_COUNT_MAX))
+        {
+          return 0U;
+        }
+
+        return PhaseMaskFromList(
+          &config->overlaps[channel->controlSource - 1U].includedPhases,
+          config->phaseCount);
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t PhaseMasksCanRunTogether(const IntersectionConfig_t *config,
+                                        uint16_t phaseMaskA,
+                                        uint16_t phaseMaskB)
+{
+  uint8_t phaseA;
+  uint8_t phaseB;
+
+  if ((config == NULL) || (phaseMaskA == 0U) || (phaseMaskB == 0U))
+  {
+    return 0U;
+  }
+
+  for (phaseA = 0U; phaseA < INTERSECTION_PHASE_COUNT_MAX; phaseA++)
+  {
+    if ((phaseMaskA & (uint16_t) (1U << phaseA)) == 0U)
+    {
+      continue;
+    }
+
+    for (phaseB = 0U; phaseB < INTERSECTION_PHASE_COUNT_MAX; phaseB++)
+    {
+      if ((phaseMaskB & (uint16_t) (1U << phaseB)) == 0U)
+      {
+        continue;
+      }
+
+      if (PhasesAreConcurrent(config, (uint8_t) (phaseA + 1U),
+                              (uint8_t) (phaseB + 1U)) != 0U)
+      {
+        return 1U;
+      }
+    }
+  }
+
+  return 0U;
+}
+
+static uint32_t ChannelConflictMask(const IntersectionConfig_t *config,
+                                    const uint16_t *channelPhaseMasks,
+                                    uint8_t channelIndex)
+{
+  uint32_t mask = 0U;
+  uint8_t otherIndex;
+
+  if ((config == NULL) || (channelPhaseMasks == NULL)
+      || (channelIndex >= INTERSECTION_CHANNEL_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  if (channelPhaseMasks[channelIndex] == 0U)
+  {
+    return 0U;
+  }
+
+  for (otherIndex = 0U; otherIndex < INTERSECTION_CHANNEL_COUNT_MAX; otherIndex++)
+  {
+    if ((otherIndex == channelIndex) || (channelPhaseMasks[otherIndex] == 0U))
+    {
+      continue;
+    }
+
+    if (PhaseMasksCanRunTogether(config,
+                                 channelPhaseMasks[channelIndex],
+                                 channelPhaseMasks[otherIndex]) == 0U)
+    {
+      mask |= (uint32_t) (1UL << otherIndex);
+    }
+  }
+
+  return mask;
+}
+
+static uint8_t ClampDsToByte(uint16_t value)
+{
+  return (value > 0xFFU) ? 0xFFU : (uint8_t) value;
+}
+
+static uint8_t ChannelMinYellowDs(const IntersectionConfig_t *config,
+                                  uint8_t channelIndex)
+{
+  const IntersectionChannelConfig_t *channel;
+
+  if ((config == NULL) || (channelIndex >= INTERSECTION_CHANNEL_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  channel = &config->channels[channelIndex];
+
+  switch ((IntersectionChannelControlType_t) channel->controlType)
+  {
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_PEDESTRIAN:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > config->phaseCount))
+        {
+          return 0U;
+        }
+
+        return ClampDsToByte(
+          config->phases[channel->controlSource - 1U].yellowChangeDs);
+      }
+
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > INTERSECTION_OVERLAP_COUNT_MAX))
+        {
+          return 0U;
+        }
+
+        return ClampDsToByte(
+          config->overlaps[channel->controlSource - 1U].trailYellowDs);
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
+static uint8_t ChannelRedClearDs(const IntersectionConfig_t *config,
+                                 uint8_t channelIndex)
+{
+  const IntersectionChannelConfig_t *channel;
+
+  if ((config == NULL) || (channelIndex >= INTERSECTION_CHANNEL_COUNT_MAX))
+  {
+    return 0U;
+  }
+
+  channel = &config->channels[channelIndex];
+
+  switch ((IntersectionChannelControlType_t) channel->controlType)
+  {
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_PEDESTRIAN:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > config->phaseCount))
+        {
+          return 0U;
+        }
+
+        return ClampDsToByte(
+          config->phases[channel->controlSource - 1U].redClearDs);
+      }
+
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_PED_OVERLAP:
+      case INTERSECTION_CHANNEL_CONTROL_TYPE_QUEUE_JUMP:
+      {
+        if ((channel->controlSource == 0U)
+            || (channel->controlSource > INTERSECTION_OVERLAP_COUNT_MAX))
+        {
+          return 0U;
+        }
+
+        return ClampDsToByte(
+          config->overlaps[channel->controlSource - 1U].trailRedDs);
+      }
+
+      default:
+      {
+        return 0U;
+      }
+  }
+}
+
 uint8_t CpMpLinkServicePeerHealthy(const CpMpLinkService_t *service)
 {
   if (service == NULL)
@@ -61,7 +376,7 @@ uint8_t CpMpLinkServicePeerHealthy(const CpMpLinkService_t *service)
                         <= CPMP_PEER_TIMEOUT_TICKS));
 }
 
-uint8_t CpMpLinkServiceAuthorityReady(const CpMpLinkService_t *service)
+static uint8_t PeerConfigMatchesActiveConfig(const CpMpLinkService_t *service)
 {
   if (service == NULL)
   {
@@ -73,6 +388,11 @@ uint8_t CpMpLinkServiceAuthorityReady(const CpMpLinkService_t *service)
                     && (service->lastMpConfigSetId == service->configSetId)
                     && (service->lastMpConfigGeneration
                         == service->configGeneration));
+}
+
+uint8_t CpMpLinkServiceAuthorityReady(const CpMpLinkService_t *service)
+{
+  return PeerConfigMatchesActiveConfig(service);
 }
 
 CpMpSafetyAction_t CpMpLinkServiceGetEffectiveSafetyAction(
@@ -103,7 +423,7 @@ uint8_t CpMpLinkServiceGetLastSafetyReasonCode(
 }
 
 uint8_t CpMpLinkServiceGetFaultStatus(const CpMpLinkService_t *service,
-                                      CpMpFaultStatusImageV1_t *faultStatus)
+                                      CpMpFaultStatusImage_t *faultStatus)
 {
   if ((service == NULL) || (faultStatus == NULL)
       || (service->lastFaultStatusValid == 0U))
@@ -134,8 +454,10 @@ static uint8_t BuildConfigImage(CpMpLinkService_t *service)
 {
   const IntersectionConfig_t *config;
   uint8_t phaseIndex;
+  uint8_t channelIndex;
   uint8_t outputRowIndex;
   uint8_t outputMapCount = 0U;
+  uint16_t channelPhaseMasks[INTERSECTION_CHANNEL_COUNT_MAX];
 
   if ((service == NULL) || (service->configurationService == NULL))
   {
@@ -154,6 +476,7 @@ static uint8_t BuildConfigImage(CpMpLinkService_t *service)
   service->configImage.channelCount = INTERSECTION_CHANNEL_COUNT_MAX;
   service->configImage.startupFlashSeconds = config->unit.startUpFlashSeconds;
   service->configImage.startupFlashMode = config->unit.startUpFlashMode;
+  service->configImage.failureFlashPeriodDs = config->unit.failureFlashPeriodDs;
 
   for (phaseIndex = 0U; phaseIndex < INTERSECTION_PHASE_COUNT_MAX; phaseIndex++)
   {
@@ -181,12 +504,27 @@ static uint8_t BuildConfigImage(CpMpLinkService_t *service)
     service->configImage.phaseConcurrencyMask[phaseIndex] = mask;
   }
 
-  for (phaseIndex = 0U; phaseIndex < INTERSECTION_CHANNEL_COUNT_MAX; phaseIndex++)
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex++)
   {
-    service->configImage.channelControlType[phaseIndex] =
-      config->channels[phaseIndex].controlType;
-    service->configImage.channelControlSource[phaseIndex] =
-      config->channels[phaseIndex].controlSource;
+    service->configImage.channelControlType[channelIndex] =
+      config->channels[channelIndex].controlType;
+    service->configImage.channelControlSource[channelIndex] =
+      config->channels[channelIndex].controlSource;
+    service->configImage.channelFlashMask[channelIndex] =
+      config->channels[channelIndex].flashMask;
+    channelPhaseMasks[channelIndex] = ChannelPhaseMask(config, channelIndex);
+  }
+
+  for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
+       channelIndex++)
+  {
+    service->configImage.channelConflictMask[channelIndex] =
+      ChannelConflictMask(config, channelPhaseMasks, channelIndex);
+    service->configImage.channelMinYellowDs[channelIndex] =
+      ChannelMinYellowDs(config, channelIndex);
+    service->configImage.channelRedClearDs[channelIndex] =
+      ChannelRedClearDs(config, channelIndex);
   }
 
   for (outputRowIndex = 0U;
@@ -277,6 +615,81 @@ static uint8_t SendFrame(CpMpLinkService_t *service,
   return ControlBusSendFrame(service->controlBusPort, &frame);
 }
 
+static void ApplyFaultMask(CpMpFaultStatusImage_t *faultStatus,
+                           uint16_t flag,
+                           uint32_t mask)
+{
+  uint8_t channelIndex;
+
+  if (faultStatus == NULL)
+  {
+    return;
+  }
+
+  for (channelIndex = 0U; channelIndex < CPMP_CONFIG_CHANNEL_COUNT;
+       channelIndex++)
+  {
+    if ((mask & (uint32_t) (1UL << channelIndex)) != 0U)
+    {
+      faultStatus->channelFlags[channelIndex] |= flag;
+    }
+  }
+}
+
+static void StoreReceivedEvent(CpMpLinkService_t *service,
+                               const CpMpFaultEventV1_t *event)
+{
+  uint8_t slot;
+
+  if ((service == NULL) || (event == NULL))
+  {
+    return;
+  }
+
+  slot = service->receivedEventHead;
+  service->receivedEvents[slot] = *event;
+  service->receivedEventHead = (uint8_t) ((slot + 1U)
+    % CPMP_RECEIVED_EVENT_HISTORY_CAPACITY);
+  if (service->receivedEventCount < CPMP_RECEIVED_EVENT_HISTORY_CAPACITY)
+  {
+    service->receivedEventCount++;
+  }
+}
+
+static void LogReceivedEvent(CpMpLinkService_t *service,
+                             const CpMpFaultEventV1_t *event)
+{
+  uint8_t packedParam;
+
+  if ((service == NULL) || (event == NULL) || (service->logEventPort == NULL))
+  {
+    return;
+  }
+
+  packedParam = (uint8_t) (((event->severity & 0x03U) << 6U)
+                           | (event->code & 0x3FU));
+  (void) LogEventAppend(service->logEventPort,
+                        CPMP_LOG_EVENT_MP_MMU_FAULT,
+                        packedParam,
+                        event->source,
+                        event->param);
+}
+
+static void SendEventAck(CpMpLinkService_t *service, uint32_t sequence)
+{
+  uint8_t payload[5];
+
+  if (service == NULL)
+  {
+    return;
+  }
+
+  (void) memset(payload, 0, sizeof(payload));
+  payload[0] = CPMP_PROTOCOL_VERSION;
+  WriteUint32Le(&payload[1], sequence);
+  (void) SendFrame(service, CPMP_FRAME_ID_CP_EVENT_ACK, payload, sizeof(payload));
+}
+
 static void QueueConfigTransfer(CpMpLinkService_t *service)
 {
   uint16_t imageBytes;
@@ -297,10 +710,17 @@ static void QueueConfigTransfer(CpMpLinkService_t *service)
 static void SendHeartbeat(CpMpLinkService_t *service)
 {
   uint8_t payload[16];
+  uint8_t localPermitOutputPower = 0U;
 
   if (service == NULL)
   {
     return;
+  }
+
+  if (service->relayControlService != NULL)
+  {
+    localPermitOutputPower = RelayControlServiceGetLocalPermitOutputPower(
+      service->relayControlService);
   }
 
   (void) memset(payload, 0, sizeof(payload));
@@ -316,6 +736,7 @@ static void SendHeartbeat(CpMpLinkService_t *service)
   payload[9] = (uint8_t) ((service->configGeneration >> 8U) & 0xFFU);
   payload[10] = (uint8_t) ((service->configGeneration >> 16U) & 0xFFU);
   payload[11] = (uint8_t) ((service->configGeneration >> 24U) & 0xFFU);
+  payload[12] = localPermitOutputPower;
 
   (void) SendFrame(service, CPMP_FRAME_ID_CP_HEARTBEAT, payload, sizeof(payload));
 }
@@ -437,6 +858,7 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
         {
           service->lastMpConfigState = (CpMpConfigState_t) frame->data[1];
           service->lastSafetyAction = (CpMpSafetyAction_t) frame->data[2];
+          service->lastMpPermitOutputPower = (uint8_t) (frame->data[3] != 0U);
           service->lastMpConfigSetId = ReadUint16Le(&frame->data[4]);
           service->lastMpConfigGeneration = ReadUint32Le(&frame->data[6]);
         }
@@ -472,23 +894,41 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
 
       case CPMP_FRAME_ID_MP_FAULTS:
       {
-        if (frame->length >= 44U)
+        if (frame->length >= 48U)
         {
-          uint8_t channelIndex;
-
+          (void) memset(&service->lastFaultStatus, 0, sizeof(service->lastFaultStatus));
           service->lastFaultStatus.sequence = ReadUint32Le(&frame->data[1]);
           service->lastFaultStatus.globalFlags = ReadUint32Le(&frame->data[5]);
-          for (channelIndex = 0U;
-               channelIndex < (uint8_t) (sizeof(service->lastFaultStatus.channelFlags)
-                                         / sizeof(service->lastFaultStatus.channelFlags[0]));
-               channelIndex++)
-          {
-            service->lastFaultStatus.channelFlags[channelIndex] =
-              ReadUint16Le(&frame->data[9U + (uint8_t) (channelIndex * 2U)]);
-          }
-          service->lastFaultStatus.safetyAction = frame->data[41];
-          service->lastFaultStatus.safetyReasonCode = frame->data[42];
-          service->lastFaultStatus.configState = frame->data[43];
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_CONFLICT,
+                         ReadUint32Le(&frame->data[9]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_DUAL_INDICATION,
+                         ReadUint32Le(&frame->data[13]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_RED_FAIL,
+                         ReadUint32Le(&frame->data[17]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_DARK,
+                         ReadUint32Le(&frame->data[21]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_MIN_YELLOW_SHORT,
+                         ReadUint32Le(&frame->data[25]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_CLEARANCE_SHORT,
+                         ReadUint32Le(&frame->data[29]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_SIGNAL_SEQUENCE,
+                         ReadUint32Le(&frame->data[33]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_LAMP_OPEN,
+                         ReadUint32Le(&frame->data[37]));
+          ApplyFaultMask(&service->lastFaultStatus,
+                         CPMP_FAULT_CHANNEL_FLAG_LAMP_EXTERNALLY_DRIVEN,
+                         ReadUint32Le(&frame->data[41]));
+          service->lastFaultStatus.safetyAction = frame->data[45];
+          service->lastFaultStatus.safetyReasonCode = frame->data[46];
+          service->lastFaultStatus.configState = frame->data[47];
           service->lastFaultStatus.reserved0 = 0U;
           service->lastFaultStatusValid = 1U;
           service->lastSafetyAction =
@@ -496,6 +936,33 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
           service->lastSafetyReasonCode =
             service->lastFaultStatus.safetyReasonCode;
         }
+        break;
+      }
+
+      case CPMP_FRAME_ID_MP_EVENT:
+      {
+        CpMpFaultEventV1_t event;
+
+        if (frame->length < 17U)
+        {
+          break;
+        }
+
+        event.sequence = ReadUint32Le(&frame->data[1]);
+        event.timestampTicks = ReadUint32Le(&frame->data[5]);
+        event.param = ReadUint32Le(&frame->data[9]);
+        event.source = ReadUint16Le(&frame->data[13]);
+        event.code = frame->data[15];
+        event.severity = frame->data[16];
+
+        if (event.sequence != service->lastReceivedEventSequence)
+        {
+          service->lastReceivedEventSequence = event.sequence;
+          StoreReceivedEvent(service, &event);
+          LogReceivedEvent(service, &event);
+        }
+
+        SendEventAck(service, event.sequence);
         break;
       }
 
@@ -508,8 +975,10 @@ static void OnRxFrame(void *cbCtx, const ControlBusFrame_t *frame)
 
 void CpMpLinkServiceInit(CpMpLinkService_t *service,
                          IControlBusPort_t *controlBusPort,
+                         ILogEventPort_t *logEventPort,
                          ConfigurationService_t *configurationService,
-                         IntersectionController_t *controller)
+                         IntersectionController_t *controller,
+                         RelayControlService_t *relayControlService)
 {
   if (service == NULL)
   {
@@ -518,10 +987,13 @@ void CpMpLinkServiceInit(CpMpLinkService_t *service,
 
   (void) memset(service, 0, sizeof(*service));
   service->controlBusPort = controlBusPort;
+  service->logEventPort = logEventPort;
   service->configurationService = configurationService;
   service->controller = controller;
+  service->relayControlService = relayControlService;
   service->lastSafetyAction = CPMP_SAFETY_ACTION_FLASH;
   service->lastMpConfigState = CPMP_CONFIG_STATE_EMPTY;
+  RelayControlServiceSetPeerState(relayControlService, 0U, 0U);
 
   QueueConfigTransfer(service);
   ApplyEffectiveSafetyAction(service);
@@ -545,6 +1017,13 @@ void CpMpLinkServiceStep(CpMpLinkService_t *service)
 
   service->tickCount++;
 
+  if (service->relayControlService != NULL)
+  {
+    RelayControlServiceSetPeerState(service->relayControlService,
+                                    CpMpLinkServicePeerHealthy(service),
+                                    service->lastMpPermitOutputPower);
+  }
+
   if (service->configurationService != NULL)
   {
     activeGeneration = ConfigurationServiceGetActiveGeneration(
@@ -554,6 +1033,12 @@ void CpMpLinkServiceStep(CpMpLinkService_t *service)
 
     if ((activeGeneration != service->configGeneration)
         || (activeSetId != service->configSetId))
+    {
+      QueueConfigTransfer(service);
+    }
+
+    if ((service->txState == CPMP_TX_STATE_IDLE)
+        && (PeerConfigMatchesActiveConfig(service) == 0U))
     {
       QueueConfigTransfer(service);
     }

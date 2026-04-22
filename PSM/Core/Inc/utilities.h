@@ -74,9 +74,10 @@
 
 #define THREAD_FLAGS_STORAGE_REQ_PROCESS_OK FLAG_BIT_0
 #define THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR FLAG_BIT_1
-#define THREAD_FLAGS_STORAGE_REQ_PROCESS_ALL (THREAD_FLAGS_STORAGE_REQ_PROCESS_OK | \
-				THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR
-				
+#define THREAD_FLAGS_STORAGE_REQ_PROCESS_ALL \
+    (THREAD_FLAGS_STORAGE_REQ_PROCESS_OK |   \
+     THREAD_FLAGS_STORAGE_REQ_PROCESS_ERROR)
+
 #define	THREAD_FLAGS_MEASUREMENT_DONE FLAG_BIT_0
 
 /* Maintenance task timeout: maximum time any operational task may go without
@@ -123,7 +124,7 @@ extern osMemoryPoolId_t StorageReqsMemPoolHandle;
 
 extern osEventFlagsId_t MaintenanceEventHandle;
 
-extern const uint32_t laUtilsBitValues[32];
+extern const uint32_t utilsBitValues[32];
 
 extern void MaintenanceTaskSignal(uint32_t ulSignal);
 /* Public function prototypes -----------------------------------------------*/

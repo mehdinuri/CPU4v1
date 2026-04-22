@@ -21,34 +21,34 @@
  * is V_REF = 3.38, adc_max = 4095, scaling = 276.89 (ZMPT107 + 200k/750R
  * divider).
  *
- * @param pSamples   Window of raw 12-bit ADC samples (must not be NULL)
+ * @param samples   Window of raw 12-bit ADC samples (must not be NULL)
  * @param sampleCount  Number of samples in the window (must be > 0)
- * @param fVRef      Reference voltage (e.g. 3.38f)
- * @param fAdcMax    Full-scale ADC count (e.g. 4095.0f for 12-bit)
- * @param fScaling   Front-end scaling factor (e.g. 276.89f for grid chain)
+ * @param vRef      Reference voltage (e.g. 3.38f)
+ * @param adcMax    Full-scale ADC count (e.g. 4095.0f for 12-bit)
+ * @param scaling   Front-end scaling factor (e.g. 276.89f for grid chain)
  * @return           Scaled RMS voltage in engineering units
  */
-float VoltageRMS_ComputeAC(const uint16_t *pSamples,
+float VoltageRMS_ComputeAC(const uint16_t *samples,
                            size_t sampleCount,
-                           float fVRef,
-                           float fAdcMax,
-                           float fScaling);
+                           float vRef,
+                           float adcMax,
+                           float scaling);
 
 /**
  * @brief Convert a single DC ADC sample to engineering units.
  *
  * Linear: sample × (V_REF / adc_max) × scaling.
  *
- * @param sSample    Raw 12-bit ADC sample
- * @param fVRef      Reference voltage
- * @param fAdcMax    Full-scale ADC count
- * @param fScaling   Divider scaling factor (e.g. 2.05 for 5V divider)
+ * @param sample    Raw 12-bit ADC sample
+ * @param vRef      Reference voltage
+ * @param adcMax    Full-scale ADC count
+ * @param scaling   Divider scaling factor (e.g. 2.05 for 5V divider)
  * @return           Scaled voltage in engineering units
  */
-float VoltageRMS_ConvertDC(uint16_t sSample,
-                           float fVRef,
-                           float fAdcMax,
-                           float fScaling);
+float VoltageRMS_ConvertDC(uint16_t sample,
+                           float vRef,
+                           float adcMax,
+                           float scaling);
 
 #endif /* DOMAIN_VOLTAGE_RMS_H */
 

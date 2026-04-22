@@ -15,7 +15,6 @@
 
 #include "cmsis_os2.h"
 #include "HardwarePorts.h"
-#include "PersistencePorts.h"
 #include "Domain/Lcd/LcdEngine.h"
 #include "Domain/Lcd/LcdLanguage.h"
 #include "Domain/Lcd/LcdServiceRegistry.h"
@@ -23,7 +22,6 @@
 #include "Ports/ISystemPort.h"
 #include "Ports/ICommsStatusPort.h"
 #include "Ports/IUserPort.h"
-#include "Ports/ILogRepositoryPort.h"
 #include "DomainServices.h"
 
 static LcdEngine_t g_lcdEngine;
@@ -40,6 +38,7 @@ extern LcdPage_t LcdPage_Settings;
 extern LcdPage_t LcdPage_SettingsDateTime;
 extern LcdPage_t LcdPage_SettingsGps;
 extern LcdPage_t LcdPage_SettingsLanguage;
+extern LcdPage_t LcdPage_OutputPower;
 extern LcdPage_t LcdPage_OutputTest;
 
 /* Registry instances */
@@ -81,6 +80,9 @@ extern void LcdPage_SettingsGps_Init(void *ctx,
 extern void LcdPage_SettingsLanguage_Init(void *ctx,
                                           const LcdServiceRegistry_t *s,
                                           const LcdPageRegistry_t *p);
+extern void LcdPage_OutputPower_Init(void *ctx,
+                                     const LcdServiceRegistry_t *s,
+                                     const LcdPageRegistry_t *p);
 extern void LcdPage_OutputTest_Init(void *ctx,
                                     const LcdServiceRegistry_t *s,
                                     const LcdPageRegistry_t *p);
@@ -118,7 +120,6 @@ void LCDSoftwareOpen(void)
 static ISystemPort_t s_lcdSystemPort;
 static ICommsStatusPort_t s_lcdCommsPort;
 static IUserPort_t s_lcdUserPort;
-static ILogRepositoryPort_t s_lcdLogPort;
 static uint16_t LcdGetMainVoltage(void *ctx)
 {
   uint16_t lineVoltageTenthsVrms = 0U;
@@ -212,36 +213,6 @@ static uint8_t LcdChangeAdminPassword(void *ctx,
   return (uint8_t) (status == USER_AUTH_CHANGE_OK);
 }
 
-static uint8_t LcdLogRead(void *ctx,
-                          uint16_t index,
-                          void *record,
-                          uint32_t recordSize)
-{
-  (void) ctx;
-  return LogRepositoryRead(&g_logRepositoryPort, index, record, recordSize);
-}
-
-static uint8_t LcdLogExists(void *ctx)
-{
-  (void) ctx;
-  return LogRepositoryExists(&g_logRepositoryPort);
-}
-
-static uint8_t LcdLogIsIndexValid(void *ctx, uint16_t index)
-{
-  (void) ctx;
-  return LogRepositoryIsIndexValid(&g_logRepositoryPort, index);
-}
-
-static uint16_t LcdLogGetWriteIndex(void *ctx)
-{
-  uint16_t latestIndex = 0xFFFFU;
-
-  (void) ctx;
-  (void) MmiEventLogServiceGetLatestIndex(&g_mmiEventLogService, &latestIndex);
-  return latestIndex;
-}
-
 static uint8_t LcdReadCommsSnapshot(void *ctx, CommsStatusSnapshot_t *snapshot)
 {
   (void) ctx;
@@ -268,7 +239,7 @@ void InitLCDTask(void)
   g_lcdServices.system = &s_lcdSystemPort;
   g_lcdServices.comms = &s_lcdCommsPort;
   g_lcdServices.user = &s_lcdUserPort;
-  g_lcdServices.logs = &s_lcdLogPort;
+  g_lcdServices.eventLogService = &g_mmiEventLogService;
   g_lcdServices.rtc = &g_rtcPort;
   g_lcdServices.gps = g_mmiLocalSettingsService.gpsPort;
   g_lcdServices.maintenance = &g_mmiMaintenanceService;
@@ -289,12 +260,6 @@ void InitLCDTask(void)
   s_lcdUserPort.Logout = LcdLogout;
   s_lcdUserPort.ChangeAdminPassword = LcdChangeAdminPassword;
 
-  s_lcdLogPort.ctx = NULL;
-  s_lcdLogPort.Read = LcdLogRead;
-  s_lcdLogPort.Exists = LcdLogExists;
-  s_lcdLogPort.IsIndexValid = LcdLogIsIndexValid;
-  s_lcdLogPort.GetWriteIndex = LcdLogGetWriteIndex;
-
   /* Initialize Page Registry */
   g_lcdPages.home = &LcdPage_Home;
   g_lcdPages.login = &LcdPage_Login;
@@ -307,6 +272,7 @@ void InitLCDTask(void)
   g_lcdPages.settingsDateTime = &LcdPage_SettingsDateTime;
   g_lcdPages.settingsGps = &LcdPage_SettingsGps;
   g_lcdPages.settingsLanguage = &LcdPage_SettingsLanguage;
+  g_lcdPages.outputPower = &LcdPage_OutputPower;
   g_lcdPages.outputTest = &LcdPage_OutputTest;
 
   /* Initialize All Pages (Contexts are managed internally by pages for now) */
@@ -331,6 +297,9 @@ void InitLCDTask(void)
   LcdPage_SettingsLanguage_Init(LcdPage_SettingsLanguage.ctx,
                                 &g_lcdServices,
                                 &g_lcdPages);
+  LcdPage_OutputPower_Init(LcdPage_OutputPower.ctx,
+                           &g_lcdServices,
+                           &g_lcdPages);
   LcdPage_OutputTest_Init(LcdPage_OutputTest.ctx,
                           &g_lcdServices,
                           &g_lcdPages);

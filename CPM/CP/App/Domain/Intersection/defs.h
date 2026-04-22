@@ -122,9 +122,7 @@
 #define THREAD_FLAGS_MSM_REQ_PROCESS_ALL (THREAD_FLAGS_MSM_REQ_PROCESS_OK | \
                                           THREAD_FLAGS_MSM_REQ_PROCESS_ERROR
 
-#define EVENT_FLAGS_MAINTENANCE_CPMPCOM_TASK_ACTIVE FLAG_BIT_0
 #define EVENT_FLAGS_MAINTENANCE_TIME_TASK_ACTIVE FLAG_BIT_1
-#define EVENT_FLAGS_MAINTENANCE_SIGNAL_CARD_DRIVE_TASK_ACTIVE FLAG_BIT_3
 #define EVENT_FLAGS_MAINTENANCE_GPS_TASK_ACTIVE FLAG_BIT_4
 
 #define EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE ( \
@@ -165,11 +163,8 @@ extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t MLMTaskHandle;
 extern osThreadId_t MSMTaskHandle;
 extern osThreadId_t LCDTaskHandle;
-extern osThreadId_t SignalCardDriveTaskHandle;
-extern osThreadId_t CPMPComTaskHandle;
 extern osThreadId_t UIMsgParserTaskHandle;
-extern osThreadId_t CANMsgParserTaskHandle;
-extern osThreadId_t CANMsgSenderTaskHandle;
+extern osThreadId_t FieldCanTxTaskHandle;
 extern osThreadId_t GPSMsgParserTaskHandle;
 extern osThreadId_t GPSTaskHandle;
 extern osThreadId_t MCSTaskHandle;
@@ -181,7 +176,6 @@ extern osThreadId_t MaintenanceTaskHandle;
 extern osThreadId_t PPPOSAsyMsgParserTaskHandle;
 extern osThreadId_t PPPOSAsyMsgSenderTaskHandle;
 
-extern osMemoryPoolId_t FDCANRxReqsMemPoolHandle;
 extern osMemoryPoolId_t FDCANTxReqsMemPoolHandle;
 extern osMemoryPoolId_t GPSRxReqsMemPoolHandle;
 extern osMemoryPoolId_t GPSTimeMemPoolHandle;
@@ -192,7 +186,6 @@ extern osMemoryPoolId_t LogReqsMemPoolHandle;
 extern osMemoryPoolId_t PPPOSAsyRxReqsMemPoolHandle;
 extern osMemoryPoolId_t PPPOSAsyTxReqsMemPoolHandle;
 
-extern osMessageQueueId_t FDCANRxReqsQueHandle;
 extern osMessageQueueId_t FDCANTxReqsQueHandle;
 extern osMessageQueueId_t GPSRxReqsQueHandle;
 extern osMessageQueueId_t GPSTimeQueHandle;
@@ -204,7 +197,6 @@ extern osMessageQueueId_t PPPOSAsyRxReqsQueHandle;
 extern osMessageQueueId_t PPPOSAsyTxReqsQueHandle;
 
 extern osMutexId_t TimeMutexHandle;
-extern osMutexId_t SignalGroupsMutexHandle;
 extern osMutexId_t LogMutexHandle;
 extern osMutexId_t LCDMutexHandle;
 

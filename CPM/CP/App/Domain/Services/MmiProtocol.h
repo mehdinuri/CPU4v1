@@ -25,6 +25,7 @@
 
 #define MMI_PROTOCOL_V2_SEGMENT_DATA_BYTES    4U
 #define MMI_PROTOCOL_V2_SEGMENT_INDEX_MAX     255U
+#define MMI_PROTOCOL_V2_EVENT_PAGE_MAX_RECORDS 4U
 
 typedef enum
 {
@@ -331,9 +332,9 @@ typedef struct
   uint8_t sequenceFaultMask;
   uint8_t sequence;
   uint16_t configEpoch;
-  uint16_t loadSwitchReds;
-  uint16_t loadSwitchYellows;
-  uint16_t loadSwitchGreens;
+  uint32_t loadSwitchReds;
+  uint32_t loadSwitchYellows;
+  uint32_t loadSwitchGreens;
 } __attribute__((packed)) MmiRuntimeRawInputsV2_t;
 
 typedef struct
@@ -375,9 +376,9 @@ typedef struct
   uint8_t sequenceFaultMask;
   uint8_t sequence;
   uint16_t configEpoch;
-  uint16_t loadSwitchReds;
-  uint16_t loadSwitchYellows;
-  uint16_t loadSwitchGreens;
+  uint32_t loadSwitchReds;
+  uint32_t loadSwitchYellows;
+  uint32_t loadSwitchGreens;
 } __attribute__((packed)) MmiRuntimeModuleStatusV2_t;
 
 typedef struct
@@ -450,10 +451,10 @@ typedef struct
 {
   uint8_t enabled;
   uint8_t reserved0;
-  uint16_t forcedMask;
-  uint16_t redMask;
-  uint16_t yellowMask;
-  uint16_t greenMask;
+  uint32_t forcedMask;
+  uint32_t redMask;
+  uint32_t yellowMask;
+  uint32_t greenMask;
 } __attribute__((packed)) MmiRuntimeOutputTestSummaryV2_t;
 
 typedef struct
@@ -535,17 +536,16 @@ typedef struct
 typedef struct
 {
   uint16_t logIndex;
-  uint8_t second;
-  uint8_t minute;
-  uint8_t hour;
-  uint8_t day;
-  uint8_t month;
-  uint16_t year;
-  uint8_t eventCode;
-  uint8_t eventParam;
-  uint16_t eventShortParam;
-  uint32_t eventLongParam;
-} __attribute__((packed)) MmiEventRecordV2_t;
+  uint8_t eventClass;
+  uint8_t eventNumber;
+  uint16_t eventId;
+  uint32_t eventTime;
+  uint16_t eventTimeMilliseconds;
+  uint8_t valueLength;
+  uint8_t value[46];
+} __attribute__((packed)) MmiEventRecord_t;
+
+typedef MmiEventRecord_t MmiEventRecordV2_t;
 
 typedef struct
 {

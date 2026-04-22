@@ -1,0 +1,570 @@
+-- ****************************************************************************
+-- Filename:    TEKNOTEL-CPU4-MIB.mib
+-- Module:      TEKNOTEL-CPU4-MIB
+-- Vendor:      Teknotel Elektronik
+-- Enterprise:  1.3.6.1.4.1.59748 (IANA Private Enterprise Number 59748)
+--
+-- Description: Vendor-private MIB for the Teknotel Elektronik C0502-P251207-
+--              CPU4 intersection controller. Objects are organised under a
+--              four-level hierarchy that mirrors NTCIP 8004 / NTCIP 1202:
+--
+--                  teknotel -> transportation -> devices -> cpu4
+--
+--              Under the cpu4 product node, functional groups use the same
+--              numeric slots as NTCIP 1202 (unit=3, channel=8) where a
+--              semantic equivalent exists. Vendor-only groups are placed
+--              above the NTCIP 1202 standard range (cpMpLink=20,
+--              driverModule=21) to guarantee no collision with any future
+--              NTCIP asc.* assignment.
+--
+--              Use alongside, not instead of, the NTCIP 1201 and 1202 MIBs.
+--
+-- MIB Revision History:
+--   2026-04-21  Initial revision (flat .59748.1/.2 layout).
+--   2026-04-21  Restructured to vendor/transportation/devices/cpu4 layering
+--               with named functional groups. All OIDs renumbered. Trap
+--               numbers and the .59748.0 trap prefix retained.
+--   2026-04-22  Added eventSource subtree for CP-owned 1103 synthetic event
+--               counters and MP-event payload exposure.
+--   2026-04-22  Added vendor unit security objects for SNMPv3 username and
+--               credential rotation.
+--
+-- Maintenance:
+--   Update this file in the SAME commit as any code change that adds,
+--   removes, or renumbers an OID under 59748, changes the SYNTAX/ACCESS
+--   or enumerated values of an existing object, or adds/removes a
+--   specific-trap number. Every module-level CLAUDE.md / AGENTS.md carries
+--   a reminder to that effect.
+-- ****************************************************************************
+
+TEKNOTEL-CPU4-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    OBJECT-TYPE
+        FROM RFC-1212
+    TRAP-TYPE
+        FROM RFC-1215
+    enterprises, Counter, Gauge
+        FROM RFC1155-SMI;
+
+-- ****************************************************************************
+-- Enterprise arc: vendor -> transportation -> devices -> cpu4
+-- ****************************************************************************
+
+teknotel          OBJECT IDENTIFIER ::= { enterprises 59748 }
+-- <Object Identifier> 1.3.6.1.4.1.59748
+-- IANA Private Enterprise Number 59748 assigned to Teknotel Elektronik.
+
+transportation    OBJECT IDENTIFIER ::= { teknotel 4 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4
+-- Functional area for transportation equipment. Number 4 mirrors
+-- NTCIP 8004's `transportation ::= { nema 4 }`.
+
+devices           OBJECT IDENTIFIER ::= { transportation 2 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2
+-- Category node grouping every Teknotel transportation device. Number 2
+-- mirrors NTCIP 8004's `devices ::= { transportation 2 }`.
+
+cpu4              OBJECT IDENTIFIER ::= { devices 1 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1
+-- C0502-P251207-CPU4 intersection controller (NEMA TS2 actuated).
+
+-- ****************************************************************************
+-- Functional groups under cpu4
+-- ****************************************************************************
+
+unit              OBJECT IDENTIFIER ::= { cpu4 3 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3
+-- Controller-wide unit configuration. Slot 3 mirrors NTCIP 1202's
+-- `unit ::= { asc 3 }`.
+
+channel           OBJECT IDENTIFIER ::= { cpu4 8 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8
+-- Load-switch channel fault reporting. Slot 8 mirrors NTCIP 1202's
+-- `channel ::= { asc 8 }`.
+
+cpMpLink          OBJECT IDENTIFIER ::= { cpu4 20 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20
+-- Vendor extension: health and safety-authority telemetry for the private
+-- CP<->MP CAN FD supervision link. Placed at slot 20 (outside NTCIP 1202's
+-- standard asc.1..asc.13 range) to guarantee no future collision.
+
+driverModule      OBJECT IDENTIFIER ::= { cpu4 21 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.21
+-- Vendor extension: external driver (SSM) module status. Names the
+-- varbind carried by teknotelDriverModuleMissingTrap.
+
+eventSource       OBJECT IDENTIFIER ::= { cpu4 22 }
+-- <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22
+-- Vendor extension: CP-owned synthetic event counters and last MP-event
+-- payload used by the 1103 event-report engine.
+
+-- ****************************************************************************
+-- unit group (1.3.6.1.4.1.59748.4.2.1.3)
+-- Source: CPM/CP/App/Domain/NTCIP/MibVendor59748/UnitObjects.c
+-- ****************************************************************************
+
+unitFailureFlashPeriodDs OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    period500ms(5),
+                    period1000ms(10),
+                    period2000ms(20),
+                    period4000ms(40)
+                }
+    ACCESS      read-write
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Full period of the failure-flash cycle, expressed in
+         deciseconds (1 unit = 100 ms). SET is rejected (badValue) if the
+         value is not one of the four supported periods, or if the active
+         user session does not have configuration-write authority. The
+         selected value is persisted in the IntersectionUnitConfig image
+         and survives reboot.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3.1"
+    DEFVAL      { period1000ms }
+    ::= { unit 1 }
+
+unitSnmpV3ActiveUsername OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (0..32))
+    ACCESS      read-write
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Active SNMPv3 securityName used by the controller USM
+         profile. SET stages a replacement username in the current database
+         transaction. When a username change is staged, this object reflects
+         the staged value until apply.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3.2"
+    ::= { unit 2 }
+
+unitSnmpV3NewAuthPassphrase OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (8..20))
+    ACCESS      write-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Stages a replacement SNMPv3 authentication passphrase
+         for the current database transaction. In release builds this write
+         is rejected over SNMPv1/v2c and accepted only from SNMPv3 or the
+         authenticated local management path. If no separate privacy
+         passphrase is staged, unitSnmpV3Apply reuses this value for both
+         auth and privacy.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3.3"
+    ::= { unit 3 }
+
+unitSnmpV3NewPrivPassphrase OBJECT-TYPE
+    SYNTAX      OCTET STRING (SIZE (8..20))
+    ACCESS      write-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Stages a replacement SNMPv3 privacy passphrase for the
+         current database transaction. In release builds this write is
+         rejected over SNMPv1/v2c and accepted only from SNMPv3 or the
+         authenticated local management path. If no separate authentication
+         passphrase is staged, unitSnmpV3Apply reuses this value for both
+         auth and privacy.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3.4"
+    ::= { unit 4 }
+
+unitSnmpV3Apply OBJECT-TYPE
+    SYNTAX      INTEGER { apply(1) }
+    ACCESS      write-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Commits any staged unitSnmpV3ActiveUsername,
+         unitSnmpV3NewAuthPassphrase, and unitSnmpV3NewPrivPassphrase values
+         to the live SNMPv3 profile. SET is rejected unless at least one
+         staged field is present.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.3.5"
+    ::= { unit 5 }
+
+-- ****************************************************************************
+-- channel group (1.3.6.1.4.1.59748.4.2.1.8)
+-- Source: CPM/CP/App/Domain/NTCIP/MibVendor59748/ChannelFaultObjects.c
+-- ****************************************************************************
+
+channelFaultCount OBJECT-TYPE
+    SYNTAX      INTEGER (0..32)
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Number of load-switch channels currently enabled in
+         the active IntersectionConfig, and therefore the number of rows
+         present in channelFaultTable.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8.1"
+    ::= { channel 1 }
+
+channelFaultTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF ChannelFaultEntry
+    ACCESS      not-accessible
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Per-channel fault-status mirror of the MP's
+         CpMpFaultStatusImage.channelFlags[] array. The number of rows
+         equals channelFaultCount.
+         <TableType> static
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8.2"
+    ::= { channel 2 }
+
+channelFaultEntry OBJECT-TYPE
+    SYNTAX      ChannelFaultEntry
+    ACCESS      not-accessible
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>One row per load-switch channel.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8.2.1"
+    INDEX       { channelFaultNumber }
+    ::= { channelFaultTable 1 }
+
+ChannelFaultEntry ::= SEQUENCE {
+    channelFaultNumber   INTEGER,
+    channelFaultFlags    Gauge
+}
+
+channelFaultNumber OBJECT-TYPE
+    SYNTAX      INTEGER (1..32)
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>1-based channel number used both as the table row
+         index and as a convenience scalar returned in the row.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8.2.1.1"
+    ::= { channelFaultEntry 1 }
+
+channelFaultFlags OBJECT-TYPE
+    SYNTAX      Gauge
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Bitmask of per-channel fault flags
+         (CpMpFaultChannelFlags_t) latched by the MP:
+           0x0001 - Conflict with another channel
+           0x0002 - Dual indication (two colors energised)
+           0x0004 - Red fail (red output absent when commanded)
+           0x0008 - Dark (no output energised when commanded)
+           0x0010 - Minimum yellow-change shorter than configured
+           0x0020 - Red-clear shorter than configured
+           0x0040 - Signal sequence violation (G->R without Y)
+           0x0080 - Lamp open / load below threshold
+           0x0100 - Lamp externally driven (backfeed detected)
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.8.2.1.2"
+    ::= { channelFaultEntry 2 }
+
+-- ****************************************************************************
+-- cpMpLink group (1.3.6.1.4.1.59748.4.2.1.20)
+-- Source: CPM/CP/App/Domain/NTCIP/MibVendor59748/CpMpLinkObjects.c
+--         CPM/Libs/CpMpProtocolShared.h
+-- ****************************************************************************
+
+cpMpLinkProtocolVersion OBJECT-TYPE
+    SYNTAX      Gauge
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Protocol version number carried on the CP/MP CAN FD
+         supervision link (CPMP_PROTOCOL_VERSION in CpMpProtocolShared.h).
+         Both peers MUST agree on this value; a mismatch latches a
+         configuration fault and the safety action falls back to flash.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.1"
+    ::= { cpMpLink 1 }
+
+cpMpLinkPeerHealthy OBJECT-TYPE
+    SYNTAX      INTEGER { peerDown(0), peerHealthy(1) }
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>1 when the MP peer has sent a heartbeat within the
+         last CPMP_PEER_TIMEOUT_TICKS (5 x 100 ms) ProgramTick cycles, 0
+         when the link has timed out.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.2"
+    ::= { cpMpLink 2 }
+
+cpMpLinkAuthorityReady OBJECT-TYPE
+    SYNTAX      INTEGER { notReady(0), ready(1) }
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>1 when the CP has successfully handed its active
+         IntersectionConfig image to the MP and the MP has acknowledged
+         (configState == applied). 0 during startup, reconfiguration, or
+         after any invalidation event.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.3"
+    ::= { cpMpLink 3 }
+
+cpMpLinkConfigState OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    empty(0),
+                    loading(1),
+                    applied(2),
+                    invalid(3)
+                }
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Last reported CpMpConfigState_t value from the MP:
+           empty(0)   - no config image held,
+           loading(1) - chunked transfer in progress,
+           applied(2) - validated and active,
+           invalid(3) - rejected by MP validator.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.4"
+    ::= { cpMpLink 4 }
+
+cpMpLinkSafetyAction OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    normal(0),
+                    flash(1),
+                    dark(2)
+                }
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Effective CpMpSafetyAction_t the MP is commanding on
+         the load switches:
+           normal(0) - run the active NEMA TS2 sequence,
+           flash(1)  - red/yellow flash (conflict, lamp fault, or CP fault),
+           dark(2)   - all load switches off.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.5"
+    ::= { cpMpLink 5 }
+
+cpMpLinkSafetyReasonCode OBJECT-TYPE
+    SYNTAX      Gauge
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Most-recent reason code latched by the MP when it
+         promoted the safety action above normal. 0 means 'no reason'
+         (running normally). Reason codes are defined inside the MP
+         firmware; consult MP/CLAUDE.md for the authoritative list.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.6"
+    ::= { cpMpLink 6 }
+
+cpMpLinkStatusSequence OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonically-increasing sequence number from the
+         most recent CpMpFaultStatusImage received from the MP. A stuck
+         counter implies the MP is no longer publishing fault status,
+         even if cpMpLinkPeerHealthy still reports the heartbeat alive.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.7"
+    ::= { cpMpLink 7 }
+
+cpMpLinkGlobalFlags OBJECT-TYPE
+    SYNTAX      Gauge
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Bitmask of controller-wide fault conditions
+         (CpMpFaultGlobalFlags_t) currently latched by the MP:
+           0x00000001 - AC line fault
+           0x00000002 - 24V rail fault
+           0x00000004 - 5V rail fault
+           0x00000008 - CP missing / heartbeat lost
+           0x00000010 - PSM missing
+           0x00000020 - SSM missing
+           0x00000040 - Watchdog expired
+           0x00000080 - Relay feedback mismatch
+           0x00000100 - Configuration image invalid
+           0x00000200 - Local flash active
+           0x00000400 - Startup flash active
+           0x00000800 - MMU flash active
+         Multiple bits may be set simultaneously.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.20.8"
+    ::= { cpMpLink 8 }
+
+-- ****************************************************************************
+-- driverModule group (1.3.6.1.4.1.59748.4.2.1.21)
+-- Source: CPM/CP/App/Domain/NTCIP/MibVendor59748/DriverModuleObjects.c
+-- ****************************************************************************
+
+driverModuleStatus OBJECT-TYPE
+    SYNTAX      INTEGER
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>SSM module status bitmap sent as the sole varbind of
+         the teknotelDriverModuleMissingTrap (see trap section below).
+         The encoding matches the 16-bit status word published by the SSM
+         on the field-bus. GET returns the last-known value, or 0 when
+         none has been published since startup.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.21.1"
+    ::= { driverModule 1 }
+
+-- ****************************************************************************
+-- eventSource group (1.3.6.1.4.1.59748.4.2.1.22)
+-- Source: CPM/CP/App/Domain/NTCIP/MibVendor59748/EventSourceObjects.c
+-- ****************************************************************************
+
+eventSourcePowerOnCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of CP power-on notifications observed by
+         the 1103 event-report service.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.1"
+    ::= { eventSource 1 }
+
+eventSourceResetCause OBJECT-TYPE
+    SYNTAX      Gauge
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Most recent reset-cause event code captured at startup.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.2"
+    ::= { eventSource 2 }
+
+eventSourceStandbyCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of standby / imminent power-loss events.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.3"
+    ::= { eventSource 3 }
+
+eventSourceDoorOpenCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of cabinet-door open transitions.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.4"
+    ::= { eventSource 4 }
+
+eventSourceDoorClosedCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of cabinet-door close transitions.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.5"
+    ::= { eventSource 5 }
+
+eventSourceCpMpLinkDegradedCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of CP-MP link degraded transitions.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.6"
+    ::= { eventSource 6 }
+
+eventSourceCpMpLinkRestoredCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of CP-MP link restored transitions.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.7"
+    ::= { eventSource 7 }
+
+eventSourceMpEventCount OBJECT-TYPE
+    SYNTAX      Counter
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Monotonic count of MP_EVENT indications received from the
+         malfunction processor.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.8"
+    ::= { eventSource 8 }
+
+eventSourceMpEventData OBJECT-TYPE
+    SYNTAX      OCTET STRING
+    ACCESS      read-only
+    STATUS      mandatory
+    DESCRIPTION
+        "<Definition>Seven-byte payload for the most recently received
+         MP_EVENT: eventParam, eventShortParam little-endian, then
+         eventLongParam little-endian.
+         <Object Identifier> 1.3.6.1.4.1.59748.4.2.1.22.9"
+    ::= { eventSource 9 }
+
+-- ****************************************************************************
+-- Traps (SMIv1 TRAP-TYPE)
+-- Source: CPM/CP/LWIP/App/snmp_client.c
+--
+-- All traps are emitted with enterprise = 1.3.6.1.4.1.59748 (the teknotel
+-- root node, deliberately NOT cpu4) and the specific-trap number shown
+-- below. They use generic-trap 6 (enterpriseSpecific).
+-- ****************************************************************************
+
+teknotelPowerDownTrap TRAP-TYPE
+    ENTERPRISE  teknotel
+    DESCRIPTION
+        "<Definition>Emitted when the PSM reports imminent AC-line loss
+         and the CP is about to lose power. Carries no varbinds.
+         Specific-trap number 1.
+         <Trap OID> 1.3.6.1.4.1.59748.0.1"
+    ::= 1
+
+teknotelDriverModuleMissingTrap TRAP-TYPE
+    ENTERPRISE  teknotel
+    VARIABLES   { driverModuleStatus }
+    DESCRIPTION
+        "<Definition>Emitted when one or more SSM driver modules fail to
+         respond on the field-bus. The varbind is the 16-bit SSM status
+         word published at driverModuleStatus
+         (1.3.6.1.4.1.59748.4.2.1.21.1). Specific-trap number 2.
+         <Trap OID> 1.3.6.1.4.1.59748.0.2"
+    ::= 2
+
+teknotelDoorOpenTrap TRAP-TYPE
+    ENTERPRISE  teknotel
+    DESCRIPTION
+        "<Definition>Emitted when the cabinet door sensor transitions to
+         the open state. Carries no varbinds. Specific-trap number 3.
+         <Trap OID> 1.3.6.1.4.1.59748.0.3"
+    ::= 3
+
+END
+
+-- ****************************************************************************
+-- OID Quick Reference
+--
+--   1.3.6.1.4.1.59748                  teknotel                 (enterprise)
+--   1.3.6.1.4.1.59748.4                transportation
+--   1.3.6.1.4.1.59748.4.2              devices
+--   1.3.6.1.4.1.59748.4.2.1            cpu4                     (product)
+--
+--   1.3.6.1.4.1.59748.4.2.1.3          unit
+--   1.3.6.1.4.1.59748.4.2.1.3.1        unitFailureFlashPeriodDs
+--   1.3.6.1.4.1.59748.4.2.1.3.2        unitSnmpV3ActiveUsername
+--   1.3.6.1.4.1.59748.4.2.1.3.3        unitSnmpV3NewAuthPassphrase
+--   1.3.6.1.4.1.59748.4.2.1.3.4        unitSnmpV3NewPrivPassphrase
+--   1.3.6.1.4.1.59748.4.2.1.3.5        unitSnmpV3Apply
+--
+--   1.3.6.1.4.1.59748.4.2.1.8          channel
+--   1.3.6.1.4.1.59748.4.2.1.8.1        channelFaultCount
+--   1.3.6.1.4.1.59748.4.2.1.8.2        channelFaultTable
+--   1.3.6.1.4.1.59748.4.2.1.8.2.1      channelFaultEntry
+--   1.3.6.1.4.1.59748.4.2.1.8.2.1.1    channelFaultNumber
+--   1.3.6.1.4.1.59748.4.2.1.8.2.1.2    channelFaultFlags
+--
+--   1.3.6.1.4.1.59748.4.2.1.20         cpMpLink                 (vendor ext)
+--   1.3.6.1.4.1.59748.4.2.1.20.1       cpMpLinkProtocolVersion
+--   1.3.6.1.4.1.59748.4.2.1.20.2       cpMpLinkPeerHealthy
+--   1.3.6.1.4.1.59748.4.2.1.20.3       cpMpLinkAuthorityReady
+--   1.3.6.1.4.1.59748.4.2.1.20.4       cpMpLinkConfigState
+--   1.3.6.1.4.1.59748.4.2.1.20.5       cpMpLinkSafetyAction
+--   1.3.6.1.4.1.59748.4.2.1.20.6       cpMpLinkSafetyReasonCode
+--   1.3.6.1.4.1.59748.4.2.1.20.7       cpMpLinkStatusSequence
+--   1.3.6.1.4.1.59748.4.2.1.20.8       cpMpLinkGlobalFlags
+--
+--   1.3.6.1.4.1.59748.4.2.1.21         driverModule             (vendor ext)
+--   1.3.6.1.4.1.59748.4.2.1.21.1       driverModuleStatus
+--
+--   1.3.6.1.4.1.59748.4.2.1.22         eventSource              (vendor ext)
+--   1.3.6.1.4.1.59748.4.2.1.22.1       eventSourcePowerOnCount
+--   1.3.6.1.4.1.59748.4.2.1.22.2       eventSourceResetCause
+--   1.3.6.1.4.1.59748.4.2.1.22.3       eventSourceStandbyCount
+--   1.3.6.1.4.1.59748.4.2.1.22.4       eventSourceDoorOpenCount
+--   1.3.6.1.4.1.59748.4.2.1.22.5       eventSourceDoorClosedCount
+--   1.3.6.1.4.1.59748.4.2.1.22.6       eventSourceCpMpLinkDegradedCount
+--   1.3.6.1.4.1.59748.4.2.1.22.7       eventSourceCpMpLinkRestoredCount
+--   1.3.6.1.4.1.59748.4.2.1.22.8       eventSourceMpEventCount
+--   1.3.6.1.4.1.59748.4.2.1.22.9       eventSourceMpEventData
+--
+--   Specific-trap 1  teknotelPowerDownTrap               -> .59748.0.1
+--   Specific-trap 2  teknotelDriverModuleMissingTrap     -> .59748.0.2
+--   Specific-trap 3  teknotelDoorOpenTrap                -> .59748.0.3
+-- ****************************************************************************

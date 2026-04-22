@@ -21,14 +21,14 @@
 #include "fdcan.h"
 
 /* USER CODE BEGIN 0 */
-#include "cmsis_os.h"
 #include "Adapters/STM32/ControlBusAdapter.h"
-#include "Adapters/STM32/FieldBusAdapter.h"
-#include "CANRxTx.h"
+#include "Adapters/STM32/FieldBusRxAdapter.h"
 #include <string.h>
 
 extern ControlBusAdapterCtx_t *MainApplicationGetControlBusAdapter(void);
-extern FieldBusAdapterCtx_t *MainApplicationGetFieldBusAdapter(void);
+extern FieldBusRxAdapterCtx_t *MainApplicationGetFieldBusRxAdapter(void);
+
+#define FDCAN_MAX_DATA_LEN 8U
 /* USER CODE END 0 */
 
 FDCAN_HandleTypeDef hfdcan1;
@@ -74,7 +74,7 @@ void MX_FDCAN1_Init(void)
   SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
   SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
   SFilterConfig.FilterID1 = CAN_MID_CPU_SO0;
-  SFilterConfig.FilterID2 = CAN_MID_CPU_DATE_TIME;
+  SFilterConfig.FilterID2 = CAN_MID_CPU_FLASH_SIGNALS1;
   if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
   {
     Error_Handler();
@@ -312,41 +312,28 @@ void CANDeInit(FDCAN_HandleTypeDef *hfdcan)
 	HAL_FDCAN_DeInit(hfdcan);
 }
 
-void CANSendMessage(tpSCanTxMsg pxCANTxMessage)
-{
-	if(HAL_FDCAN_AddMessageToTxFifoQ(pxCANTxMessage->hfdcan, &pxCANTxMessage->TxHeader, pxCANTxMessage->baData) != HAL_OK)
-	{
-		Error_Handler();
-	}
-}
-
-void CANWaitTransmissionComplete(FDCAN_HandleTypeDef *hfdcan)
-{
-	while(HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) == 0) 
-	{
-		osDelay(1);
-	}
-}
-
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
+  FDCAN_RxHeaderTypeDef rxHeader;
+  uint8_t data[FDCAN_MAX_DATA_LEN];
+
   UNUSED(RxFifo0ITs);
-  
-	tSCanRxMsg xCANRxMsg;
-	memset(&xCANRxMsg, 0, sizeof(xCANRxMsg));
-	
-	if(HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &xCANRxMsg.RxHeader, xCANRxMsg.baData) != HAL_OK)
+
+	(void) memset(&rxHeader, 0, sizeof(rxHeader));
+	(void) memset(data, 0, sizeof(data));
+
+	if(HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rxHeader, data) != HAL_OK)
 	{
 		Error_Handler();
 	}
 
 	if (hfdcan->Instance == FDCAN1)
 	{
-    FieldBusAdapterCtx_t *fieldBus = MainApplicationGetFieldBusAdapter();
+    FieldBusRxAdapterCtx_t *fieldBus = MainApplicationGetFieldBusRxAdapter();
 
     if (fieldBus != NULL)
     {
-      FieldBusAdapterOnRxIsr(fieldBus, &xCANRxMsg.RxHeader, xCANRxMsg.baData);
+      FieldBusRxAdapterOnRxIsr(fieldBus, &rxHeader, data);
     }
 	}
   else if (hfdcan->Instance == FDCAN2)
@@ -356,8 +343,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     if (controlBus != NULL)
     {
       ControlBusAdapterOnRxIsr(controlBus,
-                               &xCANRxMsg.RxHeader,
-                               xCANRxMsg.baData);
+                               &rxHeader,
+                               data);
     }
 	}
 }

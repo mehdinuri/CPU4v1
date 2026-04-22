@@ -61,7 +61,7 @@ typedef StaticMemPool_t osStaticMemPoolDef_t;
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 osMemoryPoolId_t CANRxReqsMemPoolHandle;
-uint8_t CANRxReqsMemPoolBuf[32 * sizeof(tSFDCANRxMsg)];
+uint8_t CANRxReqsMemPoolBuf[32 * sizeof(FdcanRxMsg_t)];
 osStaticMemPoolDef_t CANRxReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t CANRxReqsMemPool_attributes = {
   .name = "CANRxReqsMemPool",
@@ -72,7 +72,7 @@ const osMemoryPoolAttr_t CANRxReqsMemPool_attributes = {
 };
 
 osMemoryPoolId_t CANTxReqsMemPoolHandle;
-uint8_t CANTxReqsMemPoolBuf[32 * sizeof(tSFDCANTxMsg)];
+uint8_t CANTxReqsMemPoolBuf[32 * sizeof(FdcanTxMsg_t)];
 osStaticMemPoolDef_t CANTxReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t CANTxReqsMemPool_attributes = {
   .name = "CANTxReqsMemPool",
@@ -83,7 +83,7 @@ const osMemoryPoolAttr_t CANTxReqsMemPool_attributes = {
 };
 
 osMemoryPoolId_t StorageReqsMemPoolHandle;
-uint8_t StorageReqsMemPoolBuf[16 * sizeof(tSStorageReq)];
+uint8_t StorageReqsMemPoolBuf[16 * sizeof(StorageReq_t)];
 osStaticMemPoolDef_t StorageReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t StorageReqsMemPool_attributes = {
   .name = "StorageReqsMemPool",
@@ -156,7 +156,7 @@ const osThreadAttr_t StorageTask_attributes = {
 };
 /* Definitions for CANRxReqsQueue */
 osMessageQueueId_t CANRxReqsQueueHandle;
-uint8_t CANRxReqsQueueBuf[ 32 * sizeof( tpSFDCANRxMsg ) ];
+uint8_t CANRxReqsQueueBuf[ 32 * sizeof( FdcanRxMsg_t * ) ];
 osStaticMessageQDef_t CANRxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
   .name = "CANRxReqsQueue",
@@ -167,7 +167,7 @@ const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
 };
 /* Definitions for CANTxReqsQueue */
 osMessageQueueId_t CANTxReqsQueueHandle;
-uint8_t CANTxReqsQueueBuf[ 32 * sizeof( tpSFDCANTxMsg ) ];
+uint8_t CANTxReqsQueueBuf[ 32 * sizeof( FdcanTxMsg_t * ) ];
 osStaticMessageQDef_t CANTxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
   .name = "CANTxReqsQueue",
@@ -178,7 +178,7 @@ const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
 };
 /* Definitions for StorageReqsQueue */
 osMessageQueueId_t StorageReqsQueueHandle;
-uint8_t StorageReqsQueueBuf[ 16 * sizeof( tpSStorageReq ) ];
+uint8_t StorageReqsQueueBuf[ 16 * sizeof( StorageReq_t * ) ];
 osStaticMessageQDef_t StorageReqsQueueCtrlBlk;
 const osMessageQueueAttr_t StorageReqsQueue_attributes = {
   .name = "StorageReqsQueue",
@@ -256,13 +256,13 @@ void MX_FREERTOS_Init(void) {
 
 	/* add memory pools, ... */
 	/* creation of CANRxReqsMemPool */
-	CANRxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(tSFDCANRxMsg), &CANRxReqsMemPool_attributes);
+	CANRxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(FdcanRxMsg_t), &CANRxReqsMemPool_attributes);
 
 	/* creation of CANTxReqsMemPool */
-  CANTxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(tSFDCANTxMsg), &CANTxReqsMemPool_attributes);
+  CANTxReqsMemPoolHandle = osMemoryPoolNew (32, sizeof(FdcanTxMsg_t), &CANTxReqsMemPool_attributes);
 
   /* creation of NewMeasurementsMemPool */
-  StorageReqsMemPoolHandle = osMemoryPoolNew (16, sizeof(tSStorageReq), &StorageReqsMemPool_attributes);
+  StorageReqsMemPoolHandle = osMemoryPoolNew (16, sizeof(StorageReq_t), &StorageReqsMemPool_attributes);
 	
 	if (CANRxReqsMemPoolHandle == NULL)
 	{
@@ -293,13 +293,13 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of CANRxReqsQueue */
-  CANRxReqsQueueHandle = osMessageQueueNew (32, sizeof(tpSFDCANRxMsg), &CANRxReqsQueue_attributes);
+  CANRxReqsQueueHandle = osMessageQueueNew (32, sizeof(FdcanRxMsg_t *), &CANRxReqsQueue_attributes);
 
   /* creation of CANTxReqsQueue */
-  CANTxReqsQueueHandle = osMessageQueueNew (32, sizeof(tpSFDCANTxMsg), &CANTxReqsQueue_attributes);
+  CANTxReqsQueueHandle = osMessageQueueNew (32, sizeof(FdcanTxMsg_t *), &CANTxReqsQueue_attributes);
 
   /* creation of StorageReqsQueue */
-  StorageReqsQueueHandle = osMessageQueueNew (16, sizeof(tpSStorageReq), &StorageReqsQueue_attributes);
+  StorageReqsQueueHandle = osMessageQueueNew (16, sizeof(StorageReq_t *), &StorageReqsQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -393,38 +393,34 @@ void MaintenanceTaskFunc(void *argument)
 	osDelay(200);
 #ifndef DEBUG
 	MX_IWDG_Init();
-	uint32_t lActiveTaskFlags = 0;
-	uint8_t bTaskFailures = 0;
+	uint8_t taskFailures = 0;
 #endif
   /* Infinite loop */
   for(;;)
   {
 #ifndef DEBUG
 		osEventFlagsClear(MaintenanceEventHandle, EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE);
-		uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
+		uint32_t flags = osEventFlagsWait(MaintenanceEventHandle,
 																			 EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE,
 																			 osFlagsWaitAll,
 																			 MAINTENANCE_TASK_TIMEOUT_MS);
-		if (lFlags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
+		if (flags != EVENT_FLAGS_MAINTENANCE_ALL_TASKS_ACTIVE)
 		{
-			if (lActiveTaskFlags != lFlags)
+			/* Pre-increment + >= so the Nth missed window triggers, where
+			 * N = MAINTENANCE_MAX_TASK_FAILURES.  Old post-increment + strict >
+			 * was off-by-two and extended detection latency to 2 s. */
+			if (++taskFailures >= MAINTENANCE_MAX_TASK_FAILURES)
 			{
-				lActiveTaskFlags = lFlags;
-			}
+				taskFailures = 0;
 
-			if (bTaskFailures++ > MAINTENANCE_MAX_TASK_FAILURES)
-			{
-				bTaskFailures = 0;
-				
 				Error_Handler();
 			}
 		}
 		else
 		{
-			lActiveTaskFlags = lFlags;
-			bTaskFailures = 0;
+			taskFailures = 0;
 		}
-		
+
 		Watchdog_Refresh(&g_watchdogPort);
 #else
     osDelay(10);

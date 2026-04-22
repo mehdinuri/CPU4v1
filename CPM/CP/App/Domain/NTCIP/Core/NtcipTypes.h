@@ -10,6 +10,11 @@
 
 #define NTCIP_OID_MAX_LENGTH 32U
 #define NTCIP_OCTET_STRING_MAX_LENGTH 255U
+#define NTCIP_REQUEST_CONTEXT_INIT(sessionKeyValue,                  \
+                                   transactionIdValidValue,          \
+                                   transactionIdValue)               \
+        { (sessionKeyValue), (transactionIdValidValue),              \
+          (transactionIdValue), 0U, 0U }
 
 typedef enum
 {
@@ -25,10 +30,29 @@ typedef enum
 
 typedef enum
 {
+  NTCIP_AUTH_MODEL_UNKNOWN = 0,
+  NTCIP_AUTH_MODEL_LOCAL,
+  NTCIP_AUTH_MODEL_SNMP_V1,
+  NTCIP_AUTH_MODEL_SNMP_V2C,
+  NTCIP_AUTH_MODEL_SNMP_V3
+} NtcipAuthModel_t;
+
+typedef enum
+{
+  NTCIP_SECURITY_LEVEL_NONE = 0,
+  NTCIP_SECURITY_LEVEL_NOAUTH_NOPRIV,
+  NTCIP_SECURITY_LEVEL_AUTH_NOPRIV,
+  NTCIP_SECURITY_LEVEL_AUTH_PRIV
+} NtcipSecurityLevel_t;
+
+typedef enum
+{
   NTCIP_VALUE_TYPE_UNSIGNED32 = 0,
   NTCIP_VALUE_TYPE_SIGNED32,
   NTCIP_VALUE_TYPE_OBJECT_ID,
-  NTCIP_VALUE_TYPE_OCTET_STRING
+  NTCIP_VALUE_TYPE_OCTET_STRING,
+  NTCIP_VALUE_TYPE_OPAQUE,
+  NTCIP_VALUE_TYPE_IP_ADDRESS
 } NtcipValueType_t;
 
 typedef enum
@@ -60,6 +84,11 @@ typedef struct
 
 typedef struct
 {
+  uint8_t bytes[4];
+} NtcipIpAddress_t;
+
+typedef struct
+{
   NtcipValueType_t type;
 
   union
@@ -68,6 +97,8 @@ typedef struct
     int32_t signed32;
     NtcipOid_t objectId;
     NtcipOctetString_t octetString;
+    NtcipOctetString_t opaque;
+    NtcipIpAddress_t ipAddress;
   } data;
 } NtcipValue_t;
 
@@ -76,6 +107,8 @@ typedef struct
   uint32_t sessionKey;
   uint8_t transactionIdValid;
   uint8_t transactionId;
+  uint8_t authModel;
+  uint8_t securityLevel;
 } NtcipRequestContext_t;
 
 void NtcipValueClear(NtcipValue_t *value);
@@ -87,6 +120,11 @@ NtcipError_t NtcipValueSetObjectId(NtcipValue_t *value,
 NtcipError_t NtcipValueSetOctetString(NtcipValue_t *value,
                                       const uint8_t *bytes,
                                       uint16_t length);
+NtcipError_t NtcipValueSetOpaque(NtcipValue_t *value,
+                                 const uint8_t *bytes,
+                                 uint16_t length);
+NtcipError_t NtcipValueSetIpAddress(NtcipValue_t *value,
+                                    const uint8_t *bytes);
 NtcipError_t NtcipValueSetCString(NtcipValue_t *value, const char *text);
 
 #endif /* NTCIP_TYPES_H */

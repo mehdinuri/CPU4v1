@@ -7,11 +7,16 @@
 
 #include "Ports/IEepromStoragePort.h"
 #include "Ports/ILogRepositoryPort.h"
+#include "MLM.h"
 
 typedef struct
 {
+  IEepromStoragePort_t *eepromPort;
+  uint16_t logicalToPhysical[LOG_RECORDS_MAX];
   uint16_t writeIndex;
+  uint16_t physicalWriteIndex;
   uint16_t count;
+  uint32_t nextSequence;
   uint8_t exists;
 } LogRepositoryAdapterCtx_t;
 

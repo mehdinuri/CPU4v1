@@ -13,12 +13,10 @@
 /*  Include Files */
 #include "MLM.h"
 
-#include <string.h>
-
+#include "DomainServices.h"
 #include "defs.h"
 #include "main.h"
 #include "PersistencePorts.h"
-#include "time.h"
 
 /* ///////////////////////////////////////////////////////////////////////////////////////////////// */
 /*  members */
@@ -91,30 +89,12 @@ uint8_t LogRequest(uint8_t bReqID,
       case LOG_REQ_APPEND_ASYNCH:
       case LOG_REQ_APPEND:
       {
-        tSTime SLogTime = { 0 };
-        tSLogRecord SLogRecord = { 0 };
-        uint16_t sWrittenIndex = 0U;
-        uint8_t fResult;
-
-        TimeGet(&SLogTime);
-
-        SLogRecord.sYear = TimeFullYearCalc(&SLogTime);
-        SLogRecord.bMonth = SLogTime.SCurrentDate.Month;
-        SLogRecord.bMonthDay = SLogTime.SCurrentDate.Date;
-        SLogRecord.bHours = SLogTime.SCurrentTime.Hours;
-        SLogRecord.bMinutes = SLogTime.SCurrentTime.Minutes;
-        SLogRecord.bSeconds = SLogTime.SCurrentTime.Seconds;
-        SLogRecord.SEvent.bEvent = bEvent;
-        SLogRecord.SEvent.bParam = bParam;
-        SLogRecord.SEvent.sParam = sParam;
-        SLogRecord.SEvent.lParam = lParam;
-
-        fResult = LogRepositoryAppend(&g_logRepositoryPort,
-                                      &SLogRecord,
-                                      sizeof(SLogRecord),
-                                      &sWrittenIndex);
-
-        return fResult;
+        EventReportServiceAppendLegacyEvent(&g_eventReportService,
+                                            bEvent,
+                                            bParam,
+                                            sParam,
+                                            lParam);
+        return TRUE;
       }
 
       case LOG_REQ_READ_NEXT:
@@ -152,5 +132,15 @@ void MLMTaskFunc(void *argument)
   UNUSED(argument);
 
   MLMInit();
-  osThreadTerminate(osThreadGetId());
+  for (;;)
+  {
+    if (EventReportServiceProcessPersistence(&g_eventReportService) == FALSE)
+    {
+      osDelay(50U);
+    }
+    else
+    {
+      osDelay(1U);
+    }
+  }
 } /* MLMTaskFunc */

@@ -1,7 +1,7 @@
 /* App/Adapters/STM32/SystemResetAdapter.c */
 #include "SystemResetAdapter.h"
 
-#include "data.h"
+#include "SystemRuntime.h"
 
 static void RequestReset(void *ctx)
 {

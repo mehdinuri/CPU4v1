@@ -199,7 +199,8 @@ void tearDown(void)
 
 void test_detector_report_period_scalars_are_transactional(void)
 {
-  NtcipRequestContext_t request = { 0x4444U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x4444U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 4U);
@@ -246,7 +247,8 @@ void test_detector_report_period_scalars_are_transactional(void)
 
 void test_detector_report_objects_follow_runtime_samples(void)
 {
-  NtcipRequestContext_t request = { 0x4545U, 0U, 0U };
+  NtcipRequestContext_t request =
+    NTCIP_REQUEST_CONTEXT_INIT(0x4545U, 0U, 0U);
   NtcipValue_t value;
 
   BeginTransaction(&request, 5U);

@@ -19,12 +19,12 @@ void tearDown(void)
 /* ---------------------------------------------------------------------------
  * Helpers
  * ---------------------------------------------------------------------------*/
-static tSMeasurementOffset make_offset(uint8_t op, uint8_t val)
+static MeasurementOffset_t make_offset(uint8_t op, uint8_t val)
 {
-  tSMeasurementOffset off;
+  MeasurementOffset_t off;
 
-  off.eOperation = op;
-  off.bValue = val;
+  off.operation = op;
+  off.value = val;
 
   return off;
 }
@@ -35,7 +35,7 @@ static tSMeasurementOffset make_offset(uint8_t op, uint8_t val)
 
 void test_scale_net_voltage_no_offset(void)
 {
-  tSMeasurementOffset off = make_offset(OFFSET_OPERATION_NONE, 0U);
+  MeasurementOffset_t off = make_offset(OFFSET_OPERATION_NONE, 0U);
 
   /* 220.0 V / 0.73029 ≈ 301 */
   uint16_t result = Measurement_ScaleNetVoltage(220.0f, &off);
@@ -45,7 +45,7 @@ void test_scale_net_voltage_no_offset(void)
 
 void test_scale_net_voltage_sum_offset(void)
 {
-  tSMeasurementOffset off = make_offset(OFFSET_OPERATION_SUM, 10U);
+  MeasurementOffset_t off = make_offset(OFFSET_OPERATION_SUM, 10U);
 
   /* (220.0 + 10) / 0.73029 = 314.95… → truncates to 314 */
   uint16_t result = Measurement_ScaleNetVoltage(220.0f, &off);
@@ -55,7 +55,7 @@ void test_scale_net_voltage_sum_offset(void)
 
 void test_scale_net_voltage_subtract_offset(void)
 {
-  tSMeasurementOffset off = make_offset(OFFSET_OPERATION_SUBTRACT, 10U);
+  MeasurementOffset_t off = make_offset(OFFSET_OPERATION_SUBTRACT, 10U);
 
   /* (220.0 - 10) / 0.73029 ≈ 287 */
   uint16_t result = Measurement_ScaleNetVoltage(220.0f, &off);
@@ -65,7 +65,7 @@ void test_scale_net_voltage_subtract_offset(void)
 
 void test_scale_net_voltage_unknown_operation_treated_as_none(void)
 {
-  tSMeasurementOffset off = make_offset(0xFFU, 5U);
+  MeasurementOffset_t off = make_offset(0xFFU, 5U);
 
   /* Unknown op → offset ignored → 220.0 / 0.73029 ≈ 301 */
   uint16_t result = Measurement_ScaleNetVoltage(220.0f, &off);
@@ -80,7 +80,7 @@ void test_scale_net_voltage_unknown_operation_treated_as_none(void)
 void test_scale_net_voltage_negative_result_clamps_to_zero(void)
 {
   /* 50 V − 100 offset = −50 V; would be UB without clamp → must return 0 */
-  tSMeasurementOffset off = make_offset(OFFSET_OPERATION_SUBTRACT, 100U);
+  MeasurementOffset_t off = make_offset(OFFSET_OPERATION_SUBTRACT, 100U);
   uint16_t result = Measurement_ScaleNetVoltage(50.0f, &off);
 
   TEST_ASSERT_EQUAL_UINT16(0U, result);

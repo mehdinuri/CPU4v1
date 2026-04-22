@@ -10,12 +10,12 @@
 
 typedef struct
 {
-  GPIO_TypeDef *pPort;
-  uint16_t sPin;
-} tSPinRef;
+  GPIO_TypeDef *port;
+  uint16_t pin;
+} PinRef_t;
 
 /* Channel order must match ISignalOutputPort.h */
-static const tSPinRef SaPinTable[SIGNAL_OUTPUT_CHANNEL_COUNT] =
+static const PinRef_t pinTable[SIGNAL_OUTPUT_CHANNEL_COUNT] =
 {
   { R1_GPIO_Port, R1_Pin }, { Y1_GPIO_Port, Y1_Pin }, { G1_GPIO_Port, G1_Pin },
   { R2_GPIO_Port, R2_Pin }, { Y2_GPIO_Port, Y2_Pin }, { G2_GPIO_Port, G2_Pin },
@@ -23,47 +23,47 @@ static const tSPinRef SaPinTable[SIGNAL_OUTPUT_CHANNEL_COUNT] =
   { R4_GPIO_Port, R4_Pin }, { Y4_GPIO_Port, Y4_Pin }, { G4_GPIO_Port, G4_Pin }
 };
 
-static void AdapterApply(void *pCtx, const tSSignalOutputImage *pImage)
+static void AdapterApply(void *ctx, const SignalOutputImage_t *image)
 {
   uint8_t i;
 
-  (void) pCtx;
+  (void) ctx;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    GPIO_PinState fState = (pImage->aChannels[i]
-                            != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+    GPIO_PinState state = (image->channels[i]
+                           != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET;
 
-    HAL_GPIO_WritePin(SaPinTable[i].pPort, SaPinTable[i].sPin, fState);
+    HAL_GPIO_WritePin(pinTable[i].port, pinTable[i].pin, state);
   }
 }
 
-static void AdapterAllOff(void *pCtx)
+static void AdapterAllOff(void *ctx)
 {
   uint8_t i;
 
-  (void) pCtx;
+  (void) ctx;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    HAL_GPIO_WritePin(SaPinTable[i].pPort, SaPinTable[i].sPin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(pinTable[i].port, pinTable[i].pin, GPIO_PIN_RESET);
   }
 }
 
-void GpioOutputAdapter_Init(tSGpioOutputAdapterCtx *pCtx)
+void GpioOutputAdapter_Init(GpioOutputAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 
   /* MX_GPIO_Init() is called by CubeMX before the scheduler starts;
    * the pins are already configured as push-pull outputs by that point.
    */
 }
 
-ISignalOutputPort_t GpioOutputAdapter_CreatePort(tSGpioOutputAdapterCtx *pCtx)
+ISignalOutputPort_t GpioOutputAdapter_CreatePort(GpioOutputAdapterCtx_t *ctx)
 {
   ISignalOutputPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Apply = AdapterApply;
   port.AllOff = AdapterAllOff;
 
@@ -75,12 +75,12 @@ void GpioOutputAdapter_ForceAllOff(void)
   uint8_t i;
 
   /* Context-free. No vtable dispatch, no port instance, no RTOS primitives.
-   * Single source of truth for the pin map — shares SaPinTable with the
+   * Single source of truth for the pin map — shares pinTable with the
    * regular Apply/AllOff path.
    */
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    HAL_GPIO_WritePin(SaPinTable[i].pPort, SaPinTable[i].sPin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(pinTable[i].port, pinTable[i].pin, GPIO_PIN_RESET);
   }
 }
 

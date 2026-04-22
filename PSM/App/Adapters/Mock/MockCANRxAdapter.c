@@ -8,15 +8,15 @@
 
 #include <string.h>
 
-static void AdapterSubmitFrame(void *ctx, const tSCANRxFrame *pFrame)
+static void AdapterSubmitFrame(void *ctx, const CanRxFrame_t *frame)
 {
   MockCANRxAdapterCtx_t *c = (MockCANRxAdapterCtx_t *) ctx;
 
-  if (pFrame != NULL)
+  if (frame != NULL)
   {
-    c->SLastFrame = *pFrame;
+    c->lastFrame = *frame;
   }
-  c->lSubmitCount++;
+  c->submitCount++;
 }
 
 void MockCANRxAdapterInit(MockCANRxAdapterCtx_t *ctx)

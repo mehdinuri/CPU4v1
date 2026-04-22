@@ -76,6 +76,7 @@ typedef enum {
 
 typedef struct snmp_request_identity {
   u8_t version;
+  u8_t security_level;
   ip_addr_t source_ip;
   const u8_t *security_name;
   u16_t security_name_len;

@@ -11,7 +11,7 @@
 static void AdapterRefresh(void *ctx)
 {
   MockWatchdogAdapterCtx_t *c = (MockWatchdogAdapterCtx_t *) ctx;
-  c->lRefreshCount++;
+  c->refreshCount++;
 }
 
 void MockWatchdogAdapterInit(MockWatchdogAdapterCtx_t *ctx)

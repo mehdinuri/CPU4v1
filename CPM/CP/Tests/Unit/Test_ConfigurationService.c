@@ -53,6 +53,8 @@ void test_empty_repository_uses_defaults_until_first_commit(void)
   TEST_ASSERT_EQUAL_UINT8(CONFIGURATION_SLOT_NONE,
                           ConfigurationServiceGetActiveSlot(&s_service));
   TEST_ASSERT_EQUAL_UINT16(50U, config->phases[0].minGreenDs);
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_500MS_DS,
+                          config->unit.failureFlashPeriodDs);
 }
 
 void test_first_commit_targets_slot_b_and_survives_reload(void)
@@ -947,6 +949,9 @@ void test_unit_configuration_persists_across_reload(void)
                      &s_service,
                      (uint8_t)
                      INTERSECTION_UNIT_STARTUP_FLASH_MODE_ALL_RED_FLASH_OVERRIDE));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetUnitFailureFlashPeriodDs(
+                     &s_service,
+                     INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS));
   TEST_ASSERT_TRUE(ConfigurationServiceSetUnitTimeSourceCommanded(
                      &s_service,
                      (uint8_t) UNIT_CLOCK_SOURCE_RTC_SQWR));
@@ -966,6 +971,8 @@ void test_unit_configuration_persists_across_reload(void)
   TEST_ASSERT_EQUAL_UINT8(
     (uint8_t) INTERSECTION_UNIT_STARTUP_FLASH_MODE_ALL_RED_FLASH_OVERRIDE,
     unit.startUpFlashMode);
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS,
+                          unit.failureFlashPeriodDs);
   TEST_ASSERT_EQUAL_UINT8((uint8_t) UNIT_CLOCK_SOURCE_RTC_SQWR,
                           unit.timeSourceCommanded);
   TEST_ASSERT_EQUAL_UINT8(18U, unit.elevationOffsetMeters);
@@ -999,6 +1006,19 @@ void test_unit_elevation_offset_above_mib_limit_fails_verify(void)
   TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
   errorInfo = ConfigurationServiceGetLastError(&s_service);
   TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_UNIT_ELEVATION_OFFSET,
+                        errorInfo.type);
+}
+
+void test_unit_failure_flash_period_invalid_value_fails_verify(void)
+{
+  IntersectionConfigErrorInfo_t errorInfo;
+
+  TEST_ASSERT_TRUE(ConfigurationServiceCreateTransaction(&s_service));
+  TEST_ASSERT_TRUE(ConfigurationServiceSetUnitFailureFlashPeriodDs(&s_service,
+                                                                   7U));
+  TEST_ASSERT_FALSE(ConfigurationServiceVerify(&s_service));
+  errorInfo = ConfigurationServiceGetLastError(&s_service);
+  TEST_ASSERT_EQUAL_INT(INTERSECTION_CONFIG_ERROR_UNIT_FAILURE_FLASH_PERIOD,
                         errorInfo.type);
 }
 
@@ -1265,6 +1285,7 @@ int main(void)
   RUN_TEST(test_unit_configuration_persists_across_reload);
   RUN_TEST(test_line_sync_time_source_persists_across_reload);
   RUN_TEST(test_unit_elevation_offset_above_mib_limit_fails_verify);
+  RUN_TEST(test_unit_failure_flash_period_invalid_value_fails_verify);
   RUN_TEST(test_user_defined_backup_configuration_persists_across_reload);
   RUN_TEST(
     test_unit_backup_time_write_is_ignored_when_user_defined_backup_time_is_nonzero);

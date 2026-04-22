@@ -1,8 +1,7 @@
 /* App/Ports/IRelayPort.h
  *
- * Port interface for the output relay (PA6).
- * In a NEMA TS2 context this relay is used as a fault or flash
- * output.  The domain reads it back to confirm state.
+ * Raw CP-side relay GPIO port. The MMU layer converts permit semantics into a
+ * raw drive level; the adapter/hardware implement the final active-low vote.
  */
 #ifndef IRELAY_PORT_H
 #define IRELAY_PORT_H

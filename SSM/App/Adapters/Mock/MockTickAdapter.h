@@ -13,12 +13,12 @@
 
 typedef struct
 {
-  uint32_t lNow_ms;
-} tSMockTickAdapterCtx;
+  uint32_t nowMs;
+} MockTickAdapterCtx_t;
 
-void MockTickAdapter_Init(tSMockTickAdapterCtx *pCtx);
-void MockTickAdapter_SetNow(tSMockTickAdapterCtx *pCtx, uint32_t lNow_ms);
-ITickPort_t MockTickAdapter_CreatePort(tSMockTickAdapterCtx *pCtx);
+void MockTickAdapter_Init(MockTickAdapterCtx_t *ctx);
+void MockTickAdapter_SetNow(MockTickAdapterCtx_t *ctx, uint32_t nowMs);
+ITickPort_t MockTickAdapter_CreatePort(MockTickAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_TICK_ADAPTER_H */
 

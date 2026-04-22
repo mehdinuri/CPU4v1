@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 /* ---------------------------------------------------------------------------
- * Evaluate verdict — matches tEFrequencyCaptureFSMVerdict in the domain
+ * Evaluate verdict — matches FrequencyCaptureFSMVerdict_e in the domain
  * FSM.  Duplicated here so Core/Src consumers do not have to include the
  * Domain FSM header.
  * ---------------------------------------------------------------------------*/
@@ -22,8 +22,10 @@ typedef enum
 {
   FREQ_CAPTURE_VERDICT_OK           = 0,  /* in tolerance band          */
   FREQ_CAPTURE_VERDICT_BAD          = 1,  /* out of band / no recent edge */
-  FREQ_CAPTURE_VERDICT_ENTER_SLEEP  = 2   /* strike threshold reached   */
-} tEFrequencyCaptureVerdict;
+  FREQ_CAPTURE_VERDICT_ENTER_FLASH  = 2   /* strike threshold reached — */
+                                          /* driver should enter flash  */
+                                          /* mode (not MCU standby)     */
+} FrequencyCaptureVerdict_e;
 
 /* ---------------------------------------------------------------------------
  * Port interface
@@ -31,32 +33,32 @@ typedef enum
 typedef struct
 {
   void *ctx;
-  void   (*Restart)(void *ctx, uint32_t lNowMs);
-  void   (*OnEdge) (void *ctx, uint32_t lCaptureValue, uint32_t lNowMs);
-  uint8_t (*Evaluate)(void *ctx, uint32_t lNowMs); /* returns tEFrequencyCaptureVerdict */
+  void   (*Restart)(void *ctx, uint32_t nowMs);
+  void   (*OnEdge) (void *ctx, uint32_t captureValue, uint32_t nowMs);
+  uint8_t (*Evaluate)(void *ctx, uint32_t nowMs); /* returns FrequencyCaptureVerdict_e */
 } IFrequencyCapturePort_t;
 
 /* ---------------------------------------------------------------------------
  * Zero-cost inline dispatch helpers
  * ---------------------------------------------------------------------------*/
 static inline void FrequencyCapture_Restart(IFrequencyCapturePort_t *p,
-                                             uint32_t lNowMs)
+                                             uint32_t nowMs)
 {
-  p->Restart(p->ctx, lNowMs);
+  p->Restart(p->ctx, nowMs);
 }
 
 static inline void FrequencyCapture_OnEdge(IFrequencyCapturePort_t *p,
-                                            uint32_t lCaptureValue,
-                                            uint32_t lNowMs)
+                                            uint32_t captureValue,
+                                            uint32_t nowMs)
 {
-  p->OnEdge(p->ctx, lCaptureValue, lNowMs);
+  p->OnEdge(p->ctx, captureValue, nowMs);
 }
 
-static inline tEFrequencyCaptureVerdict FrequencyCapture_Evaluate(
+static inline FrequencyCaptureVerdict_e FrequencyCapture_Evaluate(
     IFrequencyCapturePort_t *p,
-    uint32_t lNowMs)
+    uint32_t nowMs)
 {
-  return (tEFrequencyCaptureVerdict) p->Evaluate(p->ctx, lNowMs);
+  return (FrequencyCaptureVerdict_e) p->Evaluate(p->ctx, nowMs);
 }
 
 #endif /* PORTS_IFREQUENCYCAPTUREPORT_H */

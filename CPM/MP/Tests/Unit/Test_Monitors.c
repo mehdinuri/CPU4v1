@@ -83,6 +83,33 @@ static void SeedTwoChannelConfig(ConfigurationService_t *svc)
   (void) ConfigurationServiceValidate(svc);
 }
 
+static void SeedOverlapMonitorConfig(ConfigurationService_t *svc)
+{
+  IntersectionConfig_t cfg;
+  ChannelOutputMapping_t mapping;
+
+  (void) memset(&cfg, 0, sizeof(cfg));
+  cfg.phaseCount = 4U;
+  cfg.ringCount = 1U;
+  cfg.phases[0].concurrency.length = 1U;
+  cfg.phases[0].concurrency.values[0] = 3U;
+  cfg.channels[0].controlSource = 1U;
+  cfg.channels[0].controlType = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  cfg.channels[1].controlSource = 2U;
+  cfg.channels[1].controlType =
+    INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+  cfg.overlaps[0].includedPhases.length = 1U;
+  cfg.overlaps[0].includedPhases.values[0] = 3U;
+  cfg.overlaps[0].trailYellowDs = 4U;
+  cfg.overlaps[0].trailRedDs = 6U;
+
+  ConfigurationServiceInit(svc, NULL);
+  (void) ConfigurationServiceSetConfig(svc, &cfg);
+  ChannelStateResolverInit(&mapping);
+  (void) ConfigurationServiceSetOutputMapping(svc, &mapping);
+  (void) ConfigurationServiceValidate(svc);
+}
+
 void test_conflict_monitor_green_green_fires_after_dwell(void)
 {
   ConfigurationService_t svc;
@@ -270,6 +297,17 @@ void test_min_yellow_fires_when_too_short(void)
 
   TEST_ASSERT_EQUAL_UINT32(1U, g_collector.count);
   TEST_ASSERT_EQUAL_UINT16(FAULT_CODE_MIN_YELLOW_SHORT, g_collector.last.code);
+}
+
+void test_configuration_service_derives_overlap_monitoring_profile(void)
+{
+  ConfigurationService_t svc;
+
+  SeedOverlapMonitorConfig(&svc);
+
+  TEST_ASSERT_EQUAL_UINT8(4U, ConfigurationServiceGetChannelMinYellowDs(&svc, 0U));
+  TEST_ASSERT_EQUAL_UINT8(6U, ConfigurationServiceGetChannelRedClearDs(&svc, 0U));
+  TEST_ASSERT_TRUE(ConfigurationServiceChannelsConflict(&svc, 0U, 1U));
 }
 
 /* ---------- ClearanceMonitor ---------- */
@@ -475,6 +513,7 @@ int main(void)
   RUN_TEST(test_signal_sequence_flags_illegal_green_to_red);
   RUN_TEST(test_signal_sequence_allows_red_to_green);
   RUN_TEST(test_min_yellow_fires_when_too_short);
+  RUN_TEST(test_configuration_service_derives_overlap_monitoring_profile);
   RUN_TEST(test_clearance_short_fires_when_conflict_enters_too_early);
   RUN_TEST(test_lamp_open_fires_when_commanded_but_no_voltage);
   RUN_TEST(

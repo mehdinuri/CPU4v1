@@ -1,32 +1,32 @@
-# STM32 platform layer: bootstrap, legacy services, and residual task-style
-# modules that have not yet been split into thin RTOS wrappers.
+# STM32 platform layer: bootstrap and thin RTOS/task wrappers around the
+# current domain and adapter services.
 
 add_library(Platform_STM32 STATIC)
 
 target_sources(Platform_STM32 PRIVATE
     Bootstrap/main_stm32.c
-    Services/Control/Legacy/data.c
-    Services/Control/Legacy/LegacyControllerModeBridge.c
     Services/Persistence/MLM.c
     Services/Persistence/MSM.c
+    Services/Persistence/SettingsStorage.c
     ../../Adapters/STM32/LCDAdapter.c
     Services/Time/gps.c
+    Services/Time/LrlfDetectTimeStore.c
+    Services/Time/SystemStartTimeStore.c
+    Services/Time/TimeSourceState.c
     Services/Time/time.c
     Services/Comms/MCS.c
     Services/Comms/PPPOSAsynch.c
-    Services/Comms/cpmpcomm.c
     Services/UI/lcd.c
     Services/UI/ui.c
+    Core/SystemRuntime.c
     Core/DWT.c
     Core/FaultHandler.c
     Core/TimerCapture.c
     Core/usb.c
     Core/lcdDrv.c
-    Tasks/LegacyCanIngress.c
-    Tasks/CanMsgParser.c
+    Tasks/FieldCanTxTask.c
     Tasks/IntersectionControlTask.c
     Tasks/Maintenance.c
-    Tasks/signalCardDrv.c
 )
 
 target_include_directories(Platform_STM32
@@ -34,7 +34,6 @@ target_include_directories(Platform_STM32
             ${CMAKE_CURRENT_SOURCE_DIR}/Bootstrap
             ${CMAKE_CURRENT_SOURCE_DIR}/Core
             ${CMAKE_CURRENT_SOURCE_DIR}/Tasks
-            ${CMAKE_CURRENT_SOURCE_DIR}/Services/Control/Legacy
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Persistence
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Time
             ${CMAKE_CURRENT_SOURCE_DIR}/Services/Comms

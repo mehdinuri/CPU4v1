@@ -54,54 +54,50 @@ void MX_FDCAN1_Init(void);
 void MX_FDCAN2_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-typedef struct _tSFDCANRxMsg
+typedef struct FdcanRxMsg
 {
-	FDCAN_HandleTypeDef	*hfdcan;
-  FDCAN_RxHeaderTypeDef SRxHeader;
-  uint8_t baData[FDCAN_MAX_DATA_LEN];
-	
-} tSFDCANRxMsg, *tpSFDCANRxMsg;
+  FDCAN_HandleTypeDef   *hfdcan;
+  FDCAN_RxHeaderTypeDef  rxHeader;
+  uint8_t                data[FDCAN_MAX_DATA_LEN];
+} FdcanRxMsg_t;
 
-typedef struct _tSFDCANTxMsg
+typedef struct FdcanTxMsg
 {
-	FDCAN_HandleTypeDef	*hfdcan;
-  FDCAN_TxHeaderTypeDef STxHeader;
-  uint8_t baData[FDCAN_MAX_DATA_LEN];
-	
-} tSFDCANTxMsg, *tpSFDCANTxMsg;
+  FDCAN_HandleTypeDef   *hfdcan;
+  FDCAN_TxHeaderTypeDef  txHeader;
+  uint8_t                data[FDCAN_MAX_DATA_LEN];
+} FdcanTxMsg_t;
 
-typedef struct __attribute__((packed)) _tSPSMMeasurement
+typedef struct __attribute__((packed))
 {
-	uint8_t bACLow : 8;
-	uint8_t b24V1Low : 8;
-	uint8_t b24V2Low : 8;
-	uint8_t b5V1Low : 8;
-	uint8_t b5V2Low : 8;
-	uint8_t bACHigh : 2;
-	uint8_t b24V1High : 2;
-	uint8_t b24V2High : 2;
-	uint8_t b5V1High : 2;
-	uint8_t b5V2High : 2;
-	uint8_t bIsolatedVoltage : 1;
-	uint8_t bReserved : 5;
-	uint8_t bFrequency : 8;
+  uint8_t acLow           : 8;
+  uint8_t dc24V1Low     : 8;
+  uint8_t dc24V2Low     : 8;
+  uint8_t dc5V1Low      : 8;
+  uint8_t dc5V2Low      : 8;
+  uint8_t acHigh          : 2;
+  uint8_t dc24V1High    : 2;
+  uint8_t dc24V2High    : 2;
+  uint8_t dc5V1High     : 2;
+  uint8_t dc5V2High     : 2;
+  uint8_t isolatedVoltage : 1;
+  uint8_t reserved        : 5;
+  uint8_t frequency       : 8;
+} PsmMeasurement_t;
 
-} tSPSMMeasurement, *tpSPSMMeasurement;
-
-typedef struct __attribute__((packed)) _tSFlashSync
+typedef struct __attribute__((packed))
 {
-	uint8_t bFlashSync : 1;
-	uint8_t bReserved : 7;
-	uint8_t baReserved[7];
+  uint8_t flashSync : 1;
+  uint8_t reserved  : 7;
+  uint8_t padding[7];
+} FlashSync_t;
 
-} tSFlashSync, *tpSFlashSync;
-
-extern uint8_t CANGetRxDataLength(uint32_t lCode);
-extern uint32_t CANGetTxDataLengthCode(uint8_t bLen);
+extern uint8_t CANGetRxDataLength(uint32_t code);
+extern uint32_t CANGetTxDataLengthCode(uint8_t len);
 extern void CANStart(FDCAN_HandleTypeDef* hfdcan);
 extern void CANStop(FDCAN_HandleTypeDef* hfdcan);
 extern void CANDeInit(FDCAN_HandleTypeDef* hfdcan);
-extern void CANSendMessage(tpSFDCANTxMsg pSMsg);
+extern void CANSendMessage(FdcanTxMsg_t * msg);
 extern void CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan);
 
 /* USER CODE END Prototypes */

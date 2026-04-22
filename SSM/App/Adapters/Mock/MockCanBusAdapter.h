@@ -16,19 +16,19 @@
 
 typedef struct
 {
-  tECanBusId eBus;
-  tSCanFrame SFrame;
-} tSMockCanSentEntry;
+  CanBusId_e eBus;
+  CanFrame_t frame;
+} MockCanSentEntry_t;
 
 typedef struct
 {
-  tSMockCanSentEntry aSent[MOCK_CAN_MAX_RECORDED];
-  uint8_t bSentCount;               /* saturates at MOCK_CAN_MAX_RECORDED */
-  uint8_t bForceSendFail;           /* 1 = SendStd returns 0 */
-} tSMockCanBusAdapterCtx;
+  MockCanSentEntry_t sent[MOCK_CAN_MAX_RECORDED];
+  uint8_t sentCount;               /* saturates at MOCK_CAN_MAX_RECORDED */
+  uint8_t forceSendFail;           /* 1 = SendStd returns 0 */
+} MockCanBusAdapterCtx_t;
 
-void MockCanBusAdapter_Init(tSMockCanBusAdapterCtx *pCtx);
-ICanBusPort_t MockCanBusAdapter_CreatePort(tSMockCanBusAdapterCtx *pCtx);
+void MockCanBusAdapter_Init(MockCanBusAdapterCtx_t *ctx);
+ICanBusPort_t MockCanBusAdapter_CreatePort(MockCanBusAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_CAN_BUS_ADAPTER_H */
 

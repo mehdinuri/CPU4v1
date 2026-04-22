@@ -18,11 +18,11 @@
  * one of two counters. The output is active for this cycle iff the on-samples
  * outnumber the off-samples (strict majority). Equal counts count as inactive.
  *
- * @param bOnCntr   On-sample count  (0..255)
- * @param bOffCntr  Off-sample count (0..255)
- * @return 1 if bOnCntr > bOffCntr, 0 otherwise
+ * @param onCntr   On-sample count  (0..255)
+ * @param offCntr  Off-sample count (0..255)
+ * @return 1 if onCntr > offCntr, 0 otherwise
  */
-uint8_t SignalOutput_IsActive(uint8_t bOnCntr, uint8_t bOffCntr);
+uint8_t SignalOutput_IsActive(uint8_t onCntr, uint8_t offCntr);
 
 #endif /* DOMAIN_SIGNALOUTPUT_H */
 

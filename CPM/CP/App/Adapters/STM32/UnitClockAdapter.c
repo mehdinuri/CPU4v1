@@ -8,8 +8,8 @@
 #include <string.h>
 
 #include "Platform/STM32/Core/Tim2CaptureView.h"
-#include "data.h"
 #include "gps.h"
+#include "TimeSourceState.h"
 
 enum
 {
@@ -138,11 +138,11 @@ static uint8_t AdapterGetCurrentStatus(void *ctx, uint8_t *currentStatus)
 
   if (currentSource == (uint8_t) UNIT_CLOCK_SOURCE_GNSS)
   {
-    if (GpsModemAliveGet() == FALSE)
+    if (GpsModemAliveGet() == 0U)
     {
       *currentStatus = (uint8_t) UNIT_CLOCK_SOURCE_STATUS_DATA_TIMEOUT_ERROR;
     }
-    else if (GpsRTCInitialUpdateDoneGet() == FALSE)
+    else if (GpsRTCInitialUpdateDoneGet() == 0U)
     {
       *currentStatus = (uint8_t) UNIT_CLOCK_SOURCE_STATUS_PENDING_UPDATE;
     }

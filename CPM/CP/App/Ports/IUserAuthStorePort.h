@@ -22,7 +22,6 @@ typedef struct
 
   uint8_t (*Load)(void *ctx, UserAuthStoreRecord_t *record);
   uint8_t (*Save)(void *ctx, const UserAuthStoreRecord_t *record);
-  uint8_t (*LoadLegacyAdminPin)(void *ctx, uint16_t *adminPin);
 } IUserAuthStorePort_t;
 
 static inline uint8_t UserAuthStoreLoad(IUserAuthStorePort_t *p,
@@ -35,13 +34,6 @@ static inline uint8_t UserAuthStoreSave(IUserAuthStorePort_t *p,
                                         const UserAuthStoreRecord_t *record)
 {
   return p->Save(p->ctx, record);
-}
-
-static inline uint8_t UserAuthStoreLoadLegacyAdminPin(
-  IUserAuthStorePort_t *p,
-  uint16_t *adminPin)
-{
-  return p->LoadLegacyAdminPin(p->ctx, adminPin);
 }
 
 #endif /* IUSER_AUTH_STORE_PORT_H */

@@ -12,8 +12,8 @@
 
 typedef struct
 {
-  tSCANRxFrame SLastFrame;    /* last frame submitted           */
-  uint32_t     lSubmitCount;  /* total submissions              */
+  CanRxFrame_t lastFrame;    /* last frame submitted           */
+  uint32_t     submitCount;  /* total submissions              */
 } MockCANRxAdapterCtx_t;
 
 void         MockCANRxAdapterInit(MockCANRxAdapterCtx_t *ctx);

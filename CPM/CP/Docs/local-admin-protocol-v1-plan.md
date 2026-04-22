@@ -113,7 +113,6 @@ Replace the legacy ASCII `UITask` protocol with a transport-neutral local admin 
   - `data.h`
   - `program.h`
   - `gps.h`
-  - `cpmpcomm.h`
   - `MCSAsynch.h`
 - Keep `MCSTask` only behind clean comms/identity services.
 - Treat USB CDC as the default future PC-admin transport, but do not change the USB class in the cleanup slice.
@@ -129,4 +128,3 @@ Replace the legacy ASCII `UITask` protocol with a transport-neutral local admin 
 - NTCIP object transaction flow
 - config import verify / activate / rollback
 - event paging and latest door-log navigation
-

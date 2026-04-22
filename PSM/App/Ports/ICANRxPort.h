@@ -16,7 +16,7 @@
 /* ---------------------------------------------------------------------------
  * Generic CAN frame descriptor — kept minimal so the port does not leak
  * HAL typedefs into the domain.  Adapters translate to/from their native
- * frame representation (tSFDCANRxMsg on STM32).
+ * frame representation (FdcanRxMsg_t on STM32).
  * ---------------------------------------------------------------------------*/
 #ifndef CANRX_MAX_DATA_LEN
 #define CANRX_MAX_DATA_LEN 64U
@@ -24,11 +24,11 @@
 
 typedef struct
 {
-  uint32_t lId;                          /* 11-bit or 29-bit identifier      */
-  uint8_t  fExtendedId;                  /* 0 = standard, 1 = extended       */
-  uint8_t  bDataLen;                     /* number of valid payload bytes    */
-  uint8_t  baData[CANRX_MAX_DATA_LEN];   /* payload                          */
-} tSCANRxFrame;
+  uint32_t id;                          /* 11-bit or 29-bit identifier      */
+  uint8_t  extendedId;                  /* 0 = standard, 1 = extended       */
+  uint8_t  dataLen;                     /* number of valid payload bytes    */
+  uint8_t  data[CANRX_MAX_DATA_LEN];   /* payload                          */
+} CanRxFrame_t;
 
 /* ---------------------------------------------------------------------------
  * Port interface
@@ -36,16 +36,16 @@ typedef struct
 typedef struct
 {
   void *ctx;
-  void (*SubmitFrame)(void *ctx, const tSCANRxFrame *pFrame);
+  void (*SubmitFrame)(void *ctx, const CanRxFrame_t *frame);
 } ICANRxPort_t;
 
 /* ---------------------------------------------------------------------------
  * Zero-cost inline dispatch helper
  * ---------------------------------------------------------------------------*/
 static inline void CanRx_SubmitFrame(ICANRxPort_t *p,
-                                      const tSCANRxFrame *pFrame)
+                                      const CanRxFrame_t *frame)
 {
-  p->SubmitFrame(p->ctx, pFrame);
+  p->SubmitFrame(p->ctx, frame);
 }
 
 #endif /* PORTS_ICANRXPORT_H */

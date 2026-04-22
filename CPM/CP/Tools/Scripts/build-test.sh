@@ -21,8 +21,9 @@ cd - > /dev/null
 echo "==> Generating coverage report -> $COVERAGE_DIR/"
 mkdir -p "$COVERAGE_DIR"
 gcovr \
+    --config gcovr.cfg \
+    --gcov-ignore-parse-errors \
     --root . \
-    --filter App/Domain/ \
     --html-details "$COVERAGE_DIR/index.html" \
     --xml "$COVERAGE_DIR/coverage.xml" \
     --print-summary \

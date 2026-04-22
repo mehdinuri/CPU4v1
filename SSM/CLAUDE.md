@@ -95,20 +95,24 @@ Files under `Core/Src/` for peripherals (`adc.c`, `fdcan.c`, `gpio.c`, `tim.c`, 
 
 ## Naming Conventions
 
-Hungarian-style prefixes used throughout:
+Follow the system-wide rules in the root `CLAUDE.md` § "Naming Conventions (system-wide)":
+`PascalCase_t` types, `PascalCase_e` enums, `camelCase` variables/fields/params, `SCREAMING_SNAKE_CASE` macros, `g_` / `s_` for scope, **no Hungarian prefixes**.
 
-| Prefix | Type |
-|---|---|
-| `b` | `uint8_t` / byte / bool flag |
-| `s` | `uint16_t` / short |
-| `l` | `uint32_t` / long |
-| `f` | `float` or boolean flag (context-dependent) |
-| `p` | pointer |
-| `tS` | struct typedef |
-| `tE` | enum typedef |
-| `tU` | union typedef |
-| `S` (uppercase) | struct instance |
-| `U` (uppercase) | union instance |
+**Do not reintroduce** the legacy prefixes previously documented here —
+`b` (uint8_t), `s` (uint16_t), `l` (uint32_t), `f` (float / flag),
+`p` (pointer), `tS` (struct typedef), `tE` (enum typedef), `tU` (union),
+`S` / `U` (struct/union instance). Type information comes from the
+declaration, not the identifier.
+
+**Migration status**: SSM is **not yet migrated**; all three still apply in
+existing files. Follow the new convention for new code; rename
+opportunistically when touching a legacy file. Union-typedef idioms from
+the old `tU` scheme simply become `SomeName_t` (typedef's tag suffix is `_t`
+whether the underlying aggregate is a struct or a union).
+
+CubeMX-generated locals inside `Core/` HAL init blocks (e.g. `sConfig`,
+`sMasterConfig`) are regenerated on each `.ioc` export and must be left
+alone.
 
 ## GitHub Actions Workflows
 
@@ -121,3 +125,15 @@ CI lives at the repo root in `/CPU4v1/.github/workflows/` (not inside this modul
 | `ssm-release.yml` | tag `ssm-v*.*.*` | Calls build + test, generates `.bin`, creates GitHub Release |
 
 When adding new testable computation to `Tasks/`, extract it into `App/Domain/` first and add Unity tests in `Tests/Unit/` via `Add_Unity_Domain_Test`. Each test file must include its own `main()` with `UNITY_BEGIN()`, `RUN_TEST()` calls, and `UNITY_END()`. The `App/Domain/` coverage gate is enforced at 80% line coverage (`gcovr.cfg`).
+
+## Vendor MIB Maintenance (1.3.6.1.4.1.59748)
+
+SSM does not serve SNMP itself, but SSM status reaches the CP SNMP agent over the field-bus and surfaces under the Teknotel enterprise arc `1.3.6.1.4.1.59748`. The canonical `.mib` (vendor "Teknotel Elektronik") lives at `../CPM/CP/Docs/TEKNOTEL-CPU4-MIB.mib`. OID arc shape: `teknotel .59748 → transportation .4 → devices .2 → cpu4 .1 → { unit .3, channel .8, cpMpLink .20, driverModule .21 }`.
+
+**Update that `.mib` in the same commit** whenever SSM work changes:
+
+- The 16-bit SSM status-word bit layout — it is the sole varbind of `teknotelDriverModuleMissingTrap` (specific-trap 2, `.59748.0.2`), carried at `driverModuleStatus` (`1.3.6.1.4.1.59748.4.2.1.21.1`). Any new status bit must be documented in the MIB `DESCRIPTION`.
+- The per-channel fault flags the SSM contributes to `CpMpFaultChannelFlags_t` (surface as `channelFaultFlags` rows under `.59748.4.2.1.8.2.1.2`) — `RED_FAIL`, `DARK`, `LAMP_OPEN`, `LAMP_EXTERNALLY_DRIVEN`.
+- The trigger condition that causes CP to emit `teknotelDriverModuleMissingTrap`.
+
+Do not invent new enterprise OIDs from SSM — new objects must be added on the CP side via `CPM/CP/App/Domain/NTCIP/MibVendor59748/` (one file per functional group) and simultaneously in the `.mib`.

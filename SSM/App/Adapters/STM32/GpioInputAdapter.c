@@ -10,12 +10,12 @@
 
 typedef struct
 {
-  GPIO_TypeDef *pPort;
-  uint16_t sPin;
-} tSPinRef;
+  GPIO_TypeDef *port;
+  uint16_t pin;
+} PinRef_t;
 
 /* Readback pins — active-low. Channel order matches ISignalOutputPort. */
-static const tSPinRef SaReadbackPins[SIGNAL_OUTPUT_CHANNEL_COUNT] =
+static const PinRef_t readbackPins[SIGNAL_OUTPUT_CHANNEL_COUNT] =
 {
   { R1_V_GPIO_Port, R1_V_Pin }, { Y1_V_GPIO_Port, Y1_V_Pin },
   { G1_V_GPIO_Port, G1_V_Pin },
@@ -27,34 +27,34 @@ static const tSPinRef SaReadbackPins[SIGNAL_OUTPUT_CHANNEL_COUNT] =
   { G4_V_GPIO_Port, G4_V_Pin }
 };
 
-static void AdapterSample(void *pCtx, tSSignalInputSnapshot *pOut)
+static void AdapterSample(void *ctx, SignalInputSnapshot_t *out)
 {
   uint8_t i;
 
-  (void) pCtx;
+  (void) ctx;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
     /* Active-low in hardware: pin low → channel active → logical 1. */
-    pOut->aChannels[i] =
-      (HAL_GPIO_ReadPin(SaReadbackPins[i].pPort,
-                        SaReadbackPins[i].sPin) == GPIO_PIN_RESET)
+    out->channels[i] =
+      (HAL_GPIO_ReadPin(readbackPins[i].port,
+                        readbackPins[i].pin) == GPIO_PIN_RESET)
       ? 1U : 0U;
   }
 
-  pOut->bCardId = GPIOGetCardID();
+  out->cardId = GPIOGetCardID();
 }
 
-void GpioInputAdapter_Init(tSGpioInputAdapterCtx *pCtx)
+void GpioInputAdapter_Init(GpioInputAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 }
 
-ISignalInputPort_t GpioInputAdapter_CreatePort(tSGpioInputAdapterCtx *pCtx)
+ISignalInputPort_t GpioInputAdapter_CreatePort(GpioInputAdapterCtx_t *ctx)
 {
   ISignalInputPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Sample = AdapterSample;
 
   return port;

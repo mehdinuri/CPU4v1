@@ -44,6 +44,12 @@ project(${CMAKE_PROJECT_NAME})
 message(STATUS "Build target : ${BUILD_TARGET}")
 message(STATUS "Build type   : ${CMAKE_BUILD_TYPE}")
 
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_definitions(CP_SNMP_STRICT_RELEASE=1)
+else()
+    add_compile_definitions(CP_SNMP_STRICT_RELEASE=0)
+endif()
+
 # ---------------------------------------------------------------------------
 # HOST BUILD — Domain + Mock Adapters + Unit/Integration Tests (x86-64)
 # ---------------------------------------------------------------------------

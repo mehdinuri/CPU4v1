@@ -14,6 +14,7 @@ typedef struct
   uint8_t hour;
   uint8_t minute;
   uint8_t second;
+  uint16_t milliseconds;
   uint32_t secondsOfDay;
   int64_t localEpochSeconds;
   int64_t midnightEpochSeconds;
@@ -212,7 +213,8 @@ static uint8_t ReadLocalClock(GlobalTimeManagementService_t *service,
       || (snapshot.Century == 0U) || (snapshot.Month == 0U)
       || (snapshot.Month > 12U) || (snapshot.Date == 0U)
       || (snapshot.Date > 31U) || (snapshot.Hours > 23U)
-      || (snapshot.Minutes > 59U) || (snapshot.Seconds > 59U))
+      || (snapshot.Minutes > 59U) || (snapshot.Seconds > 59U)
+      || (snapshot.Milliseconds > 999U))
   {
     return 0U;
   }
@@ -228,6 +230,7 @@ static uint8_t ReadLocalClock(GlobalTimeManagementService_t *service,
   clock->hour = snapshot.Hours;
   clock->minute = snapshot.Minutes;
   clock->second = snapshot.Seconds;
+  clock->milliseconds = snapshot.Milliseconds;
   clock->secondsOfDay = ((uint32_t) snapshot.Hours * 3600U)
                         + ((uint32_t) snapshot.Minutes * 60U)
                         + (uint32_t) snapshot.Seconds;
@@ -272,6 +275,7 @@ static uint8_t WriteLocalClock(GlobalTimeManagementService_t *service,
   snapshot.Hours = (uint8_t) (secondsOfDay / 3600U);
   snapshot.Minutes = (uint8_t) ((secondsOfDay % 3600U) / 60U);
   snapshot.Seconds = (uint8_t) (secondsOfDay % 60U);
+  snapshot.Milliseconds = 0U;
 
   return RealtimeClockWriteSnapshot(service->rtcPort, &snapshot);
 }
@@ -985,6 +989,57 @@ uint8_t GlobalTimeManagementServiceGetGlobalTime(
   return GetGlobalTimeForConfig(service,
                                 &config->globalTimeManagement,
                                 globalTimeSeconds);
+}
+
+uint8_t GlobalTimeManagementServiceGetGlobalTimeWithMilliseconds(
+  GlobalTimeManagementService_t *service,
+  uint32_t *globalTimeSeconds,
+  uint16_t *globalTimeMilliseconds)
+{
+  LocalClock_t clock;
+  const IntersectionConfig_t *config = GetConfig(service);
+  int64_t utcEpoch;
+  int64_t nextUtcEpoch;
+  int32_t adjustment;
+  uint8_t iteration;
+
+  if ((config == NULL) || (globalTimeSeconds == NULL)
+      || (globalTimeMilliseconds == NULL)
+      || (ReadLocalClock(service, &clock) == 0U))
+  {
+    return 0U;
+  }
+
+  utcEpoch = clock.localEpochSeconds
+             - (int64_t)
+             config->globalTimeManagement.controllerStandardTimeZoneSeconds;
+
+  for (iteration = 0U; iteration < 3U; iteration++)
+  {
+    adjustment = ResolveDstAdjustmentForUtc(&config->globalTimeManagement,
+                                            utcEpoch);
+    nextUtcEpoch = clock.localEpochSeconds
+                   - (int64_t)
+                   config->globalTimeManagement.controllerStandardTimeZoneSeconds
+                   - (int64_t) adjustment;
+
+    if (nextUtcEpoch == utcEpoch)
+    {
+      break;
+    }
+
+    utcEpoch = nextUtcEpoch;
+  }
+
+  if ((utcEpoch < 0LL) || (utcEpoch > (int64_t) UINT32_MAX))
+  {
+    return 0U;
+  }
+
+  *globalTimeSeconds = (uint32_t) utcEpoch;
+  *globalTimeMilliseconds = clock.milliseconds;
+
+  return 1U;
 }
 
 uint8_t GlobalTimeManagementServiceGetGlobalLocalTimeDifferential(

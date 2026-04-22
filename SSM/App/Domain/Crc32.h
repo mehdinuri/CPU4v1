@@ -18,11 +18,11 @@
 /**
  * @brief Compute CRC-32/ISO-HDLC over a byte buffer.
  *
- * @param pData  Input buffer (non-NULL if sLen > 0).
- * @param sLen   Length in bytes.
+ * @param data  Input buffer (non-NULL if len > 0).
+ * @param len   Length in bytes.
  * @return       32-bit checksum.
  */
-uint32_t Crc32_Compute(const void *pData, uint16_t sLen);
+uint32_t Crc32_Compute(const void *data, uint16_t len);
 
 #endif /* DOMAIN_CRC32_H */
 

@@ -13,14 +13,14 @@
 
 typedef struct ITickPort
 {
-  void *pCtx;
+  void *ctx;
 
-  uint32_t (*Now_ms)(void *pCtx);
+  uint32_t (*Now_ms)(void *ctx);
 } ITickPort_t;
 
-static inline uint32_t Tick_Now_ms(ITickPort_t *pPort)
+static inline uint32_t Tick_Now_ms(ITickPort_t *port)
 {
-  return pPort->Now_ms(pPort->pCtx);
+  return port->Now_ms(port->ctx);
 }
 
 #endif /* PORTS_ITICK_PORT_H */

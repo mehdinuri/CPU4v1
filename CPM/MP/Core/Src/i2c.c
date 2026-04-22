@@ -21,7 +21,16 @@
 #include "i2c.h"
 
 /* USER CODE BEGIN 0 */
+#include "cmsis_os.h"
 #include <string.h>
+
+#define EVENT_FLAGS_I2C4_ERROR 0x01U
+#define EVENT_FLAGS_I2C4_RX_COMPLETE 0x02U
+#define EVENT_FLAGS_I2C4_TX_COMPLETE 0x04U
+#define EVENT_FLAGS_I2C4_ADDR_ACKNOWLEDGED 0x04U
+#define EVENT_FLAGS_I2C4_LISTEN_COMPLETE 0x08U
+
+static osEventFlagsId_t s_i2c4EventHandle = NULL;
 
 /* USER CODE END 0 */
 
@@ -344,11 +353,15 @@ void I2CDeInit(I2C_HandleTypeDef* hi2c)
 
 void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode)
 {
-  if (hi2c->Instance == I2C4)
+	if (hi2c->Instance == I2C4)
   {
 		if (TransferDirection == I2C_DIRECTION_TRANSMIT)
 		{
-			osEventFlagsSet(I2C4EventHandle, EVENT_FLAGS_I2C4_ADDR_ACKNOWLEDGED);
+			if (s_i2c4EventHandle != NULL)
+      {
+        (void) osEventFlagsSet(s_i2c4EventHandle,
+                               EVENT_FLAGS_I2C4_ADDR_ACKNOWLEDGED);
+      }
 		}
   }
 }
@@ -357,7 +370,10 @@ void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
 {
 	if (hi2c->Instance == I2C4)
   {
-		osEventFlagsSet(I2C4EventHandle, EVENT_FLAGS_I2C4_LISTEN_COMPLETE);
+		if (s_i2c4EventHandle != NULL)
+    {
+      (void) osEventFlagsSet(s_i2c4EventHandle, EVENT_FLAGS_I2C4_LISTEN_COMPLETE);
+    }
   }
 }
 
@@ -365,7 +381,10 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *I2cHandle)
 {
 	if (I2cHandle->Instance == I2C4)
 	{
-		osEventFlagsSet(I2C4EventHandle, EVENT_FLAGS_I2C4_ERROR);
+		if (s_i2c4EventHandle != NULL)
+    {
+      (void) osEventFlagsSet(s_i2c4EventHandle, EVENT_FLAGS_I2C4_ERROR);
+    }
 	}
 }
 
@@ -373,9 +392,9 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *I2cHandle)
 {
 	if (I2cHandle->Instance == I2C4)
 	{
-		if (I2C4EventHandle != NULL)
+		if (s_i2c4EventHandle != NULL)
 		{
-			osEventFlagsSet(I2C4EventHandle, EVENT_FLAGS_I2C4_RX_COMPLETE);
+			(void) osEventFlagsSet(s_i2c4EventHandle, EVENT_FLAGS_I2C4_RX_COMPLETE);
 		}
 	}
 }
@@ -384,9 +403,9 @@ void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *I2cHandle)
 {
 	if (I2cHandle->Instance == I2C4)
 	{
-		if (I2C4EventHandle != NULL)
+		if (s_i2c4EventHandle != NULL)
 		{
-			osEventFlagsSet(I2C4EventHandle, EVENT_FLAGS_I2C4_TX_COMPLETE);
+			(void) osEventFlagsSet(s_i2c4EventHandle, EVENT_FLAGS_I2C4_TX_COMPLETE);
 		}
 	}
 }

@@ -7,15 +7,27 @@
 
 #include "Domain/Measurement.h"
 
+#include <math.h>
+
 /* ---------------------------------------------------------------------------
  * Private helpers
  * ---------------------------------------------------------------------------*/
 
 /* C11 §6.3.1.4: converting a float to an integer type when the value does not
  * fit is undefined behaviour — not guaranteed to wrap or clamp.  All paths that
- * produce a uint16_t must pass through this function. */
+ * produce a uint16_t must pass through this function.
+ *
+ * NaN compares false against every ordered comparison, so the < / > checks
+ * would fall through to the cast and produce an implementation-defined value.
+ * The explicit isnan() early-return makes a NaN reading deterministically
+ * zero — safer than forwarding garbage to the CAN frame. */
 static uint16_t SafeFloatToU16(float f)
 {
+  if (isnan(f))
+  {
+    return 0U;
+  }
+
   if (f < 0.0f)
   {
     return 0U;
@@ -33,54 +45,55 @@ static uint16_t SafeFloatToU16(float f)
  * Public application code
  * ---------------------------------------------------------------------------*/
 
-uint16_t Measurement_ScaleNetVoltage(float fNetVoltage,
-                                     const tSMeasurementOffset *pOffset)
+uint16_t Measurement_ScaleNetVoltage(float netVoltage,
+                                     const MeasurementOffset_t *offset)
 {
-  float fOffsetVoltage;
+  float offsetVoltage;
 
-  switch ((tEOffsetOperation) pOffset->eOperation)
+  switch ((OffsetOperation_e) offset->operation)
   {
       case OFFSET_OPERATION_SUM:
       {
-        fOffsetVoltage = fNetVoltage + (float) pOffset->bValue;
+        offsetVoltage = netVoltage + (float) offset->value;
         break;
       }
 
       case OFFSET_OPERATION_SUBTRACT:
       {
-        fOffsetVoltage = fNetVoltage - (float) pOffset->bValue;
+        offsetVoltage = netVoltage - (float) offset->value;
         break;
       }
 
       default:
       {
-        fOffsetVoltage = fNetVoltage;
+        offsetVoltage = netVoltage;
         break;
       }
   }
 
-  return SafeFloatToU16(fOffsetVoltage / MEASUREMENT_CP_NET_VOLTAGE_COEFFICIENT);
+  return SafeFloatToU16(offsetVoltage
+                        / MEASUREMENT_CP_NET_VOLTAGE_COEFFICIENT);
 }
 
-uint16_t Measurement_ScaleRegVoltage(float fVoltage, float fCoefficient)
+uint16_t Measurement_ScaleRegVoltage(float voltage, float coefficient)
 {
-  return SafeFloatToU16(fVoltage * fCoefficient);
+  return SafeFloatToU16(voltage * coefficient);
 }
 
-uint8_t Measurement_DCIsOK(uint16_t sRegVIn, uint16_t sRegVOut)
-{
-  return (uint8_t) (
-    (sRegVIn  >= MEASUREMENT_REG_VIN_OK_MIN)
-    && (sRegVIn  <= MEASUREMENT_REG_VIN_OK_MAX)
-    && (sRegVOut >= MEASUREMENT_REG_VOUT_OK_MIN)
-    && (sRegVOut <= MEASUREMENT_REG_VOUT_OK_MAX));
-}
-
-uint8_t Measurement_ACIsOK(uint16_t sNetVoltage)
+uint8_t Measurement_DCIsOK(uint16_t regVIn, uint16_t regVOut)
 {
   return (uint8_t) (
-    (sNetVoltage >= MEASUREMENT_NET_LEVEL_OK_MIN)
-    && (sNetVoltage <= MEASUREMENT_NET_LEVEL_OK_MAX));
+    (regVIn  >= MEASUREMENT_REG_VIN_OK_MIN)
+    && (regVIn  <= MEASUREMENT_REG_VIN_OK_MAX)
+    && (regVOut >= MEASUREMENT_REG_VOUT_OK_MIN)
+    && (regVOut <= MEASUREMENT_REG_VOUT_OK_MAX));
+}
+
+uint8_t Measurement_ACIsOK(uint16_t netVoltage)
+{
+  return (uint8_t) (
+    (netVoltage >= MEASUREMENT_NET_LEVEL_OK_MIN)
+    && (netVoltage <= MEASUREMENT_NET_LEVEL_OK_MAX));
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

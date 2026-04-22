@@ -19,7 +19,7 @@
 #define DOMAIN_OUTPUT_VERIFY_H
 
 #include <stdint.h>
-#include "Ports/ISignalOutputPort.h"    /* for tSSignalOutputImage */
+#include "Ports/ISignalOutputPort.h"    /* for SignalOutputImage_t */
 
 /* Consecutive-mismatch count that trips the fault. At a 50 Hz task wake
  * cadence, 5 cycles ≈ 100 ms — long enough for triacs to settle, short
@@ -28,14 +28,14 @@
 
 typedef struct
 {
-  uint8_t aMismatchCount[SIGNAL_OUTPUT_CHANNEL_COUNT];
-  uint8_t bFaultActive;      /* sticky: once set, only Reset clears it */
-} tSOutputVerifyState;
+  uint8_t mismatchCount[SIGNAL_OUTPUT_CHANNEL_COUNT];
+  uint8_t faultActive;      /* sticky: once set, only Reset clears it */
+} OutputVerifyState_t;
 
 /**
  * @brief Reset all counters and clear the fault flag.
  */
-void OutputVerify_Reset(tSOutputVerifyState *pState);
+void OutputVerify_Reset(OutputVerifyState_t *state);
 
 /**
  * @brief One cycle of verification. For each channel:
@@ -43,13 +43,13 @@ void OutputVerify_Reset(tSOutputVerifyState *pState);
  *          - commanded != observed → increment; at >= threshold, latch
  *            the fault flag.
  *
- * @note    bFaultActive is sticky; a transient mismatch that resolves on
+ * @note    faultActive is sticky; a transient mismatch that resolves on
  *          the next cycle still leaves the flag set if the threshold was
  *          reached. Callers must call Reset to clear.
  */
-void OutputVerify_Step(tSOutputVerifyState *pState,
-                       const tSSignalOutputImage *pCommanded,
-                       const tSSignalOutputImage *pObserved);
+void OutputVerify_Step(OutputVerifyState_t *state,
+                       const SignalOutputImage_t *commanded,
+                       const SignalOutputImage_t *observed);
 
 #endif /* DOMAIN_OUTPUT_VERIFY_H */
 

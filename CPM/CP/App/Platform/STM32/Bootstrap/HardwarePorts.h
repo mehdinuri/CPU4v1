@@ -15,6 +15,7 @@
 #include "Ports/IPowerMonitorPort.h"
 #include "Ports/IRelayPort.h"
 #include "Ports/IDoorSensorPort.h"
+#include "Ports/ISnmpSecurityPort.h"
 #include "Ports/IStatusLEDPort.h"
 #include "Ports/IUserInputPort.h"
 #include "Ports/IDisplayPort.h"
@@ -44,6 +45,7 @@ extern IModuleBusPort_t g_moduleBusPort;
 extern IUnitAlarmPort_t g_unitAlarmPort;
 extern IUnitInputPort_t g_unitInputPort;
 extern IUnitClockPort_t g_unitClockPort;
+extern ISnmpSecurityPort_t g_snmpSecurityPort;
 
 /* Serial port instances — one per physical UART. */
 extern ISerialPort_t g_modemPort;       /* UART4  — GPRS modem           */

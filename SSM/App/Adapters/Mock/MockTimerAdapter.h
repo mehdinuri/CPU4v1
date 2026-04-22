@@ -13,11 +13,11 @@
 
 typedef struct
 {
-  uint32_t aStartCount[TIMER_ID__COUNT];
-} tSMockTimerAdapterCtx;
+  uint32_t startCount[TIMER_ID__COUNT];
+} MockTimerAdapterCtx_t;
 
-void MockTimerAdapter_Init(tSMockTimerAdapterCtx *pCtx);
-ITimerPort_t MockTimerAdapter_CreatePort(tSMockTimerAdapterCtx *pCtx);
+void MockTimerAdapter_Init(MockTimerAdapterCtx_t *ctx);
+ITimerPort_t MockTimerAdapter_CreatePort(MockTimerAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_TIMER_ADAPTER_H */
 

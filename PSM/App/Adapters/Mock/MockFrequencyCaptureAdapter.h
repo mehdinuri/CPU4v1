@@ -4,8 +4,8 @@
  * @brief   Mock adapter for IFrequencyCapturePort.
  *
  *          Tests can pre-set fields on the context to drive specific port
- *          behaviour: bPublishOnEdge controls whether a fed edge triggers
- *          the publish callback, bPublishFreq is the value published, and
+ *          behaviour: publishOnEdge controls whether a fed edge triggers
+ *          the publish callback, publishFreq is the value published, and
  *          eEvaluateVerdict is returned verbatim by Evaluate().
  ******************************************************************************
  */
@@ -15,24 +15,24 @@
 
 #include "Ports/IFrequencyCapturePort.h"
 
-typedef void (*MockFrequencyPublishCb_t)(uint8_t bFreqHz);
+typedef void (*MockFrequencyPublishCb_t)(uint8_t freqHz);
 
 typedef struct
 {
   /* Fed by the mock on each call */
-  uint32_t                 lRestartCount;
-  uint32_t                 lLastRestartNowMs;
-  uint32_t                 lOnEdgeCount;
-  uint32_t                 lLastCaptureValue;
-  uint32_t                 lLastOnEdgeNowMs;
-  uint32_t                 lEvaluateCount;
-  uint32_t                 lLastEvaluateNowMs;
+  uint32_t                 restartCount;
+  uint32_t                 lastRestartNowMs;
+  uint32_t                 onEdgeCount;
+  uint32_t                 lastCaptureValue;
+  uint32_t                 lastOnEdgeNowMs;
+  uint32_t                 evaluateCount;
+  uint32_t                 lastEvaluateNowMs;
 
   /* Controls what the mock does (pre-set by tests) */
-  MockFrequencyPublishCb_t publish;          /* callback invoked on OnEdge if fPublishOnEdge */
-  uint8_t                  fPublishOnEdge;
-  uint8_t                  bPublishFreq;
-  uint8_t                  eEvaluateVerdict; /* tEFrequencyCaptureVerdict */
+  MockFrequencyPublishCb_t publish;          /* callback invoked on OnEdge if publishOnEdge */
+  uint8_t                  publishOnEdge;
+  uint8_t                  publishFreq;
+  uint8_t                  eEvaluateVerdict; /* FrequencyCaptureVerdict_e */
 } MockFrequencyCaptureAdapterCtx_t;
 
 void                    MockFrequencyCaptureAdapterInit(

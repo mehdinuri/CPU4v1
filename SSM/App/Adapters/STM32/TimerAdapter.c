@@ -7,9 +7,9 @@
 #include "Adapters/STM32/TimerAdapter.h"
 #include "tim.h"
 
-static void AdapterStart(void *pCtx, tETimerId eId)
+static void AdapterStart(void *ctx, TimerId_e eId)
 {
-  (void) pCtx;
+  (void) ctx;
 
   switch (eId)
   {
@@ -44,16 +44,16 @@ static void AdapterStart(void *pCtx, tETimerId eId)
   }
 }
 
-void TimerAdapter_Init(tSTimerAdapterCtx *pCtx)
+void TimerAdapter_Init(TimerAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 }
 
-ITimerPort_t TimerAdapter_CreatePort(tSTimerAdapterCtx *pCtx)
+ITimerPort_t TimerAdapter_CreatePort(TimerAdapterCtx_t *ctx)
 {
   ITimerPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Start = AdapterStart;
 
   return port;

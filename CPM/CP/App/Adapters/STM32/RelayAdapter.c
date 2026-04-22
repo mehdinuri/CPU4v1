@@ -1,8 +1,7 @@
 /* App/Adapters/STM32/RelayAdapter.c
  *
- * IRelayPort concrete implementation for the output relay (PA6).
- * Drives RELAY_Pin directly via HAL.
- * Init opens the relay (GPIO_PIN_RESET = relay off = safe state).
+ * Raw CP-side relay GPIO adapter. The MMU layer owns topology/permit logic;
+ * this adapter only applies the raw drive level to RELAY_Pin.
  */
 #include "RelayAdapter.h"
 #include "main.h"
@@ -33,8 +32,10 @@ static uint8_t AdapterGet(void *ctx)
  * ------------------------------------------------------------------ */
 void RelayAdapterInit(RelayAdapterCtx_t *ctx)
 {
-  ctx->state = 0U;
-  HAL_GPIO_WritePin(RELAY_GPIO_Port, RELAY_Pin, GPIO_PIN_RESET); /* safe: relay open */
+  ctx->state = 1U;
+  HAL_GPIO_WritePin(RELAY_GPIO_Port,
+                    RELAY_Pin,
+                    GPIO_PIN_SET); /* active-low hardware safe state */
 }
 
 IRelayPort_t RelayAdapterCreatePort(RelayAdapterCtx_t *ctx)

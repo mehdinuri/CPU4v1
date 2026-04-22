@@ -8,7 +8,8 @@
 #include <stddef.h>
 #include <string.h>
 
-static const NtcipRequestContext_t kDefaultRequestContext = { 0U, 0U, 0U };
+static const NtcipRequestContext_t kDefaultRequestContext =
+  NTCIP_REQUEST_CONTEXT_INIT(0U, 0U, 0U);
 
 static uint8_t OidPrefixMatches(const uint32_t *oid,
                                 const NtcipObjectDescriptor_t *descriptor)

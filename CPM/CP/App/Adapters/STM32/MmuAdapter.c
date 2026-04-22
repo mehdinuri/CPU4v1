@@ -1,8 +1,8 @@
 /* App/Adapters/STM32/MmuAdapter.c
  *
- * Conservative MMU adapter. It is a platform-side safety seam, not the final
- * MMU implementation. The current behavior is explicit and testable:
- * pass through normally, or force all-red on every channel.
+ * CP-side output authority boundary. MP remains the only MMU authority; CP
+ * enforces the commanded `NORMAL` / `FLASH` / `DARK` action at the cabinet
+ * output boundary while keeping the relay drive and approved image explicit.
  */
 #include "MmuAdapter.h"
 
@@ -24,6 +24,8 @@ static uint8_t ComputePermitOutputPower(const MmuAdapterCtx_t *ctx)
   }
 
   return (uint8_t) ((ctx->safetyAction != MMU_CONTROL_ACTION_DARK)
+                    && (ctx->configReady != 0U)
+                    && (ctx->requiredSsmHealthy != 0U)
                     && (userEnabled != 0U));
 }
 
@@ -53,11 +55,11 @@ static void RefreshRelayDrive(MmuAdapterCtx_t *ctx)
 
   if (ctx->relayControlService != NULL)
   {
-    RelayControlServiceSetAppliedState(ctx->relayControlService,
-                                       ctx->permitOutputPower,
-                                       relayDrive,
-                                       (uint8_t) ctx->relayTopology,
-                                       (uint8_t) ctx->safetyAction);
+    RelayControlServiceSetLocalState(ctx->relayControlService,
+                                     ctx->permitOutputPower,
+                                     relayDrive,
+                                     (uint8_t) ctx->relayTopology,
+                                     (uint8_t) ctx->safetyAction);
   }
 }
 
@@ -142,6 +144,20 @@ static uint8_t SetSafetyActionPort(void *ctx, MmuControlAction_t action)
   return 1U;
 }
 
+static uint8_t SetConfigReadyPort(void *ctx, uint8_t configReady)
+{
+  MmuAdapterSetConfigReady((MmuAdapterCtx_t *) ctx, configReady);
+
+  return 1U;
+}
+
+static uint8_t SetRequiredSsmHealthyPort(void *ctx, uint8_t requiredSsmHealthy)
+{
+  MmuAdapterSetRequiredSsmHealthy((MmuAdapterCtx_t *) ctx, requiredSsmHealthy);
+
+  return 1U;
+}
+
 void MmuAdapterInit(MmuAdapterCtx_t *ctx)
 {
   if (ctx == NULL)
@@ -202,6 +218,29 @@ void MmuAdapterSetForceAllRed(MmuAdapterCtx_t *ctx, uint8_t forceAllRed)
   ctx->forceAllRed = (uint8_t) (forceAllRed != 0U);
 }
 
+void MmuAdapterSetConfigReady(MmuAdapterCtx_t *ctx, uint8_t configReady)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->configReady = (uint8_t) (configReady != 0U);
+  RefreshRelayDrive(ctx);
+}
+
+void MmuAdapterSetRequiredSsmHealthy(MmuAdapterCtx_t *ctx,
+                                     uint8_t requiredSsmHealthy)
+{
+  if (ctx == NULL)
+  {
+    return;
+  }
+
+  ctx->requiredSsmHealthy = (uint8_t) (requiredSsmHealthy != 0U);
+  RefreshRelayDrive(ctx);
+}
+
 void MmuAdapterSetSafetyAction(MmuAdapterCtx_t *ctx, MmuControlAction_t action)
 {
   if (ctx == NULL)
@@ -240,6 +279,8 @@ IMmuPort_t MmuAdapterCreatePort(MmuAdapterCtx_t *ctx)
   port.ctx = ctx;
   port.SetForceAllRed = SetForceAllRedPort;
   port.SetSafetyAction = SetSafetyActionPort;
+  port.SetConfigReady = SetConfigReadyPort;
+  port.SetRequiredSsmHealthy = SetRequiredSsmHealthyPort;
   port.FilterOutputImage = FilterOutputImage;
 
   return port;

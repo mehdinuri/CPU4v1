@@ -28,9 +28,9 @@
 /* Public function prototypes -----------------------------------------------*/
 
 /* Private application code --------------------------------------------------*/
-static uint32_t FlashBankGet(uint32_t lAddress)
+static uint32_t FlashBankGet(uint32_t address)
 {
-	if (lAddress < FLASH_BANK2_START_ADDR)
+	if (address < FLASH_BANK2_START_ADDR)
 	{
 		return FLASH_BANK_1;
 	}
@@ -40,15 +40,15 @@ static uint32_t FlashBankGet(uint32_t lAddress)
 	}
 }
 
-static uint32_t FlashPageGet(uint32_t lAddress)
+static uint32_t FlashPageGet(uint32_t address)
 {
-  if(lAddress < FLASH_BANK2_START_ADDR)
+  if(address < FLASH_BANK2_START_ADDR)
   {
-    return (uint32_t)((lAddress - FLASH_BASE) / FLASH_PAGE_SIZE);
+    return (uint32_t)((address - FLASH_BASE) / FLASH_PAGE_SIZE);
   }
   else
   {
-		return (uint32_t)((lAddress - (FLASH_BASE + FLASH_BANK_SIZE)) / FLASH_PAGE_SIZE);
+		return (uint32_t)((address - (FLASH_BASE + FLASH_BANK_SIZE)) / FLASH_PAGE_SIZE);
   }
 }
 
@@ -70,28 +70,28 @@ static void FlashDeInit(void)
 }
 
 /* Public application code --------------------------------------------------*/
-uint32_t lBanks = 0, lNumberOfPages = 0, lPageError = 0;
-uint32_t lStartPage = 0, lEndPage = 0;
+uint32_t banks = 0, numberOfPages = 0, pageError = 0;
+uint32_t startPage = 0, endPage = 0;
 
-static uint8_t FlashErase(uint32_t lAddress, uint32_t lDataSize)
+static uint8_t FlashErase(uint32_t address, uint32_t dataSize)
 {
-	FLASH_EraseInitTypeDef SEraseInitStruct = { 0 };
+	FLASH_EraseInitTypeDef eraseInitStruct = { 0 };
 	
-	lBanks = 0, lNumberOfPages = 0, lPageError = 0;
-	lStartPage = 0, lEndPage = 0,
+	banks = 0, numberOfPages = 0, pageError = 0;
+	startPage = 0, endPage = 0,
 	
 	IWDGRefresh();
 	
-	lBanks = FlashBankGet(lAddress);
-	lStartPage = FlashPageGet(lAddress);
-	lEndPage = FlashPageGet((lAddress + lDataSize) - 1U);
-	lNumberOfPages = lEndPage - lStartPage + 1;
+	banks = FlashBankGet(address);
+	startPage = FlashPageGet(address);
+	endPage = FlashPageGet((address + dataSize) - 1U);
+	numberOfPages = endPage - startPage + 1;
 	
-	SEraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
-	SEraseInitStruct.Banks = lBanks;
-	SEraseInitStruct.Page = lStartPage;
-	SEraseInitStruct.NbPages = lNumberOfPages;
-	if(HAL_FLASHEx_Erase(&SEraseInitStruct, &lPageError) != HAL_OK)
+	eraseInitStruct.TypeErase = FLASH_TYPEERASE_PAGES;
+	eraseInitStruct.Banks = banks;
+	eraseInitStruct.Page = startPage;
+	eraseInitStruct.NbPages = numberOfPages;
+	if(HAL_FLASHEx_Erase(&eraseInitStruct, &pageError) != HAL_OK)
 	{
 		return FALSE;
 	}
@@ -99,43 +99,43 @@ static uint8_t FlashErase(uint32_t lAddress, uint32_t lDataSize)
 	return TRUE;
 }
 
-uint8_t FlashWrite(uint32_t lAddress, const void * pvData, uint32_t lDataSize)
+uint8_t FlashWrite(uint32_t address, const void * data, uint32_t dataSize)
 {
-	uint32_t lWriteAddress = lAddress, lBytesWritten = 0;
+	uint32_t writeAddress = address, bytesWritten = 0;
 	
-	if ((pvData == NULL)
-	    || (lDataSize == 0U)
-	    || (lWriteAddress % 8 != 0)
-	    || (lWriteAddress < FLASH_ADDR_USER_BASE)
-	    || (lWriteAddress > FLASH_ADDR_USER_END)
-	    || ((lDataSize - 1U) > (FLASH_ADDR_USER_END - lWriteAddress)))
+	if ((data == NULL)
+	    || (dataSize == 0U)
+	    || (writeAddress % 8 != 0)
+	    || (writeAddress < FLASH_ADDR_USER_BASE)
+	    || (writeAddress > FLASH_ADDR_USER_END)
+	    || ((dataSize - 1U) > (FLASH_ADDR_USER_END - writeAddress)))
 	{
 		return FALSE;
 	}
 	
 	FlashInit();
 	
-	if (!FlashErase(lAddress, lDataSize))
+	if (!FlashErase(address, dataSize))
 	{
 		FlashDeInit();
 		return FALSE;
 	}
 	
-	const uint8_t *pbData = (const uint8_t *)pvData;
-	uint64_t llDataBuf = 0;
-		
-	while(lBytesWritten < lDataSize)
+	const uint8_t *bytes = (const uint8_t *)data;
+	uint64_t dataBuf = 0;
+
+	while(bytesWritten < dataSize)
 	{
 		IWDGRefresh();
+
+		dataBuf = 0;
+		uint8_t numBytes = (dataSize - bytesWritten) >= 8 ? 8 : (dataSize - bytesWritten);
+		memcpy(&dataBuf, &bytes[bytesWritten], numBytes);
 		
-		llDataBuf = 0;
-		uint8_t bNumBytes = (lDataSize - lBytesWritten) >= 8 ? 8 : (lDataSize - lBytesWritten);
-		memcpy(&llDataBuf, &pbData[lBytesWritten], bNumBytes);
-		
-		if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, lWriteAddress, llDataBuf) == HAL_OK)
+		if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, writeAddress, dataBuf) == HAL_OK)
 		{
-			lBytesWritten += 8;
-			lWriteAddress += 8;
+			bytesWritten += 8;
+			writeAddress += 8;
 		}
 		else
 		{
@@ -149,31 +149,31 @@ uint8_t FlashWrite(uint32_t lAddress, const void * pvData, uint32_t lDataSize)
 	return TRUE;
 }
 
-uint8_t FlashRead(uint32_t lAddress, void * pvData, uint32_t lDataSize)
+uint8_t FlashRead(uint32_t address, void * data, uint32_t dataSize)
 {
-	uint32_t lReadAddress = lAddress, lBytesRead = 0;
-	uint8_t * pbData	= (uint8_t *) pvData;
-	
-	if ((pvData == NULL)
-	    || (lDataSize == 0U)
-	    || (lReadAddress < FLASH_ADDR_USER_BASE)
-	    || (lReadAddress > FLASH_ADDR_USER_END)
-	    || ((lDataSize - 1U) > (FLASH_ADDR_USER_END - lReadAddress)))
+	uint32_t readAddress = address, bytesRead = 0;
+	uint8_t *bytes	= (uint8_t *) data;
+
+	if ((data == NULL)
+	    || (dataSize == 0U)
+	    || (readAddress < FLASH_ADDR_USER_BASE)
+	    || (readAddress > FLASH_ADDR_USER_END)
+	    || ((dataSize - 1U) > (FLASH_ADDR_USER_END - readAddress)))
 	{
 		return FALSE;
 	}
-	
-	if(lReadAddress % 4 != 0) return FALSE;
-	
-	while(lBytesRead < lDataSize)
+
+	if(readAddress % 4 != 0) return FALSE;
+
+	while(bytesRead < dataSize)
 	{
 		IWDGRefresh();
-		
-		*pbData = *(__I uint8_t *)lReadAddress;
-		
-		lReadAddress++;
-		lBytesRead++;
-		pbData++;
+
+		*bytes = *(__I uint8_t *)readAddress;
+
+		readAddress++;
+		bytesRead++;
+		bytes++;
 	}
 	
 	return TRUE;

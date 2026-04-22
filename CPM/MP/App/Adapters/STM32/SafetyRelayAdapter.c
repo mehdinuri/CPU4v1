@@ -100,8 +100,8 @@ void SafetyRelayAdapterInit(SafetyRelayAdapterCtx_t *ctx)
   }
 
   ctx->commandedState = SAFETY_RELAY_STATE_OPEN;
-  ctx->topology = SAFETY_RELAY_TOPOLOGY_LEGACY_ACTIVE_HIGH_CLOSE;
-  ctx->lastRelayDrive = 0U;
+  ctx->topology = SAFETY_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP;
+  ctx->lastRelayDrive = 1U;
   ctx->lastTriacDrive = 1U;
   DrivePins(ctx, SAFETY_RELAY_STATE_OPEN);
 }

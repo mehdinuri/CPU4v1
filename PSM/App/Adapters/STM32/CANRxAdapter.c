@@ -15,35 +15,35 @@
 /* ---------------------------------------------------------------------------
  * Private adapter implementation
  * ---------------------------------------------------------------------------*/
-static void AdapterSubmitFrame(void *ctx, const tSCANRxFrame *pFrame)
+static void AdapterSubmitFrame(void *ctx, const CanRxFrame_t *frame)
 {
   (void) ctx;
 
-  if (pFrame == NULL)
+  if (frame == NULL)
   {
     return;
   }
 
-  tSFDCANRxMsg SMsg;
-  memset(&SMsg, 0, sizeof(SMsg));
+  FdcanRxMsg_t msg;
+  memset(&msg, 0, sizeof(msg));
 
-  SMsg.hfdcan                = &hfdcan1;
-  SMsg.SRxHeader.IdType      = (pFrame->fExtendedId != 0U)
+  msg.hfdcan                = &hfdcan1;
+  msg.rxHeader.IdType      = (frame->extendedId != 0U)
                                 ? FDCAN_EXTENDED_ID
                                 : FDCAN_STANDARD_ID;
-  SMsg.SRxHeader.Identifier  = pFrame->lId;
-  SMsg.SRxHeader.DataLength  = pFrame->bDataLen;
+  msg.rxHeader.Identifier  = frame->id;
+  msg.rxHeader.DataLength  = frame->dataLen;
 
-  uint8_t bCopy = (pFrame->bDataLen > CANRX_MAX_DATA_LEN)
+  uint8_t copy = (frame->dataLen > CANRX_MAX_DATA_LEN)
                 ? CANRX_MAX_DATA_LEN
-                : pFrame->bDataLen;
-  if (bCopy > (uint8_t) sizeof(SMsg.baData))
+                : frame->dataLen;
+  if (copy > (uint8_t) sizeof(msg.data))
   {
-    bCopy = (uint8_t) sizeof(SMsg.baData);
+    copy = (uint8_t) sizeof(msg.data);
   }
-  memcpy(SMsg.baData, pFrame->baData, bCopy);
+  memcpy(msg.data, frame->data, copy);
 
-  CANRxRequest(&SMsg);
+  CANRxRequest(&msg);
 }
 
 /* ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ static void AdapterSubmitFrame(void *ctx, const tSCANRxFrame *pFrame)
  * ---------------------------------------------------------------------------*/
 void CANRxAdapterInit(CANRxAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 ICANRxPort_t CANRxAdapterCreatePort(CANRxAdapterCtx_t *ctx)

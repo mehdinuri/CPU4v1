@@ -13,15 +13,15 @@
 
 typedef struct
 {
-  tSSignalInputSnapshot SCanned;
-  uint32_t lSampleCount;
-} tSMockSignalInputAdapterCtx;
+  SignalInputSnapshot_t canned;
+  uint32_t sampleCount;
+} MockSignalInputAdapterCtx_t;
 
-void MockSignalInputAdapter_Init(tSMockSignalInputAdapterCtx *pCtx);
-void MockSignalInputAdapter_SetSnapshot(tSMockSignalInputAdapterCtx *pCtx,
-                                        const tSSignalInputSnapshot *pSnap);
+void MockSignalInputAdapter_Init(MockSignalInputAdapterCtx_t *ctx);
+void MockSignalInputAdapter_SetSnapshot(MockSignalInputAdapterCtx_t *ctx,
+                                        const SignalInputSnapshot_t *snap);
 ISignalInputPort_t MockSignalInputAdapter_CreatePort(
-  tSMockSignalInputAdapterCtx *pCtx);
+  MockSignalInputAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_SIGNAL_INPUT_ADAPTER_H */
 

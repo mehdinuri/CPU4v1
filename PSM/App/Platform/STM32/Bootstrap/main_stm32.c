@@ -54,13 +54,13 @@ IWatchdogPort_t           g_watchdogPort;
  * Grid-frequency capture configuration — passed to the adapter at
  * init time; matches the TIM2 channel setup in Core/Src/tim.c.
  * ------------------------------------------------------------------ */
-static const tSFrequencyCaptureFSMConfig s_freqCaptureCfg = {
-  .lClockFreqHz            = 100000U,
-  .lCounterMax             = 0xFFFFFFFFU,
-  .lCaptureTimeoutMs       = 100U,
-  .bTargetFreqHz           = 50U,
-  .bFreqToleranceHz        = 5U,
-  .sBadReadingsBeforeSleep = 500U
+static const FrequencyCaptureFSMConfig_t s_freqCaptureCfg = {
+  .clockFreqHz            = 100000U,
+  .counterMax             = 0xFFFFFFFFU,
+  .captureTimeoutMs       = 100U,
+  .targetFreqHz           = 50U,
+  .freqToleranceHz        = 5U,
+  .badReadingsBeforeSleep = 500U
 };
 
 /* ------------------------------------------------------------------
@@ -70,24 +70,24 @@ static const tSFrequencyCaptureFSMConfig s_freqCaptureCfg = {
  * setters.  The adapters own the field write logic; this file only
  * routes the call to the correct adapter context.
  * ------------------------------------------------------------------ */
-void MeasurementNetVoltageSet(float fVolt)
+void MeasurementNetVoltageSet(float volt)
 {
-  VoltageSensorAdapter_SetNetVoltage(&s_voltage, fVolt);
+  VoltageSensorAdapter_SetNetVoltage(&s_voltage, volt);
 }
 
-void MeasurementRegVInSet(float fVIn)
+void MeasurementRegVInSet(float vIn)
 {
-  VoltageSensorAdapter_SetRegVIn(&s_voltage, fVIn);
+  VoltageSensorAdapter_SetRegVIn(&s_voltage, vIn);
 }
 
-void MeasurementRegVOutSet(float fVOut)
+void MeasurementRegVOutSet(float vOut)
 {
-  VoltageSensorAdapter_SetRegVOut(&s_voltage, fVOut);
+  VoltageSensorAdapter_SetRegVOut(&s_voltage, vOut);
 }
 
-void MeasurementNetFrequencySet(uint8_t bFreq)
+void MeasurementNetFrequencySet(uint8_t freq)
 {
-  FrequencySensorAdapter_SetNetFrequency(&s_freq, bFreq);
+  FrequencySensorAdapter_SetNetFrequency(&s_freq, freq);
 }
 
 /* ------------------------------------------------------------------

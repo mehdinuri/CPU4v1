@@ -608,6 +608,12 @@ static void RefreshRelay(MmiSnapshotCache_t *cache)
       RelayControlServiceGetRelayTopology(cache->relayControlService);
     cache->relaySummary.safetyAction =
       RelayControlServiceGetSafetyAction(cache->relayControlService);
+    cache->relaySummary.reserved0[0] =
+      RelayControlServiceGetLocalPermitOutputPower(cache->relayControlService);
+    cache->relaySummary.reserved0[1] =
+      RelayControlServiceGetPeerPermitOutputPower(cache->relayControlService);
+    cache->relaySummary.reserved0[2] =
+      RelayControlServiceGetPeerPermitValid(cache->relayControlService);
   }
 }
 
@@ -642,20 +648,22 @@ static void RefreshOutputTest(MmiSnapshotCache_t *cache)
     {
         case OUTPUT_DRIVER_ASPECT_RED:
         {
-          cache->outputTestSummary.redMask |= (uint16_t) (1U << channelIndex);
+          cache->outputTestSummary.redMask |=
+            (uint32_t) (1UL << channelIndex);
           break;
         }
 
         case OUTPUT_DRIVER_ASPECT_YELLOW:
         {
           cache->outputTestSummary.yellowMask |=
-            (uint16_t) (1U << channelIndex);
+            (uint32_t) (1UL << channelIndex);
           break;
         }
 
         case OUTPUT_DRIVER_ASPECT_GREEN:
         {
-          cache->outputTestSummary.greenMask |= (uint16_t) (1U << channelIndex);
+          cache->outputTestSummary.greenMask |=
+            (uint32_t) (1UL << channelIndex);
           break;
         }
 

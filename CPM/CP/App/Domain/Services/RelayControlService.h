@@ -7,6 +7,9 @@
 typedef struct
 {
   uint8_t userOutputPowerEnabled;
+  uint8_t localPermitOutputPower;
+  uint8_t peerPermitOutputPower;
+  uint8_t peerPermitValid;
   uint8_t effectivePermitOutputPower;
   uint8_t relayDrive;
   uint8_t relayTopology;
@@ -20,11 +23,20 @@ uint8_t RelayControlServiceSetUserOutputPowerEnabled(
   uint8_t enabled);
 uint8_t RelayControlServiceGetUserOutputPowerEnabled(
   const RelayControlService_t *service);
-void RelayControlServiceSetAppliedState(RelayControlService_t *service,
-                                        uint8_t effectivePermitOutputPower,
-                                        uint8_t relayDrive,
-                                        uint8_t relayTopology,
-                                        uint8_t safetyAction);
+void RelayControlServiceSetLocalState(RelayControlService_t *service,
+                                      uint8_t localPermitOutputPower,
+                                      uint8_t relayDrive,
+                                      uint8_t relayTopology,
+                                      uint8_t safetyAction);
+void RelayControlServiceSetPeerState(RelayControlService_t *service,
+                                     uint8_t peerPermitValid,
+                                     uint8_t peerPermitOutputPower);
+uint8_t RelayControlServiceGetLocalPermitOutputPower(
+  const RelayControlService_t *service);
+uint8_t RelayControlServiceGetPeerPermitOutputPower(
+  const RelayControlService_t *service);
+uint8_t RelayControlServiceGetPeerPermitValid(
+  const RelayControlService_t *service);
 uint8_t RelayControlServiceGetEffectivePermitOutputPower(
   const RelayControlService_t *service);
 uint8_t RelayControlServiceGetRelayDrive(const RelayControlService_t *service);

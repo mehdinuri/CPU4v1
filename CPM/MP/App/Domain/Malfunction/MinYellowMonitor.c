@@ -8,26 +8,8 @@
 static uint16_t ChannelYellowMinTicks(const ConfigurationService_t *service,
                                       uint8_t channelIndex)
 {
-  if (service == NULL)
-  {
-    return 0U;
-  }
-
-  if (channelIndex >= MP_CHANNEL_COUNT_MAX)
-  {
-    return 0U;
-  }
-
-  const IntersectionConfig_t *cfg = &service->config;
-  const IntersectionChannelConfig_t *ch = &cfg->channels[channelIndex];
-  uint8_t phaseNumber = ch->controlSource;
-
-  if ((phaseNumber == 0U) || (phaseNumber > cfg->phaseCount))
-  {
-    return 0U;
-  }
-
-  uint16_t decis = cfg->phases[phaseNumber - 1U].yellowChangeDs;
+  uint16_t decis =
+    ConfigurationServiceGetChannelMinYellowDs(service, channelIndex);
 
   return (uint16_t) (decis * MIN_YELLOW_TICKS_PER_DECISECOND);
 }

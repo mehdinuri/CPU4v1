@@ -22,7 +22,7 @@ static void AdapterRefresh(void *ctx)
  * ---------------------------------------------------------------------------*/
 void WatchdogAdapterInit(WatchdogAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 IWatchdogPort_t WatchdogAdapterCreatePort(WatchdogAdapterCtx_t *ctx)

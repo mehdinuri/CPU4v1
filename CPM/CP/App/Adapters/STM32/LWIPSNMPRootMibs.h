@@ -10,6 +10,8 @@
 
 extern const struct snmp_mib ntcip1201mib;
 extern const struct snmp_mib ntcip1202mib;
+extern const struct snmp_mib ntcip1103applicationmib;
+extern const struct snmp_mib ntcip1103trapmib;
 extern const struct snmp_mib teknotelmib;
 
 #endif /* LWIP_SNMP_ROOT_MIBS_H */

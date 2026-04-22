@@ -5,10 +5,9 @@
 add_library(Adapters_STM32 STATIC)
 
 target_sources(Adapters_STM32 PRIVATE
-    SignalCardAdapter.c
     ControlBusAdapter.c
     FieldCanQueueTx.c
-    FieldOutputCanAdapter.c
+    FieldBusTxAdapter.c
     MmiCanAdapter.c
     CommsStatusAdapter.c
     ControllerModeControlAdapter.c
@@ -16,15 +15,14 @@ target_sources(Adapters_STM32 PRIVATE
     SystemResetAdapter.c
     ShadowOutputDriverAdapter.c
     MmuAdapter.c
-    FieldInputCanAdapter.c
-    CompositeModuleBusPort.c
-    ModuleBusAdapter.c
+    FieldBusRxAdapter.c
     RTCAdapter.c
     UnitAlarmAdapter.c
     UnitClockAdapter.c
     LWIPSNMPAdapter.c
     LWIPSNMPBridge.c
     LWIPSNMPRootMibs.c
+    SnmpSecurityAdapter.c
     ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Core/flash.c
     FlashStorageAdapter.c
     EepromStorageAdapter.c
@@ -35,7 +33,6 @@ target_sources(Adapters_STM32 PRIVATE
     LogRepositoryAdapter.c
     KeypadAdapter.c
     UnitInputAdapter.c
-    AdminInfoAdapter.c
     BrokenInputSettingsAdapter.c
     GpsConfigAdapter.c
     GpsTimeSyncAdapter.c
@@ -60,7 +57,6 @@ target_include_directories(Adapters_STM32
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Bootstrap
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Core
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Tasks
-            ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Control/Legacy
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Persistence
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Time
             ${CMAKE_SOURCE_DIR}/App/Platform/STM32/Services/Comms

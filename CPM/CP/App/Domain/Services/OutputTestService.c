@@ -62,7 +62,7 @@ uint8_t OutputTestServiceSetChannelAspect(OutputTestService_t *service,
                                           OutputDriverAspect_t aspect)
 {
   uint8_t index;
-  uint16_t mask;
+  uint32_t mask;
 
   if ((service == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -71,7 +71,7 @@ uint8_t OutputTestServiceSetChannelAspect(OutputTestService_t *service,
   }
 
   index = (uint8_t) (channelNumber - 1U);
-  mask = (uint16_t) (1U << index);
+  mask = (uint32_t) (1UL << index);
   service->enabled = 1U;
   service->forcedMask |= mask;
   service->forcedAspects[index] = aspect;
@@ -83,7 +83,7 @@ uint8_t OutputTestServiceClearChannel(OutputTestService_t *service,
                                       uint8_t channelNumber)
 {
   uint8_t index;
-  uint16_t mask;
+  uint32_t mask;
 
   if ((service == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -92,8 +92,8 @@ uint8_t OutputTestServiceClearChannel(OutputTestService_t *service,
   }
 
   index = (uint8_t) (channelNumber - 1U);
-  mask = (uint16_t) (1U << index);
-  service->forcedMask &= (uint16_t) ~mask;
+  mask = (uint32_t) (1UL << index);
+  service->forcedMask &= ~mask;
   service->forcedAspects[index] = OUTPUT_DRIVER_ASPECT_DARK;
   service->changeSequence++;
   return 1U;
@@ -121,7 +121,7 @@ uint8_t OutputTestServiceApply(const OutputTestService_t *service,
   for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
        channelIndex++)
   {
-    uint16_t mask = (uint16_t) (1U << channelIndex);
+    uint32_t mask = (uint32_t) (1UL << channelIndex);
 
     if ((service->forcedMask & mask) != 0U)
     {
@@ -137,7 +137,7 @@ uint8_t OutputTestServiceIsEnabled(const OutputTestService_t *service)
   return (service == NULL) ? 0U : service->enabled;
 }
 
-uint16_t OutputTestServiceGetForcedMask(const OutputTestService_t *service)
+uint32_t OutputTestServiceGetForcedMask(const OutputTestService_t *service)
 {
   return (service == NULL) ? 0U : service->forcedMask;
 }
@@ -147,7 +147,7 @@ uint8_t OutputTestServiceGetChannelAspect(const OutputTestService_t *service,
                                           OutputDriverAspect_t *aspect)
 {
   uint8_t index;
-  uint16_t mask;
+  uint32_t mask;
 
   if ((service == NULL) || (aspect == NULL) || (channelNumber == 0U)
       || (channelNumber > INTERSECTION_CHANNEL_COUNT_MAX))
@@ -156,7 +156,7 @@ uint8_t OutputTestServiceGetChannelAspect(const OutputTestService_t *service,
   }
 
   index = (uint8_t) (channelNumber - 1U);
-  mask = (uint16_t) (1U << index);
+  mask = (uint32_t) (1UL << index);
   if ((service->forcedMask & mask) == 0U)
   {
     return 0U;

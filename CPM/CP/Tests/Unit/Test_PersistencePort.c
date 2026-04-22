@@ -48,12 +48,12 @@ void test_offset_access_avoids_object_base_leakage(void)
   uint32_t readBack = 0UL;
 
   TEST_ASSERT_TRUE(PersistenceWrite(&port,
-                                    PERSIST_OBJECT_SIGNAL_OUTPUT_POWERS,
+                                    PERSIST_OBJECT_MCS_CONNECTION_INFO,
                                     12U,
                                     &value,
                                     sizeof(value)));
   TEST_ASSERT_TRUE(PersistenceRead(&port,
-                                   PERSIST_OBJECT_SIGNAL_OUTPUT_POWERS,
+                                   PERSIST_OBJECT_MCS_CONNECTION_INFO,
                                    12U,
                                    &readBack,
                                    sizeof(readBack)));

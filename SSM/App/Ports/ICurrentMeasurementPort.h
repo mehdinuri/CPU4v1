@@ -17,24 +17,23 @@
 
 typedef struct
 {
-  uint16_t aCurrents_mA[CURRENT_CHANNEL_COUNT];      /* RMS current per group, in mA */
-  uint8_t bStatus;                                   /* CURRENT_MEASUREMENT_STATUS_* */
-  uint32_t lSeqNo;                                   /* monotonic sample counter (ok to wrap) */
-} tSCurrentMeasurementSnapshot;
+  uint16_t currentsMa[CURRENT_CHANNEL_COUNT];      /* RMS current per group, in mA */
+  uint8_t status;                                   /* CURRENT_MEASUREMENT_STATUS_* */
+  uint32_t seqNo;                                   /* monotonic sample counter (ok to wrap) */
+} CurrentMeasurementSnapshot_t;
 
 typedef struct ICurrentMeasurementPort
 {
-  void *pCtx;
+  void *ctx;
 
-  void (*GetLatest)(void *pCtx, tSCurrentMeasurementSnapshot *pOut);
+  void (*GetLatest)(void *ctx, CurrentMeasurementSnapshot_t *out);
 } ICurrentMeasurementPort_t;
 
-static inline void CurrentMeasurement_GetLatest(
-  ICurrentMeasurementPort_t *pPort,
-  tSCurrentMeasurementSnapshot *
-  pOut)
+static inline void CurrentMeasurement_GetLatest(ICurrentMeasurementPort_t *port,
+                                                CurrentMeasurementSnapshot_t *
+                                                out)
 {
-  pPort->GetLatest(pPort->pCtx, pOut);
+  port->GetLatest(port->ctx, out);
 }
 
 #endif /* PORTS_ICURRENT_MEASUREMENT_PORT_H */

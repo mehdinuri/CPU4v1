@@ -7,23 +7,23 @@
 #include <string.h>
 #include "Adapters/Mock/MockWatchdogAdapter.h"
 
-static void MockRefresh(void *pCtx)
+static void MockRefresh(void *ctx)
 {
-  tSMockWatchdogAdapterCtx *pC = (tSMockWatchdogAdapterCtx *) pCtx;
+  MockWatchdogAdapterCtx_t *pC = (MockWatchdogAdapterCtx_t *) ctx;
 
-  pC->lRefreshCount++;
+  pC->refreshCount++;
 }
 
-void MockWatchdogAdapter_Init(tSMockWatchdogAdapterCtx *pCtx)
+void MockWatchdogAdapter_Init(MockWatchdogAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
-IWatchdogPort_t MockWatchdogAdapter_CreatePort(tSMockWatchdogAdapterCtx *pCtx)
+IWatchdogPort_t MockWatchdogAdapter_CreatePort(MockWatchdogAdapterCtx_t *ctx)
 {
   IWatchdogPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Refresh = MockRefresh;
 
   return port;

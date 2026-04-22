@@ -100,7 +100,7 @@ uint8_t MmiMaintenanceServiceReadOutputTestStatus(
   MmiMaintenanceOutputTestStatus_t *status)
 {
   uint8_t channelIndex;
-  uint16_t forcedMask;
+  uint32_t forcedMask;
   OutputDriverAspect_t aspect = OUTPUT_DRIVER_ASPECT_DARK;
 
   if (service == NULL)
@@ -119,7 +119,7 @@ uint8_t MmiMaintenanceServiceReadOutputTestStatus(
   for (channelIndex = 0U; channelIndex < INTERSECTION_CHANNEL_COUNT_MAX;
        channelIndex++)
   {
-    if ((forcedMask & (uint16_t) (1U << channelIndex)) != 0U)
+    if ((forcedMask & (uint32_t) (1UL << channelIndex)) != 0U)
     {
       status->outputNumber = (uint8_t) (channelIndex + 1U);
       if (OutputTestServiceGetChannelAspect(service->outputTestService,

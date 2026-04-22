@@ -19,9 +19,9 @@ typedef struct
 {
   void *ctx;
   void (*Send)(void *ctx,
-               uint32_t lID,
-               const uint8_t *baData,
-               uint8_t bDataLen);
+               uint32_t id,
+               const uint8_t *data,
+               uint8_t dataLen);
   uint8_t (*GetOverflowCount)(void *ctx);
 } ICANTxPort_t;
 
@@ -29,11 +29,11 @@ typedef struct
  * Zero-cost inline dispatch helper
  * ---------------------------------------------------------------------------*/
 static inline void CANTx_Send(ICANTxPort_t *p,
-                               uint32_t lID,
-                               const uint8_t *baData,
-                               uint8_t bDataLen)
+                               uint32_t id,
+                               const uint8_t *data,
+                               uint8_t dataLen)
 {
-  p->Send(p->ctx, lID, baData, bDataLen);
+  p->Send(p->ctx, id, data, dataLen);
 }
 
 static inline uint8_t CANTx_GetOverflowCount(ICANTxPort_t *p)

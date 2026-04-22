@@ -33,7 +33,7 @@ static uint8_t AdapterWrite(void *ctx, uint32_t address, const void *src, uint32
  * ---------------------------------------------------------------------------*/
 void EepromAdapterInit(EepromAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 IEepromPort_t EepromAdapterCreatePort(EepromAdapterCtx_t *ctx)

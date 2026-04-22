@@ -11,14 +11,14 @@
 
 typedef struct IWatchdogPort
 {
-  void *pCtx;
+  void *ctx;
 
-  void (*Refresh)(void *pCtx);
+  void (*Refresh)(void *ctx);
 } IWatchdogPort_t;
 
-static inline void Watchdog_Refresh(IWatchdogPort_t *pPort)
+static inline void Watchdog_Refresh(IWatchdogPort_t *port)
 {
-  pPort->Refresh(pPort->pCtx);
+  port->Refresh(port->ctx);
 }
 
 #endif /* PORTS_IWATCHDOG_PORT_H */

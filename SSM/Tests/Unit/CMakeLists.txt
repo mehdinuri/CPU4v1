@@ -76,3 +76,8 @@ Add_Unity_Domain_Test(Test_SignalDiagnostics
 Add_Unity_Domain_Test(Test_VoltageCurrentFrame
     ${CMAKE_CURRENT_SOURCE_DIR}/Test_VoltageCurrentFrame.c
 )
+
+# Domain: CAN Rx backpressure consecutive-drop / threshold logic.
+Add_Unity_Domain_Test(Test_CanRxBackpressure
+    ${CMAKE_CURRENT_SOURCE_DIR}/Test_CanRxBackpressure.c
+)

@@ -1,8 +1,8 @@
 /**
  ******************************************************************************
  * @file    Adapters/STM32/CANRxAdapter.h
- * @brief   STM32 adapter for ICANRxPort — repackages a neutral tSCANRxFrame
- *          into the HAL-typed tSFDCANRxMsg used by the parser task queue.
+ * @brief   STM32 adapter for ICANRxPort — repackages a neutral CanRxFrame_t
+ *          into the HAL-typed FdcanRxMsg_t used by the parser task queue.
  ******************************************************************************
  */
 
@@ -13,7 +13,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } CANRxAdapterCtx_t;
 
 void         CANRxAdapterInit(CANRxAdapterCtx_t *ctx);

@@ -33,8 +33,8 @@ extern void LCDSoftwareClose(void);
 
 /* menu size */
 #define LCD_SIZE_OF_PAGE 4 /* in terms of lines */
-#define LCD_SIZE_OF_MENU 6 /* in terms of lines */
-#define LCD_SIZE_OF_ADMIN_MENU 6 /* in terms of lines */
+#define LCD_SIZE_OF_MENU 7 /* in terms of lines */
+#define LCD_SIZE_OF_ADMIN_MENU 7 /* in terms of lines */
 #define LCD_SIZE_OF_GUEST_MENU 3 /* in terms of lines */
 #define LCD_MENU_PAGE_ADMIN_TOTAL 2 /* in terms of pages */
 #define LCD_MENU_PAGE_GUEST_TOTAL 1 /* in terms of pages */

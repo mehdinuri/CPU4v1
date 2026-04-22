@@ -6,6 +6,7 @@
  */
 
 /* Includes ------------------------------------------------------------------*/
+#include <stdint.h>
 #include <string.h>
 #include "CanMsgSender.h"
 #include "utilities.h"
@@ -24,7 +25,27 @@ void vCANMsgSenderInit(void);
 /* Public define ------------------------------------------------------------*/
 
 /* Public variables ---------------------------------------------------------*/
-volatile uint8_t g_bCanTxOverflowCount = 0U;
+
+/* Saturating overflow counter.  Widened from uint8_t so it can no longer
+ * silently wrap at 256.  Incremented under a brief IRQ lock to serialise
+ * concurrent producers; stays at UINT32_MAX once it hits the ceiling. */
+volatile uint32_t g_canTxOverflowCount = 0U;
+
+static void CanTxOverflowBump(void)
+{
+  uint32_t primask = __get_PRIMASK();
+
+  __disable_irq();
+  if (g_canTxOverflowCount < 0xFFFFFFFFU)
+  {
+    g_canTxOverflowCount++;
+  }
+
+  if (primask == 0U)
+  {
+    __enable_irq();
+  }
+}
 
 /* Public function prototypes -----------------------------------------------*/
 
@@ -35,48 +56,48 @@ void CANMsgSenderInit(void)
 
 /* Public application code --------------------------------------------------*/
 void CANTxRequest(FDCAN_HandleTypeDef *hfdcan,
-                  uint32_t lIDType,
-                  uint32_t lID,
-                  uint32_t lFrameType,
-                  uint32_t lBitRateSwitch,
-                  uint32_t lFDFormat,
-                  uint8_t *baData,
-                  uint8_t bDataLen)
+                  uint32_t idType,
+                  uint32_t id,
+                  uint32_t frameType,
+                  uint32_t bitRateSwitch,
+                  uint32_t fdFormat,
+                  uint8_t *data,
+                  uint8_t dataLen)
 {
-  if (bDataLen > FDCAN_MAX_DATA_LEN)
+  if (dataLen > FDCAN_MAX_DATA_LEN)
   {
-    bDataLen = FDCAN_MAX_DATA_LEN;
+    dataLen = FDCAN_MAX_DATA_LEN;
   }
 
-  tpSFDCANTxMsg pSReq =
-    (tpSFDCANTxMsg) osMemoryPoolAlloc(CANTxReqsMemPoolHandle,
-                                      0);
+  FdcanTxMsg_t *req =
+    (FdcanTxMsg_t *) osMemoryPoolAlloc(CANTxReqsMemPoolHandle,
+                                       0);
 
-  if (pSReq != NULL)
+  if (req != NULL)
   {
-    memset(pSReq, 0, sizeof(tSFDCANTxMsg));
+    memset(req, 0, sizeof(FdcanTxMsg_t));
 
-    pSReq->hfdcan = hfdcan;
-    pSReq->STxHeader.IdType = lIDType;
-    pSReq->STxHeader.Identifier = lID;
-    pSReq->STxHeader.TxFrameType = lFrameType;
-    pSReq->STxHeader.BitRateSwitch = lBitRateSwitch;
-    pSReq->STxHeader.FDFormat = lFDFormat;
-    pSReq->STxHeader.DataLength = CANGetTxDataLengthCode(bDataLen);
-    pSReq->STxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    pSReq->STxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-    pSReq->STxHeader.MessageMarker = 0x00;
-    memcpy(pSReq->baData, baData, bDataLen);
+    req->hfdcan = hfdcan;
+    req->txHeader.IdType = idType;
+    req->txHeader.Identifier = id;
+    req->txHeader.TxFrameType = frameType;
+    req->txHeader.BitRateSwitch = bitRateSwitch;
+    req->txHeader.FDFormat = fdFormat;
+    req->txHeader.DataLength = CANGetTxDataLengthCode(dataLen);
+    req->txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    req->txHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    req->txHeader.MessageMarker = 0x00;
+    memcpy(req->data, data, dataLen);
 
-    if (osMessageQueuePut(CANTxReqsQueueHandle, &pSReq, 0, 0) != osOK)
+    if (osMessageQueuePut(CANTxReqsQueueHandle, &req, 0, 0) != osOK)
     {
-      osMemoryPoolFree(CANTxReqsMemPoolHandle, pSReq);
-      g_bCanTxOverflowCount++;
+      osMemoryPoolFree(CANTxReqsMemPoolHandle, req);
+      CanTxOverflowBump();
     }
   }
   else
   {
-    g_bCanTxOverflowCount++;
+    CanTxOverflowBump();
   }
 }
 
@@ -93,7 +114,7 @@ void CANMsgSenderTaskFunc(void *argument)
   /* USER CODE BEGIN vCANMsgSenderTask */
   UNUSED(argument);
 
-  tpSFDCANTxMsg pSTxMsg = NULL;
+  FdcanTxMsg_t *txMsg = NULL;
 
   CANMsgSenderInit();
 
@@ -101,13 +122,13 @@ void CANMsgSenderTaskFunc(void *argument)
   while (pdTRUE)
   {
     if (osMessageQueueGet(CANTxReqsQueueHandle,
-                          &pSTxMsg,
+                          &txMsg,
                           NULL,
                           MAINTENANCE_TASK_TIMEOUT_MS) == osOK)
     {
-      CANSendMessage(pSTxMsg);
-      CANWaitTxComplete(pSTxMsg->hfdcan);
-      osMemoryPoolFree(CANTxReqsMemPoolHandle, pSTxMsg);
+      CANSendMessage(txMsg);
+      CANWaitTxComplete(txMsg->hfdcan);
+      osMemoryPoolFree(CANTxReqsMemPoolHandle, txMsg);
     }
 
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_SENDER_TASK_ACTIVE);

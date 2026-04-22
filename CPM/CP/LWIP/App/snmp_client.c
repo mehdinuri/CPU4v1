@@ -43,7 +43,6 @@
 
 #include "main.h"
 #include "MCS.h"
-#include "data.h"
 #include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "Adapters/STM32/LWIPSNMPAdapter.h"
@@ -58,18 +57,149 @@
 #define TEKNOTEL_DOOR_OPEN_SPECIFIC_TRAP 3U
 
 #define TEKNOTEL_DEVICE_ENTERPRISE_OID                                         \
-  { 1U, 3U, 6U, 1U, 4U, 1U, SNMP_TEKNOTEL_ENTERPRISE_OID }
+        { 1U, 3U, 6U, 1U, 4U, 1U, SNMP_TEKNOTEL_ENTERPRISE_OID }
 #define TEKNOTEL_DEVICE_ENTERPRISE_OID_LEN 7U
 static struct snmp_obj_id SDeviceEnterpriseOID =
 { TEKNOTEL_DEVICE_ENTERPRISE_OID_LEN, TEKNOTEL_DEVICE_ENTERPRISE_OID };
 
 static const u32_t kDriverModuleStatusTrapOid[] =
 {
-  1U, 3U, 6U, 1U, 4U, 1U, SNMP_TEKNOTEL_ENTERPRISE_OID, 1U, 11U, 1U
+  1U, 3U, 6U, 1U, 4U, 1U,
+  SNMP_TEKNOTEL_ENTERPRISE_OID, 4U, 2U, 1U, 21U, 1U
+};
+static const u32_t kNtcipTrapEnterpriseOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 1U, 4U
+};
+static const u32_t kNtcipTrapDataOid[] =
+{
+  1U, 3U, 6U, 1U, 4U, 1U, 1206U, 4U, 1U, 4U, 1U, 2U
+};
+static struct snmp_obj_id s_ntcipTrapEnterpriseObjId =
+{
+  10U, { 0U }
 };
 
 static tESNMPClientState eClientState = SNMP_CLIENT_NONE;
 static LWIPSNMPAdapterCtx_t s_lwipSnmpAdapterCtx;
+static char s_trapCommunityName[17];
+
+static const EventReportCommunityRow_t *FindTrapCommunityRow(
+  const EventReportConfiguration_t *config,
+  uint8_t communityIndex)
+{
+  uint8_t index;
+
+  if ((config == NULL) || (communityIndex == 0U))
+  {
+    return NULL;
+  }
+
+  for (index = 0U; index < EVENT_REPORT_COMMUNITY_NAMES_MAX; index++)
+  {
+    if (config->communityRows[index].communityNameIndex == communityIndex)
+    {
+      return &config->communityRows[index];
+    }
+  }
+
+  return NULL;
+}
+
+static uint8_t TryGetTrapDestination(ip_addr_t *address)
+{
+  const EventReportConfiguration_t *config;
+  const EventReportLogicalNameRow_t *logicalNameRow;
+  const EventReportTrapMgmtRow_t *trapMgmtRow;
+  uint8_t index;
+
+  if (address == NULL)
+  {
+    return FALSE;
+  }
+
+  config = EventReportServiceGetActiveConfig(&g_eventReportService);
+  if (config == NULL)
+  {
+    return FALSE;
+  }
+
+  trapMgmtRow = &config->trapMgmtRows[0];
+  logicalNameRow = &config->logicalNameRows[0];
+  if ((trapMgmtRow->trapMgmtRowStatus != EVENT_REPORT_ROW_STATUS_ACTIVE)
+      || (logicalNameRow->status != EVENT_REPORT_ROW_STATUS_ACTIVE)
+      || (trapMgmtRow->trapMgmtManagerPointer
+          != logicalNameRow->logicalNameTranslationIndex))
+  {
+    return FALSE;
+  }
+
+  for (index = 0U; index < 4U; index++)
+  {
+    if (logicalNameRow->networkAddress[index] != 0U)
+    {
+      IP_ADDR4(address,
+               logicalNameRow->networkAddress[0],
+               logicalNameRow->networkAddress[1],
+               logicalNameRow->networkAddress[2],
+               logicalNameRow->networkAddress[3]);
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+static void ConfigureTrapReporting(ip_addr_t *fallbackTargetIp)
+{
+  const EventReportConfiguration_t *config;
+  const EventReportTrapMgmtRow_t *trapMgmtRow;
+  const EventReportCommunityRow_t *communityRow;
+  ip_addr_t targetIp;
+  uint8_t targetValid = FALSE;
+
+  config = EventReportServiceGetActiveConfig(&g_eventReportService);
+  trapMgmtRow = (config == NULL) ? NULL : &config->trapMgmtRows[0];
+  communityRow = (config == NULL) ? NULL
+                 : FindTrapCommunityRow(config,
+                                        config->trapMgmtRows[0]
+                                        .trapMgmtCommunityNamePointer);
+
+  if ((communityRow != NULL) && (communityRow->communityNameLength > 0U))
+  {
+    (void) memset(&s_trapCommunityName[0], 0, sizeof(s_trapCommunityName));
+    (void) memcpy(&s_trapCommunityName[0],
+                  &communityRow->communityNameUser[0],
+                  communityRow->communityNameLength);
+    snmp_set_community_trap(&s_trapCommunityName[0]);
+  }
+  else
+  {
+    snmp_set_community_trap(MCSGetSNMPTrapCommunityName());
+  }
+
+  if (TryGetTrapDestination(&targetIp) != FALSE)
+  {
+    targetValid = TRUE;
+  }
+  else if (fallbackTargetIp != NULL)
+  {
+    targetIp = *fallbackTargetIp;
+    targetValid = TRUE;
+  }
+
+  if ((trapMgmtRow != NULL)
+      && (trapMgmtRow->trapMgmtRowStatus == EVENT_REPORT_ROW_STATUS_ACTIVE)
+      && (targetValid != FALSE))
+  {
+    snmp_trap_dst_ip_set(0, &targetIp);
+    snmp_trap_dst_enable(0, 1);
+  }
+  else
+  {
+    snmp_trap_dst_enable(0, 0);
+  }
+}
 
 static void BindDomainSnmpAdapter(void)
 {
@@ -77,10 +207,18 @@ static void BindDomainSnmpAdapter(void)
                       &g_configurationService,
                       &g_intersectionEngine,
                       &g_intersectionController);
+  EventReportServiceApplySnmpCommunities(&g_eventReportService,
+                                         MCSGetSNMPReadCommunityName(),
+                                         MCSGetSNMPWriteCommunityName(),
+                                         MCSGetSNMPTrapCommunityName());
   LWIPSNMPAdapterBindDetectorReportService(&s_lwipSnmpAdapterCtx,
                                            &g_detectorReportService);
   LWIPSNMPAdapterBindGlobalTimeManagementService(&s_lwipSnmpAdapterCtx,
                                                  &g_globalTimeManagementService);
+  LWIPSNMPAdapterBindEventReportService(&s_lwipSnmpAdapterCtx,
+                                        &g_eventReportService);
+  LWIPSNMPAdapterBindSnmpSecurityPort(&s_lwipSnmpAdapterCtx,
+                                      &g_snmpSecurityPort);
   LWIPSNMPAdapterBindActivationService(&s_lwipSnmpAdapterCtx,
                                        &g_intersectionActivationService);
   LWIPSNMPAdapterBindDoorSensorPort(&s_lwipSnmpAdapterCtx, &g_doorPort);
@@ -90,15 +228,23 @@ static void BindDomainSnmpAdapter(void)
   LWIPSNMPAdapterBindUnitAlarmPort(&s_lwipSnmpAdapterCtx, &g_unitAlarmPort);
   LWIPSNMPAdapterBindUnitClockPort(&s_lwipSnmpAdapterCtx, &g_unitClockPort);
   LWIPSNMPAdapterBindCpMpLinkService(&s_lwipSnmpAdapterCtx, &g_cpMpLinkService);
+  EventReportServiceBindObjectDirectory(&g_eventReportService,
+                                        &s_lwipSnmpAdapterCtx.objectDirectory);
   LWIPSNMPBridgeBindAdapter(&s_lwipSnmpAdapterCtx);
 }
 
-static const struct snmp_mib *SaMibs[] = { &mib2, &ntcip1201mib, &ntcip1202mib,
-                                           &teknotelmib,
-                                           #if LWIP_SNMP_V3
-                                           &snmpframeworkmib,
-                                           &snmpusmmib
-                                           #endif
+static const struct snmp_mib *SaMibs[] =
+{
+  &mib2,
+  &ntcip1201mib,
+  &ntcip1202mib,
+  &ntcip1103applicationmib,
+  &ntcip1103trapmib,
+  &teknotelmib,
+  #if LWIP_SNMP_V3
+  &snmpframeworkmib,
+  &snmpusmmib
+  #endif
 };
 
 void SNMPClientSetState(tESNMPClientState eState)
@@ -116,28 +262,38 @@ uint8_t SNMPClientIsStarted(void)
   return eClientState == SNMP_CLIENT_STARTED;
 }
 
+void SNMPClientBindDomainServices(void)
+{
+  BindDomainSnmpAdapter();
+}
+
 uint8_t SNMPClientStart(ip_addr_t *pSTargetIp)
 {
   SNMPClientStop();
-  BindDomainSnmpAdapter();
+  SNMPClientBindDomainServices();
+
+  if (MCSCurrentSnmpProfileValid() == FALSE)
+  {
+    return FALSE;
+  }
 
   SNMPv3Init();
 
   snmp_set_device_enterprise_oid(&SDeviceEnterpriseOID);
   snmp_set_community(MCSGetSNMPReadCommunityName());
   snmp_set_community_write(MCSGetSNMPWriteCommunityName());
-  snmp_set_community_trap(MCSGetSNMPTrapCommunityName());
   snmp_set_mibs(SaMibs, LWIP_ARRAYSIZE(SaMibs));
 
-  snmp_v1_enable(1);
+  snmp_v1_enable(0);
   snmp_v2c_enable(1);
   snmp_v3_enable(1);
 
   snmp_set_default_trap_version(MCSGetSNMPTrapVersion());
-
-  snmp_trap_dst_ip_set(0, pSTargetIp);
-  snmp_trap_dst_enable(0, 1);
+  ConfigureTrapReporting(pSTargetIp);
   snmp_set_auth_traps_enabled(1);
+  MEMCPY(s_ntcipTrapEnterpriseObjId.id,
+         kNtcipTrapEnterpriseOid,
+         sizeof(kNtcipTrapEnterpriseOid));
 
   snmp_init();
 
@@ -160,6 +316,39 @@ void SNMPSendColdStartTrap(void)
   if (SNMPClientIsStarted())
   {
     snmp_coldstart_trap();
+  }
+}
+
+void SNMPClientProcessEventReportTrap(void)
+{
+  NtcipOctetString_t trapData;
+
+  if (!SNMPClientIsStarted()
+      || (EventReportServiceCopyPendingTrap(&g_eventReportService, &trapData)
+          == 0U))
+  {
+    return;
+  }
+
+  ConfigureTrapReporting(NULL);
+  if (trapData.length > 0U)
+  {
+    struct snmp_obj_id trapDataOid = { 12U, { 0U } };
+    struct snmp_varbind trapVarBind;
+
+    MEMCPY(trapDataOid.id, kNtcipTrapDataOid, sizeof(kNtcipTrapDataOid));
+    trapVarBind.next = NULL;
+    trapVarBind.oid = trapDataOid;
+    trapVarBind.type = SNMP_ASN1_TYPE_OCTET_STRING;
+    trapVarBind.value_len = trapData.length;
+    trapVarBind.value = &trapData.bytes[0];
+
+    EventReportServiceAcknowledgeTrapDispatch(
+      &g_eventReportService,
+      (uint8_t) (snmp_send_trap(&s_ntcipTrapEnterpriseObjId,
+                                SNMP_GENTRAP_ENTERPRISE_SPECIFIC,
+                                1,
+                                &trapVarBind) == ERR_OK));
   }
 }
 

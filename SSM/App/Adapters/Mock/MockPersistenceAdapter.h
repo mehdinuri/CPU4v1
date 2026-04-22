@@ -17,21 +17,21 @@
 typedef struct
 {
   uint8_t abBlob[MOCK_PERSIST_MAX_BLOB_SIZE];
-  uint16_t sSize;         /* 0 = empty/unset */
-  uint8_t bForceReadFail;
-  uint8_t bForceWriteFail;
-} tSMockPersistenceSlot;
+  uint16_t size;         /* 0 = empty/unset */
+  uint8_t forceReadFail;
+  uint8_t forceWriteFail;
+} MockPersistenceSlot_t;
 
 typedef struct
 {
-  tSMockPersistenceSlot SaSlots[PERSIST_KEY__COUNT];
-  uint32_t lReadCount;
-  uint32_t lWriteCount;
-} tSMockPersistenceAdapterCtx;
+  MockPersistenceSlot_t slots[PERSIST_KEY__COUNT];
+  uint32_t readCount;
+  uint32_t writeCount;
+} MockPersistenceAdapterCtx_t;
 
-void MockPersistenceAdapter_Init(tSMockPersistenceAdapterCtx *pCtx);
+void MockPersistenceAdapter_Init(MockPersistenceAdapterCtx_t *ctx);
 IPersistencePort_t MockPersistenceAdapter_CreatePort(
-  tSMockPersistenceAdapterCtx *pCtx);
+  MockPersistenceAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_PERSISTENCE_ADAPTER_H */
 

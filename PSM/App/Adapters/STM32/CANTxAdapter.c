@@ -10,31 +10,33 @@
 #include "fdcan.h"
 #include "CanMsgSender.h"
 
-extern volatile uint8_t g_bCanTxOverflowCount;
+extern volatile uint32_t g_canTxOverflowCount;
 
 /* ---------------------------------------------------------------------------
  * Private adapter implementation
  * ---------------------------------------------------------------------------*/
 static void AdapterSend(void *ctx,
-                         uint32_t lID,
-                         const uint8_t *baData,
-                         uint8_t bDataLen)
+                         uint32_t id,
+                         const uint8_t *data,
+                         uint8_t dataLen)
 {
   (void) ctx;
   CANTxRequest(&hfdcan1,
                FDCAN_STANDARD_ID,
-               lID,
+               id,
                FDCAN_DATA_FRAME,
                FDCAN_BRS_OFF,
                FDCAN_CLASSIC_CAN,
-               (uint8_t *)(uintptr_t) baData,
-               bDataLen);
+               (uint8_t *)(uintptr_t) data,
+               dataLen);
 }
 
 static uint8_t AdapterGetOverflowCount(void *ctx)
 {
   (void) ctx;
-  return g_bCanTxOverflowCount;
+  /* Port contract is "non-zero means overflow has happened" — saturate the
+   * widened 32-bit counter into the uint8 the measurement frame expects. */
+  return (g_canTxOverflowCount > 0U) ? 0xFFU : 0U;
 }
 
 /* ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ static uint8_t AdapterGetOverflowCount(void *ctx)
  * ---------------------------------------------------------------------------*/
 void CANTxAdapterInit(CANTxAdapterCtx_t *ctx)
 {
-  ctx->bInitialised = 1U;
+  ctx->initialised = 1U;
 }
 
 ICANTxPort_t CANTxAdapterCreatePort(CANTxAdapterCtx_t *ctx)

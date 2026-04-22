@@ -2,7 +2,7 @@
  ******************************************************************************
  * @file    Ports/ITimerPort.h
  * @brief   Port: start timers that run the measurement/sampling cadence.
- *          One call per timer; adapters resolve tETimerId → hardware timer.
+ *          One call per timer; adapters resolve TimerId_e → hardware timer.
  ******************************************************************************
  */
 
@@ -16,18 +16,18 @@ typedef enum
   TIMER_ID_ADC_TRIGGER       = 2,      /* TIM3 TRGO (drives ADC DMA)         */
   TIMER_ID_STATE_MONITOR     = 3,      /* TIM4 OC (sample-interval IT)       */
   TIMER_ID__COUNT
-} tETimerId;
+} TimerId_e;
 
 typedef struct ITimerPort
 {
-  void *pCtx;
+  void *ctx;
 
-  void (*Start)(void *pCtx, tETimerId eId);
+  void (*Start)(void *ctx, TimerId_e eId);
 } ITimerPort_t;
 
-static inline void Timer_Start(ITimerPort_t *pPort, tETimerId eId)
+static inline void Timer_Start(ITimerPort_t *port, TimerId_e eId)
 {
-  pPort->Start(pPort->pCtx, eId);
+  port->Start(port->ctx, eId);
 }
 
 #endif /* PORTS_ITIMER_PORT_H */

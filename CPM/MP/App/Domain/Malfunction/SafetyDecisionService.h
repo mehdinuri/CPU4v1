@@ -30,18 +30,30 @@ typedef struct
   FaultCode_t lastLatchedCode;
   uint32_t latchedTicks;
   uint8_t errorSeverityDropsRelay;
+  uint8_t configReady;
+  uint8_t requiredSsmHealthy;
+  uint8_t localPermitOutputPower;
+  SafetyRelayState_t commandedRelayState;
 } SafetyDecisionService_t;
 
 void SafetyDecisionServiceInit(SafetyDecisionService_t *service,
                                ISafetyRelayPort_t *relayPort);
 void SafetyDecisionServiceConfigure(SafetyDecisionService_t *service,
                                     uint8_t errorSeverityDropsRelay);
+void SafetyDecisionServiceSetConfigReady(SafetyDecisionService_t *service,
+                                         uint8_t configReady);
+void SafetyDecisionServiceSetRequiredSsmHealthy(SafetyDecisionService_t *service,
+                                                uint8_t requiredSsmHealthy);
 void SafetyDecisionServiceOnFault(SafetyDecisionService_t *service,
                                   const FaultEvent_t *event);
 void SafetyDecisionServiceReset(SafetyDecisionService_t *service);
 SafetyAction_t SafetyDecisionServiceGetLatchedAction(
   const SafetyDecisionService_t *service);
 FaultCode_t SafetyDecisionServiceGetLastLatchedCode(
+  const SafetyDecisionService_t *service);
+uint8_t SafetyDecisionServiceGetLocalPermitOutputPower(
+  const SafetyDecisionService_t *service);
+SafetyRelayState_t SafetyDecisionServiceGetCommandedRelayState(
   const SafetyDecisionService_t *service);
 
 #endif /* SAFETY_DECISION_SERVICE_H */

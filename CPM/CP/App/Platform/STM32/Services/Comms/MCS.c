@@ -9,6 +9,7 @@
  */
 
 #include "MCS.h"
+#include "DomainServices.h"
 #include "HardwarePorts.h"
 #include "PersistencePorts.h"
 
@@ -19,14 +20,15 @@
 #include <string.h>
 
 #include "cmsis_os.h"
-#include "data.h"
 #include "defs.h"
 #include "gpio.h"
 #include "lwip.h"
 #include "lwip/dns.h"
 #include "rng.h"
+#include "SettingsStorage.h"
 #include "snmp_client.h"
 #include "snmpv3_client.h"
+#include "SystemRuntime.h"
 
 #define MCS_DMA_TX_TIMEOUT 1000U
 #define MCS_DEFAULT_AT_CMD_RECEIVE_TIMEOUT 1000U
@@ -42,6 +44,8 @@
 static tSMCSRuntime SMCSRuntime;
 static tSMCSConInfo SMCSConfInfo;
 static tSMCSSNMPv3State SMCSSNMPv3State;
+static tSMCSSNMPBootstrapInfo SMCSSNMPBootstrapInfo;
+static tSMCSSNMPv3State SMCSSNMPv3BootstrapState;
 
 __attribute__((section(".ram_d2_dma_buffers"), aligned(32)))
 char strMCSTransmit[MCS_DATA_PACKET_MAX_SIZE + 1];
@@ -62,6 +66,53 @@ static IModemPort_t *s_driver;
 static ModemInfo_t s_modemInfo;
 static uint8_t s_activeNetworkType;
 static uint8_t fColdStarted = TRUE;
+
+static uint8_t MCSGetConfiguredTrapDestination(ip_addr_t *address)
+{
+  const EventReportConfiguration_t *config;
+  const EventReportLogicalNameRow_t *row;
+  uint8_t allZero;
+  uint8_t index;
+
+  if (address == NULL)
+  {
+    return FALSE;
+  }
+
+  config = EventReportServiceGetActiveConfig(&g_eventReportService);
+  if (config == NULL)
+  {
+    return FALSE;
+  }
+
+  row = &config->logicalNameRows[0];
+  if (row->status != EVENT_REPORT_ROW_STATUS_ACTIVE)
+  {
+    return FALSE;
+  }
+
+  allZero = TRUE;
+  for (index = 0U; index < 4U; index++)
+  {
+    if (row->networkAddress[index] != 0U)
+    {
+      allZero = FALSE;
+      break;
+    }
+  }
+
+  if (allZero != FALSE)
+  {
+    return FALSE;
+  }
+
+  IP_ADDR4(address,
+           row->networkAddress[0],
+           row->networkAddress[1],
+           row->networkAddress[2],
+           row->networkAddress[3]);
+  return TRUE;
+}
 
 static void ClearAscii(char *buffer, size_t size)
 {
@@ -95,6 +146,131 @@ static void CopyAscii(char *dst, size_t dstSize, const char *src)
 
     dst[index] = src[index];
   }
+}
+
+static size_t AsciiLengthBounded(const char *text, size_t capacity)
+{
+  size_t index;
+
+  if ((text == NULL) || (capacity == 0U))
+  {
+    return 0U;
+  }
+
+  for (index = 0U; index < capacity; index++)
+  {
+    unsigned char ch = (unsigned char) text[index];
+
+    if (ch == '\0')
+    {
+      return index;
+    }
+
+    if (isprint(ch) == 0)
+    {
+      return 0U;
+    }
+  }
+
+  return 0U;
+}
+
+static uint8_t TextEquals(const char *left, const char *right)
+{
+  if ((left == NULL) || (right == NULL))
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (strcmp(left, right) == 0);
+}
+
+static uint8_t CommunityNameValid(const char *community)
+{
+  size_t length = AsciiLengthBounded(community,
+                                     MCS_SNMP_MAX_COMMUNITY_STR_LEN + 1U);
+
+  return (uint8_t) ((length >= SNMP_COMMUNITY_NAME_MIN_SIZE)
+                    && (length <= MCS_SNMP_MAX_COMMUNITY_STR_LEN));
+}
+
+static uint8_t UsernameValid(const char *username)
+{
+  size_t length = AsciiLengthBounded(username, SNMPV3_USERNAME_MAX_SIZE + 1U);
+
+  return (uint8_t) ((length >= SNMPV3_USERNAME_MIN_SIZE)
+                    && (length <= SNMPV3_USERNAME_MAX_SIZE));
+}
+
+static uint8_t EngineIdValid(const char *engineId)
+{
+  size_t length = AsciiLengthBounded(engineId, SNMPV3_ENGINE_ID_MAX_SIZE + 1U);
+
+  return (uint8_t) ((length >= SNMPV3_ENGINE_ID_MIN_SIZE)
+                    && (length <= SNMPV3_ENGINE_ID_MAX_SIZE));
+}
+
+static uint8_t InsecureLegacyCommunitiesConfigured(const tSMCSConInfo *info)
+{
+  if (info == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (TextEquals(&info->SSNMPInfo.strReadCommunityName[0],
+                               MCS_DEFAULT_SNMP_READ_COMMUNITY_NAME)
+                    || TextEquals(&info->SSNMPInfo.strWriteCommunityName[0],
+                                  MCS_DEFAULT_SNMP_WRITE_COMMUNITY_NAME)
+                    || TextEquals(&info->SSNMPInfo.strTrapCommunityName[0],
+                                  MCS_DEFAULT_SNMP_TRAP_COMMUNITY_NAME));
+}
+
+static uint8_t SNMPv3StateValid(const tSMCSSNMPv3State *state)
+{
+  if ((state == NULL) || (EngineIdValid(&state->strEngineId[0]) == FALSE))
+  {
+    return FALSE;
+  }
+
+  if ((PreferredAuthAlgo() != (uint8_t) SNMP_V3_AUTH_ALGO_INVAL)
+      && ((state->bAuthConfigured == FALSE)
+          || (state->bPrivConfigured == FALSE)))
+  {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+static uint8_t SNMPBootstrapInfoValid(const tSMCSSNMPBootstrapInfo *info)
+{
+  if (info == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) ((CommunityNameValid(&info->strReadCommunityName[0]) != FALSE)
+                    && (CommunityNameValid(&info->strWriteCommunityName[0])
+                        != FALSE)
+                    && (CommunityNameValid(&info->strTrapCommunityName[0])
+                        != FALSE)
+                    && (UsernameValid(&info->strV3Username[0]) != FALSE));
+}
+
+static void MCSRestartSnmpClient(void)
+{
+  if (SNMPClientIsStarted())
+  {
+    SNMPClientStop();
+  }
+
+  MCSSetSnmpReady(FALSE);
+  SMCSRuntime.bSnmpRetryCountdown = 0U;
+}
+
+static const char *CurrentModemApn(void)
+{
+  return "";
 }
 
 static uint8_t IsValidNetworkType(uint8_t networkType)
@@ -137,15 +313,110 @@ static void MCSApplyPowerPolicy(void)
   }
 }
 
+static uint8_t GenerateRandom32(uint32_t *value)
+{
+  if (value == NULL)
+  {
+    return FALSE;
+  }
+
+  return (uint8_t) (HAL_RNG_GenerateRandomNumber(&hrng, value) == HAL_OK);
+}
+
+static void BuildStableIdentityWords(uint32_t words[3])
+{
+  if (words == NULL)
+  {
+    return;
+  }
+
+  words[0] = SMCSConfInfo.SSNMPInfo.lDeviceID;
+  words[1] = ((uint32_t) SMCSConfInfo.SMACAddress.bAddress0 << 24U)
+             | ((uint32_t) SMCSConfInfo.SMACAddress.bAddress1 << 16U)
+             | ((uint32_t) SMCSConfInfo.SMACAddress.bAddress2 << 8U)
+             | (uint32_t) SMCSConfInfo.SMACAddress.bAddress3;
+  words[2] = ((uint32_t) SMCSConfInfo.SMACAddress.bAddress4 << 24U)
+             | ((uint32_t) SMCSConfInfo.SMACAddress.bAddress5 << 16U)
+             | ((uint32_t) SMCSConfInfo.bNetworkType << 8U)
+             | (uint32_t) SMCSConfInfo.bInitialized;
+
+  if (words[0] == 0U)
+  {
+    words[0] = 0x59748001UL;
+  }
+
+  if ((words[1] == 0U) && (words[2] == 0U))
+  {
+    words[1] = 0x4D435330UL;
+    words[2] = 0x01020304UL;
+  }
+}
+
+static uint32_t HashWord(uint32_t hash, uint32_t word)
+{
+  hash ^= word;
+  hash *= MCS_FNV_PRIME;
+  return hash;
+}
+
+static uint32_t DeriveStableSecretWord(uint32_t purpose, uint32_t index)
+{
+  uint32_t words[3] = { 0U, 0U, 0U };
+  uint32_t hash = MCS_FNV_OFFSET_BASIS;
+
+  BuildStableIdentityWords(words);
+  hash = HashWord(hash, purpose);
+  hash = HashWord(hash, index);
+  hash = HashWord(hash, words[0]);
+  hash = HashWord(hash, words[1]);
+  hash = HashWord(hash, words[2]);
+
+  if (hash == 0U)
+  {
+    hash = 0x5A17C3E1UL ^ purpose ^ index;
+  }
+
+  return hash;
+}
+
+static void GenerateBase32Secret(char *dst,
+                                 size_t dstSize,
+                                 size_t length,
+                                 uint32_t purpose)
+{
+  static const char alphabet[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  size_t index;
+
+  if ((dst == NULL) || (dstSize <= length))
+  {
+    return;
+  }
+
+  (void) memset(dst, 0, dstSize);
+  for (index = 0U; index < length; index++)
+  {
+    uint32_t word;
+
+    if ((GenerateRandom32(&word) == FALSE) || (word == 0U))
+    {
+      word = DeriveStableSecretWord(purpose, (uint32_t) index);
+    }
+
+    dst[index] = alphabet[word & 0x1FU];
+  }
+}
+
 static void MCSGenerateDefaultSnmpEngineId(char *dst, size_t dstSize)
 {
-  ReadCPUDeviceUID();
+  uint32_t words[3] = { 0U, 0U, 0U };
+
+  BuildStableIdentityWords(words);
   (void) snprintf(dst,
                   dstSize,
                   "MAESTRO-%08" PRIX32 "%08" PRIX32 "%08" PRIX32,
-                  GetCPUDeviceUID()->ulaUID[0],
-                  GetCPUDeviceUID()->ulaUID[1],
-                  GetCPUDeviceUID()->ulaUID[2]);
+                  words[0],
+                  words[1],
+                  words[2]);
 }
 
 static uint8_t MCSDeriveLocalizedKeys(const char *engineId,
@@ -209,6 +480,115 @@ static uint8_t MCSDeriveLocalizedKeys(const char *engineId,
 static uint8_t MCSIsSNMPv3StateInitialized(void)
 {
   return (uint8_t) (SMCSSNMPv3State.strEngineId[0] != '\0');
+}
+
+static void BuildBootstrapInfoFromActive(tSMCSSNMPBootstrapInfo *info)
+{
+  if (info == NULL)
+  {
+    return;
+  }
+
+  (void) memset(info, 0, sizeof(*info));
+  CopyAscii(&info->strReadCommunityName[0],
+            sizeof(info->strReadCommunityName),
+            &SMCSConfInfo.SSNMPInfo.strReadCommunityName[0]);
+  CopyAscii(&info->strWriteCommunityName[0],
+            sizeof(info->strWriteCommunityName),
+            &SMCSConfInfo.SSNMPInfo.strWriteCommunityName[0]);
+  CopyAscii(&info->strTrapCommunityName[0],
+            sizeof(info->strTrapCommunityName),
+            &SMCSConfInfo.SSNMPInfo.strTrapCommunityName[0]);
+  CopyAscii(&info->strV3Username[0],
+            sizeof(info->strV3Username),
+            &SMCSConfInfo.SSNMPInfo.strV3Username[0]);
+}
+
+static void ApplyBootstrapInfoToActive(const tSMCSSNMPBootstrapInfo *info)
+{
+  if (info == NULL)
+  {
+    return;
+  }
+
+  CopyAscii(&SMCSConfInfo.SSNMPInfo.strReadCommunityName[0],
+            sizeof(SMCSConfInfo.SSNMPInfo.strReadCommunityName),
+            &info->strReadCommunityName[0]);
+  CopyAscii(&SMCSConfInfo.SSNMPInfo.strWriteCommunityName[0],
+            sizeof(SMCSConfInfo.SSNMPInfo.strWriteCommunityName),
+            &info->strWriteCommunityName[0]);
+  CopyAscii(&SMCSConfInfo.SSNMPInfo.strTrapCommunityName[0],
+            sizeof(SMCSConfInfo.SSNMPInfo.strTrapCommunityName),
+            &info->strTrapCommunityName[0]);
+  CopyAscii(&SMCSConfInfo.SSNMPInfo.strV3Username[0],
+            sizeof(SMCSConfInfo.SSNMPInfo.strV3Username),
+            &info->strV3Username[0]);
+}
+
+static uint8_t SeedBootstrapStoresFromActive(void)
+{
+  BuildBootstrapInfoFromActive(&SMCSSNMPBootstrapInfo);
+  (void) memcpy(&SMCSSNMPv3BootstrapState,
+                &SMCSSNMPv3State,
+                sizeof(SMCSSNMPv3BootstrapState));
+
+  return (uint8_t) ((MCSWriteSNMPBootstrapInfo() != FALSE)
+                    && (MCSWriteSNMPv3BootstrapState() != FALSE));
+}
+
+static uint8_t ProvisionReleaseBootstrapProfile(void)
+{
+  tSMCSSNMPBootstrapInfo bootstrapInfo;
+  tSMCSSNMPv3State activeState;
+  char passphrase[SNMPV3_PASSWORD_MAX_SIZE + 1U];
+
+  (void) memset(&bootstrapInfo, 0, sizeof(bootstrapInfo));
+  (void) memset(&activeState, 0, sizeof(activeState));
+  (void) memset(&passphrase[0], 0, sizeof(passphrase));
+
+  GenerateBase32Secret(&bootstrapInfo.strReadCommunityName[0],
+                       sizeof(bootstrapInfo.strReadCommunityName),
+                       MCS_RELEASE_SNMP_COMMUNITY_LENGTH,
+                       0x1001UL);
+  GenerateBase32Secret(&bootstrapInfo.strWriteCommunityName[0],
+                       sizeof(bootstrapInfo.strWriteCommunityName),
+                       MCS_RELEASE_SNMP_COMMUNITY_LENGTH,
+                       0x1002UL);
+  GenerateBase32Secret(&bootstrapInfo.strTrapCommunityName[0],
+                       sizeof(bootstrapInfo.strTrapCommunityName),
+                       MCS_RELEASE_SNMP_COMMUNITY_LENGTH,
+                       0x1003UL);
+  CopyAscii(&bootstrapInfo.strV3Username[0],
+            sizeof(bootstrapInfo.strV3Username),
+            MCS_DEFAULT_SNMPV3_USERNAME);
+  GenerateBase32Secret(&passphrase[0],
+                       sizeof(passphrase),
+                       MCS_RELEASE_SNMPV3_PASSWORD_LENGTH,
+                       0x2001UL);
+
+  MCSGenerateDefaultSnmpEngineId(&activeState.strEngineId[0],
+                                 sizeof(activeState.strEngineId));
+  if (MCSDeriveLocalizedKeys(&activeState.strEngineId[0],
+                             &passphrase[0],
+                             &passphrase[0],
+                             &activeState) == FALSE)
+  {
+    return FALSE;
+  }
+
+  ApplyBootstrapInfoToActive(&bootstrapInfo);
+  (void) memcpy(&SMCSSNMPv3State, &activeState, sizeof(SMCSSNMPv3State));
+  (void) memcpy(&SMCSSNMPBootstrapInfo,
+                &bootstrapInfo,
+                sizeof(SMCSSNMPBootstrapInfo));
+  (void) memcpy(&SMCSSNMPv3BootstrapState,
+                &activeState,
+                sizeof(SMCSSNMPv3BootstrapState));
+
+  return (uint8_t) ((MCSWriteConInfo() != FALSE)
+                    && (MCSWriteSNMPv3State() != FALSE)
+                    && (MCSWriteSNMPBootstrapInfo() != FALSE)
+                    && (MCSWriteSNMPv3BootstrapState() != FALSE));
 }
 
 static void MCSClearResolvedManagerIp(void)
@@ -346,6 +726,42 @@ uint8_t MCSReadSNMPv3State(void)
                          sizeof(SMCSSNMPv3State));
 }
 
+uint8_t MCSWriteSNMPBootstrapInfo(void)
+{
+  return PersistenceWrite(&g_persistencePort,
+                          PERSIST_OBJECT_SNMP_BOOTSTRAP_INFO,
+                          0U,
+                          &SMCSSNMPBootstrapInfo,
+                          sizeof(SMCSSNMPBootstrapInfo));
+}
+
+uint8_t MCSReadSNMPBootstrapInfo(void)
+{
+  return PersistenceRead(&g_persistencePort,
+                         PERSIST_OBJECT_SNMP_BOOTSTRAP_INFO,
+                         0U,
+                         &SMCSSNMPBootstrapInfo,
+                         sizeof(SMCSSNMPBootstrapInfo));
+}
+
+uint8_t MCSWriteSNMPv3BootstrapState(void)
+{
+  return PersistenceWrite(&g_persistencePort,
+                          PERSIST_OBJECT_SNMPV3_BOOTSTRAP_STATE,
+                          0U,
+                          &SMCSSNMPv3BootstrapState,
+                          sizeof(SMCSSNMPv3BootstrapState));
+}
+
+uint8_t MCSReadSNMPv3BootstrapState(void)
+{
+  return PersistenceRead(&g_persistencePort,
+                         PERSIST_OBJECT_SNMPV3_BOOTSTRAP_STATE,
+                         0U,
+                         &SMCSSNMPv3BootstrapState,
+                         sizeof(SMCSSNMPv3BootstrapState));
+}
+
 void MCSSetConInfo(tpSMCSConInfo pSInfo)
 {
   (void) memcpy(&SMCSConfInfo, pSInfo, sizeof(SMCSConfInfo));
@@ -364,6 +780,11 @@ tpSMCSConInfo MCSGetConInfoPtr(void)
 const tSMCSSNMPv3State *MCSGetSNMPv3State(void)
 {
   return &SMCSSNMPv3State;
+}
+
+const tSMCSSNMPBootstrapInfo *MCSGetSNMPBootstrapInfo(void)
+{
+  return &SMCSSNMPBootstrapInfo;
 }
 
 tpSMCSMACAddress MCSGetEthernetMACAddress(void)
@@ -441,72 +862,44 @@ char *MCSGetSNMPTrapDestination(void)
   return &SMCSConfInfo.SSNMPInfo.strTrapDestination[0];
 }
 
-uint32_t MCSGetFNV132Hash(const uint8_t *pbData, uint8_t bLen)
-{
-  uint8_t bIdx = 0U;
-  uint32_t ulHash = MCS_FNV_OFFSET_BASIS;
-
-  for (bIdx = 0U; bIdx < bLen; ++bIdx)
-  {
-    ulHash ^= pbData[bIdx];
-    ulHash *= MCS_FNV_PRIME;
-  }
-
-  return ulHash;
-}
-
-uint32_t MCSGenerateUIDHash(void)
-{
-  uint8_t bIdx = 0U;
-  uint8_t baUIDBytes[UID_MAX_LENGTH * sizeof(uint32_t)];
-
-  ReadCPUDeviceUID();
-
-  for (bIdx = 0U; bIdx < UID_MAX_LENGTH; ++bIdx)
-  {
-    baUIDBytes[bIdx * sizeof(uint32_t)] =
-      (uint8_t) (GetCPUDeviceUID()->ulaUID[bIdx] >> 24);
-    baUIDBytes[(bIdx * sizeof(uint32_t)) + 1U] =
-      (uint8_t) (GetCPUDeviceUID()->ulaUID[bIdx] >> 16);
-    baUIDBytes[(bIdx * sizeof(uint32_t)) + 2U] =
-      (uint8_t) (GetCPUDeviceUID()->ulaUID[bIdx] >> 8);
-    baUIDBytes[(bIdx * sizeof(uint32_t)) + 3U] =
-      (uint8_t) GetCPUDeviceUID()->ulaUID[bIdx];
-  }
-
-  return MCSGetFNV132Hash(baUIDBytes, sizeof(baUIDBytes));
-}
-
 void MCSInitConInfo(void)
 {
-  uint32_t ulUIDHash = 0U;
-  uint32_t ulRand = 0U;
-  uint8_t fRandGenOk = FALSE;
+  uint32_t controllerId = 0U;
+  uint32_t auxRand = 0U;
 
   (void) memset(&SMCSConfInfo, 0, sizeof(SMCSConfInfo));
 
-  ulUIDHash = MCSGenerateUIDHash();
-  fRandGenOk = (uint8_t) (HAL_RNG_GenerateRandomNumber(&hrng, &ulRand) == HAL_OK);
+  if ((GenerateRandom32(&controllerId) == FALSE) || (controllerId == 0U))
+  {
+    controllerId = 0x59748001UL;
+  }
+
+  if ((GenerateRandom32(&auxRand) == FALSE) || (auxRand == 0U))
+  {
+    auxRand = 0x13572468UL;
+  }
 
   SMCSConfInfo.bInitialized = MCS_CON_INFO_INITIALIZED;
   SMCSConfInfo.bNetworkType = (uint8_t) MCS_NETWORK_TYPE_ETHERNET;
   SMCSConfInfo.SFlags.fEthStaticIp = TRUE;
 
   SMCSConfInfo.SMACAddress.bAddress0 = MCS_DEFAULT_ETH_MAC_ADDRESS_0;
-  SMCSConfInfo.SMACAddress.bAddress1 = (uint8_t) ((ulUIDHash >> 24) & 0xFFU);
-  SMCSConfInfo.SMACAddress.bAddress2 = (uint8_t) ((ulUIDHash >> 16) & 0xFFU);
-  SMCSConfInfo.SMACAddress.bAddress3 = (uint8_t) ((ulUIDHash >> 8) & 0xFFU);
-  SMCSConfInfo.SMACAddress.bAddress4 = (uint8_t) (ulUIDHash & 0xFFU);
-  SMCSConfInfo.SMACAddress.bAddress5 = fRandGenOk != FALSE
-                                       ? (uint8_t) ((ulRand >> 8) & 0xFFU)
-                                       : MCS_DEFAULT_ETH_MAC_ADDRESS_5;
+  SMCSConfInfo.SMACAddress.bAddress1 =
+    (uint8_t) ((controllerId >> 24) & 0xFFU);
+  SMCSConfInfo.SMACAddress.bAddress2 =
+    (uint8_t) ((controllerId >> 16) & 0xFFU);
+  SMCSConfInfo.SMACAddress.bAddress3 =
+    (uint8_t) ((controllerId >> 8) & 0xFFU);
+  SMCSConfInfo.SMACAddress.bAddress4 = (uint8_t) (controllerId & 0xFFU);
+  SMCSConfInfo.SMACAddress.bAddress5 =
+    (uint8_t) ((auxRand >> 8) & 0xFFU);
 
   SMCSConfInfo.SEthLocalIPv4.bAddress0 = MCS_DEFAULT_ETH_STATIC_IPV4_0;
   SMCSConfInfo.SEthLocalIPv4.bAddress1 = MCS_DEFAULT_ETH_STATIC_IPV4_1;
   SMCSConfInfo.SEthLocalIPv4.bAddress2 = MCS_DEFAULT_ETH_STATIC_IPV4_2;
-  SMCSConfInfo.SEthLocalIPv4.bAddress3 = fRandGenOk != FALSE
-                                         ? (uint8_t) (ulRand & 0xFFU)
-                                         : MCS_DEFAULT_ETH_STATIC_IPV4_3;
+  SMCSConfInfo.SEthLocalIPv4.bAddress3 =
+    (uint8_t) ((auxRand & 0xFFU) != 0U ? (auxRand & 0xFFU)
+              : MCS_DEFAULT_ETH_STATIC_IPV4_3);
 
   SMCSConfInfo.SEthSubnetMask.bAddress0 = MCS_DEFAULT_ETH_STATIC_SUBNET_MASK_0;
   SMCSConfInfo.SEthSubnetMask.bAddress1 = MCS_DEFAULT_ETH_STATIC_SUBNET_MASK_1;
@@ -536,7 +929,7 @@ void MCSInitConInfo(void)
   SMCSConfInfo.SSecondaryDNSServer.bAddress3 =
     MCS_DEFAULT_SECONDARY_DNS_SERVER_IPV4_3;
 
-  SMCSConfInfo.SSNMPInfo.lDeviceID = ulUIDHash;
+  SMCSConfInfo.SSNMPInfo.lDeviceID = controllerId;
   SMCSConfInfo.SSNMPInfo.bTrapVersion = MCS_DEFAULT_SNMP_TRAP_VERSION;
   CopyAscii(&SMCSConfInfo.SSNMPInfo.strReadCommunityName[0],
             sizeof(SMCSConfInfo.SSNMPInfo.strReadCommunityName),
@@ -569,31 +962,82 @@ void MCSInitSNMPv3State(void)
   (void) MCSWriteSNMPv3State();
 }
 
+uint8_t MCSSetSNMPCommunities(const char *readCommunity,
+                              const char *writeCommunity,
+                              const char *trapCommunity)
+{
+  tSMCSConInfo nextInfo;
+
+  if ((CommunityNameValid(readCommunity) == FALSE)
+      || (CommunityNameValid(writeCommunity) == FALSE)
+      || (CommunityNameValid(trapCommunity) == FALSE))
+  {
+    return FALSE;
+  }
+
+#if CP_SNMP_STRICT_RELEASE
+  if ((TextEquals(readCommunity, MCS_DEFAULT_SNMP_READ_COMMUNITY_NAME) != FALSE)
+      || (TextEquals(writeCommunity, MCS_DEFAULT_SNMP_WRITE_COMMUNITY_NAME)
+          != FALSE)
+      || (TextEquals(trapCommunity, MCS_DEFAULT_SNMP_TRAP_COMMUNITY_NAME)
+          != FALSE))
+  {
+    return FALSE;
+  }
+#endif
+
+  (void) memcpy(&nextInfo, &SMCSConfInfo, sizeof(nextInfo));
+  CopyAscii(&nextInfo.SSNMPInfo.strReadCommunityName[0],
+            sizeof(nextInfo.SSNMPInfo.strReadCommunityName),
+            readCommunity);
+  CopyAscii(&nextInfo.SSNMPInfo.strWriteCommunityName[0],
+            sizeof(nextInfo.SSNMPInfo.strWriteCommunityName),
+            writeCommunity);
+  CopyAscii(&nextInfo.SSNMPInfo.strTrapCommunityName[0],
+            sizeof(nextInfo.SSNMPInfo.strTrapCommunityName),
+            trapCommunity);
+
+  (void) memcpy(&SMCSConfInfo, &nextInfo, sizeof(SMCSConfInfo));
+  if (MCSWriteConInfo() == FALSE)
+  {
+    return FALSE;
+  }
+
+  MCSRestartSnmpClient();
+  return TRUE;
+}
+
 uint8_t MCSSetSNMPv3Username(const char *username)
 {
-  size_t len;
+  tSMCSConInfo nextInfo;
 
-  if (username == NULL)
+  if (UsernameValid(username) == FALSE)
   {
     return FALSE;
   }
 
-  len = strlen(username);
-  if ((len < SNMPV3_USERNAME_MIN_SIZE) || (len > SNMPV3_USERNAME_MAX_SIZE))
-  {
-    return FALSE;
-  }
-
-  CopyAscii(&SMCSConfInfo.SSNMPInfo.strV3Username[0],
-            sizeof(SMCSConfInfo.SSNMPInfo.strV3Username),
+  (void) memcpy(&nextInfo, &SMCSConfInfo, sizeof(nextInfo));
+  CopyAscii(&nextInfo.SSNMPInfo.strV3Username[0],
+            sizeof(nextInfo.SSNMPInfo.strV3Username),
             username);
-  return MCSWriteConInfo();
+
+  (void) memcpy(&SMCSConfInfo, &nextInfo, sizeof(SMCSConfInfo));
+  if (MCSWriteConInfo() == FALSE)
+  {
+    return FALSE;
+  }
+
+  MCSRestartSnmpClient();
+  return TRUE;
 }
 
 uint8_t MCSSetSNMPv3Credentials(const char *username,
                                 const char *authPassphrase,
                                 const char *privPassphrase)
 {
+  tSMCSConInfo nextInfo;
+  tSMCSSNMPv3State nextState;
+
   if ((authPassphrase == NULL) || (privPassphrase == NULL))
   {
     return FALSE;
@@ -607,30 +1051,94 @@ uint8_t MCSSetSNMPv3Credentials(const char *username,
     return FALSE;
   }
 
-  if ((username != NULL) && (MCSSetSNMPv3Username(username) == FALSE))
+#if CP_SNMP_STRICT_RELEASE
+  if ((TextEquals(authPassphrase, MCS_DEFAULT_SNMPV3_PASSWORD) != FALSE)
+      || (TextEquals(privPassphrase, MCS_DEFAULT_SNMPV3_PASSWORD) != FALSE))
+  {
+    return FALSE;
+  }
+#endif
+
+  if ((username != NULL) && (UsernameValid(username) == FALSE))
   {
     return FALSE;
   }
 
-  if (MCSDeriveLocalizedKeys(&SMCSSNMPv3State.strEngineId[0],
+  (void) memcpy(&nextInfo, &SMCSConfInfo, sizeof(nextInfo));
+  (void) memcpy(&nextState, &SMCSSNMPv3State, sizeof(nextState));
+  if (username != NULL)
+  {
+    CopyAscii(&nextInfo.SSNMPInfo.strV3Username[0],
+              sizeof(nextInfo.SSNMPInfo.strV3Username),
+              username);
+  }
+
+  if (MCSDeriveLocalizedKeys(&nextState.strEngineId[0],
                              authPassphrase,
                              privPassphrase,
-                             &SMCSSNMPv3State) == FALSE)
+                             &nextState) == FALSE)
   {
     return FALSE;
   }
 
+  (void) memcpy(&SMCSSNMPv3State, &nextState, sizeof(SMCSSNMPv3State));
   if (MCSWriteSNMPv3State() == FALSE)
   {
     return FALSE;
   }
 
-  if (SNMPClientIsStarted())
+  (void) memcpy(&SMCSConfInfo, &nextInfo, sizeof(SMCSConfInfo));
+  if ((username != NULL) && (MCSWriteConInfo() == FALSE))
   {
-    SNMPClientStop();
-    MCSSetSnmpReady(FALSE);
-    SMCSRuntime.bSnmpRetryCountdown = 0U;
+    return FALSE;
   }
+
+  MCSRestartSnmpClient();
+  return TRUE;
+}
+
+uint8_t MCSRestoreSnmpBootstrap(void)
+{
+  if ((SNMPBootstrapInfoValid(&SMCSSNMPBootstrapInfo) == FALSE)
+      || (SNMPv3StateValid(&SMCSSNMPv3BootstrapState) == FALSE))
+  {
+    return FALSE;
+  }
+
+  ApplyBootstrapInfoToActive(&SMCSSNMPBootstrapInfo);
+  (void) memcpy(&SMCSSNMPv3State,
+                &SMCSSNMPv3BootstrapState,
+                sizeof(SMCSSNMPv3State));
+
+  if ((MCSWriteConInfo() == FALSE) || (MCSWriteSNMPv3State() == FALSE))
+  {
+    return FALSE;
+  }
+
+  MCSRestartSnmpClient();
+  return TRUE;
+}
+
+uint8_t MCSCurrentSnmpProfileValid(void)
+{
+  if ((CommunityNameValid(&SMCSConfInfo.SSNMPInfo.strReadCommunityName[0])
+       == FALSE)
+      || (CommunityNameValid(&SMCSConfInfo.SSNMPInfo.strWriteCommunityName[0])
+          == FALSE)
+      || (CommunityNameValid(&SMCSConfInfo.SSNMPInfo.strTrapCommunityName[0])
+          == FALSE)
+      || (UsernameValid(&SMCSConfInfo.SSNMPInfo.strV3Username[0]) == FALSE)
+      || (SNMPv3StateValid(&SMCSSNMPv3State) == FALSE))
+  {
+    return FALSE;
+  }
+
+#if CP_SNMP_STRICT_RELEASE
+  if (InsecureLegacyCommunitiesConfigured(&SMCSConfInfo) != FALSE)
+  {
+    return FALSE;
+  }
+#endif
 
   return TRUE;
 }
@@ -820,6 +1328,8 @@ void MCSRuntimeInit(void)
 void MCSInit(ISerialPort_t *port, IModemPort_t *driver)
 {
   uint32_t baud = 0U;
+  uint8_t bootstrapInfoValid;
+  uint8_t bootstrapStateValid;
 
   s_port = port;
   s_driver = driver;
@@ -836,6 +1346,26 @@ void MCSInit(ISerialPort_t *port, IModemPort_t *driver)
   {
     MCSInitSNMPv3State();
   }
+
+  bootstrapInfoValid =
+    (uint8_t) ((MCSReadSNMPBootstrapInfo() != FALSE)
+               && (SNMPBootstrapInfoValid(&SMCSSNMPBootstrapInfo) != FALSE));
+  bootstrapStateValid =
+    (uint8_t) ((MCSReadSNMPv3BootstrapState() != FALSE)
+               && (SNMPv3StateValid(&SMCSSNMPv3BootstrapState) != FALSE));
+
+#if CP_SNMP_STRICT_RELEASE
+  if ((MCSCurrentSnmpProfileValid() == FALSE) || (bootstrapInfoValid == FALSE)
+      || (bootstrapStateValid == FALSE))
+  {
+    (void) ProvisionReleaseBootstrapProfile();
+  }
+#else
+  if ((bootstrapInfoValid == FALSE) || (bootstrapStateValid == FALSE))
+  {
+    (void) SeedBootstrapStoresFromActive();
+  }
+#endif
 
   s_activeNetworkType = SMCSConfInfo.bNetworkType;
   MCSApplyPowerPolicy();
@@ -1220,13 +1750,16 @@ uint8_t MCSSNMPClientStart(void)
   destination = MCSGetSNMPTrapDestination();
   MCSClearResolvedManagerIp();
 
-  if (!MCSIPv4AddrAtoN(destination, &SMCSRuntime.SResolvedIPv4))
+  if (MCSGetConfiguredTrapDestination(&SMCSRuntime.SResolvedIPv4) == FALSE)
   {
-    if (!MCSResolveDNSString(destination, &SMCSRuntime.SResolvedIPv4))
+    if (!MCSIPv4AddrAtoN(destination, &SMCSRuntime.SResolvedIPv4))
     {
-      MCSJobAdd("SNMP DNS ERR");
-      MCSSetSnmpReady(FALSE);
-      return FALSE;
+      if (!MCSResolveDNSString(destination, &SMCSRuntime.SResolvedIPv4))
+      {
+        MCSJobAdd("SNMP DNS ERR");
+        MCSSetSnmpReady(FALSE);
+        return FALSE;
+      }
     }
   }
 
@@ -1273,6 +1806,7 @@ static void MCSProcessSnmpState(void)
   if (SNMPClientIsStarted())
   {
     MCSSetSnmpReady(TRUE);
+    SNMPClientProcessEventReportTrap();
     return;
   }
 
@@ -1314,7 +1848,7 @@ static void MCSProcessTransportStateMachine(void)
 
   if (ModemPrepareCommand(s_driver,
                           SMCSRuntime.bState,
-                          GetDeviceInfoAPNName(),
+                          CurrentModemApn(),
                           MCSGetSNMPTrapDestination(),
                           0U,
                           cmd,

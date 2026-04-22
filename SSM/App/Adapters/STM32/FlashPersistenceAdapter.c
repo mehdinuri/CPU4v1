@@ -12,130 +12,138 @@
 
 typedef struct
 {
-  uint32_t aSlotAddresses[2];
-  uint16_t sMaxPayloadSize;
-} tSKeySlot;
+  uint32_t slotAddresses[2];
+  uint16_t maxPayloadSize;
+} KeySlot_t;
 
 /* Key → dual-slot flash journal. Each slot lives at the start of one reserved
  * flash page so a new commit never erases the previously valid record first.
  */
-static const tSKeySlot SaKeyTable[PERSIST_KEY__COUNT] =
+static const KeySlot_t keyTable[PERSIST_KEY__COUNT] =
 {
   [PERSIST_KEY_SIGNAL_OUTPUTS_FLASH] = {
     { FLASH_ADDR_USER_SLOT0, FLASH_ADDR_USER_SLOT1 }, 12U
   }
 };
 
-static void RecordReadOrZero(uint32_t lAddress,
-                             tSPersistenceJournalRecord *pOut)
+/* The payload we memcpy out of a record is bounded by
+ * sizeof(PersistenceJournalRecord_t::payload). Every key's maxPayloadSize
+ * must respect that bound, otherwise a Read with size == maxPayloadSize
+ * could walk past the source buffer. Add new keys here if the table grows.
+ */
+_Static_assert(12U <= PERSISTENCE_JOURNAL_MAX_PAYLOAD_SIZE,
+               "SIGNAL_OUTPUTS_FLASH payload exceeds journal record capacity");
+
+static void RecordReadOrZero(uint32_t address,
+                             PersistenceJournalRecord_t *out)
 {
   if (StorageRequest(STORAGE_REQ_FLASH_READ,
-                     lAddress,
-                     pOut,
-                     (uint32_t) sizeof(*pOut)) == 0U)
+                     address,
+                     out,
+                     (uint32_t) sizeof(*out)) == 0U)
   {
-    memset(pOut, 0, sizeof(*pOut));
+    memset(out, 0, sizeof(*out));
   }
 }
 
-static tEPersistenceStatus AdapterRead(void *pCtx,
-                                       tEPersistenceKey eKey,
-                                       void *pOut,
-                                       uint16_t sSize)
+static PersistenceStatus_e AdapterRead(void *ctx,
+                                       PersistenceKey_e eKey,
+                                       void *out,
+                                       uint16_t size)
 {
-  (void) pCtx;
+  (void) ctx;
 
   if (((uint32_t) eKey >= (uint32_t) PERSIST_KEY__COUNT)
-      || (pOut == 0)
-      || (sSize == 0U)
-      || (sSize > SaKeyTable[eKey].sMaxPayloadSize))
+      || (out == 0)
+      || (size == 0U)
+      || (size > keyTable[eKey].maxPayloadSize))
   {
     return PERSIST_FAIL;
   }
 
-  tSPersistenceJournalRecord SaRecords[2];
-  const tSPersistenceJournalRecord *pSLatest;
+  PersistenceJournalRecord_t records[2];
+  const PersistenceJournalRecord_t *latest;
 
-  RecordReadOrZero(SaKeyTable[eKey].aSlotAddresses[0], &SaRecords[0]);
-  RecordReadOrZero(SaKeyTable[eKey].aSlotAddresses[1], &SaRecords[1]);
+  RecordReadOrZero(keyTable[eKey].slotAddresses[0], &records[0]);
+  RecordReadOrZero(keyTable[eKey].slotAddresses[1], &records[1]);
 
-  pSLatest = PersistenceJournal_SelectLatest(&SaRecords[0],
-                                             &SaRecords[1],
-                                             SaKeyTable[eKey].sMaxPayloadSize);
-  if ((pSLatest == 0) || (sSize > pSLatest->sPayloadSize))
+  latest = PersistenceJournal_SelectLatest(&records[0],
+                                           &records[1],
+                                           keyTable[eKey].maxPayloadSize);
+  if ((latest == 0) || (size > latest->payloadSize))
   {
     return PERSIST_FAIL;
   }
 
-  memcpy(pOut, pSLatest->abPayload, sSize);
+  memcpy(out, latest->payload, size);
 
   return PERSIST_OK;
 }
 
-static tEPersistenceStatus AdapterWrite(void *pCtx,
-                                        tEPersistenceKey eKey,
-                                        const void *pIn,
-                                        uint16_t sSize)
+static PersistenceStatus_e AdapterWrite(void *ctx,
+                                        PersistenceKey_e eKey,
+                                        const void *in,
+                                        uint16_t size)
 {
-  (void) pCtx;
+  (void) ctx;
 
   if (((uint32_t) eKey >= (uint32_t) PERSIST_KEY__COUNT)
-      || (pIn == 0)
-      || (sSize == 0U)
-      || (sSize > SaKeyTable[eKey].sMaxPayloadSize))
+      || (in == 0)
+      || (size == 0U)
+      || (size > keyTable[eKey].maxPayloadSize))
   {
     return PERSIST_FAIL;
   }
 
-  tSPersistenceJournalRecord SaRecords[2];
-  const tSPersistenceJournalRecord *pSLatest;
-  tSPersistenceJournalRecord SNewRecord;
-  uint8_t bTargetSlot = 0U;
-  uint32_t lNextSequence = 1U;
+  PersistenceJournalRecord_t records[2];
+  const PersistenceJournalRecord_t *latest;
+  PersistenceJournalRecord_t newRecord;
+  uint8_t targetSlot = 0U;
+  uint32_t nextSequence = 1U;
 
-  RecordReadOrZero(SaKeyTable[eKey].aSlotAddresses[0], &SaRecords[0]);
-  RecordReadOrZero(SaKeyTable[eKey].aSlotAddresses[1], &SaRecords[1]);
+  RecordReadOrZero(keyTable[eKey].slotAddresses[0], &records[0]);
+  RecordReadOrZero(keyTable[eKey].slotAddresses[1], &records[1]);
 
-  pSLatest = PersistenceJournal_SelectLatest(&SaRecords[0],
-                                             &SaRecords[1],
-                                             SaKeyTable[eKey].sMaxPayloadSize);
-  if (pSLatest == &SaRecords[0])
+  latest = PersistenceJournal_SelectLatest(&records[0],
+                                           &records[1],
+                                           keyTable[eKey].maxPayloadSize);
+  if (latest == &records[0])
   {
-    bTargetSlot = 1U;
-    lNextSequence = SaRecords[0].lSequence + 1U;
+    targetSlot = 1U;
+    nextSequence = records[0].sequence + 1U;
   }
-  else if (pSLatest == &SaRecords[1])
+  else if (latest == &records[1])
   {
-    bTargetSlot = 0U;
-    lNextSequence = SaRecords[1].lSequence + 1U;
+    targetSlot = 0U;
+    nextSequence = records[1].sequence + 1U;
   }
 
-  if (PersistenceJournal_RecordBuild(&SNewRecord,
-                                     lNextSequence,
-                                     pIn,
-                                     sSize) == 0U)
+  if (PersistenceJournal_RecordBuild(&newRecord,
+                                     nextSequence,
+                                     in,
+                                     size) == 0U)
   {
     return PERSIST_FAIL;
   }
 
   return (StorageRequest(STORAGE_REQ_FLASH_WRITE,
-                         SaKeyTable[eKey].aSlotAddresses[bTargetSlot],
-                         &SNewRecord,
-                         (uint32_t) sizeof(SNewRecord)) != 0U)
+                         keyTable[eKey].slotAddresses[targetSlot],
+                         &newRecord,
+                         (uint32_t) sizeof(newRecord)) != 0U)
          ? PERSIST_OK : PERSIST_FAIL;
 } /* AdapterWrite */
 
-void FlashPersistenceAdapter_Init(tSFlashPersistenceAdapterCtx *pCtx)
+void FlashPersistenceAdapter_Init(FlashPersistenceAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 }
 
 IPersistencePort_t FlashPersistenceAdapter_CreatePort(
-  tSFlashPersistenceAdapterCtx *pCtx)
+  FlashPersistenceAdapterCtx_t *ctx)
 {
   IPersistencePort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Read = AdapterRead;
   port.Write = AdapterWrite;
 

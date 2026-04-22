@@ -1,30 +1,41 @@
 /* App/Adapters/STM32/LogEventAdapter.c */
 #include "LogEventAdapter.h"
 
-#include "MLM.h"
-
 static uint8_t AdapterAppend(void *ctx,
                              uint8_t eventCode,
                              uint8_t eventParam,
                              uint16_t eventShortParam,
                              uint32_t eventLongParam)
 {
-  (void) ctx;
+  LogEventAdapterCtx_t *adapterCtx = (LogEventAdapterCtx_t *) ctx;
 
-  return LogRequest(LOG_REQ_APPEND_ASYNCH,
-                    NULL,
-                    eventCode,
-                    eventParam,
-                    eventShortParam,
-                    eventLongParam,
-                    0U);
+  if ((adapterCtx == NULL) || (adapterCtx->eventReportService == NULL))
+  {
+    return 0U;
+  }
+
+  EventReportServiceAppendLegacyEvent(adapterCtx->eventReportService,
+                                      eventCode,
+                                      eventParam,
+                                      eventShortParam,
+                                      eventLongParam);
+  return 1U;
 }
 
 void LogEventAdapterInit(LogEventAdapterCtx_t *ctx)
 {
   if (ctx != NULL)
   {
-    ctx->reserved = 0U;
+    ctx->eventReportService = NULL;
+  }
+}
+
+void LogEventAdapterBindEventReportService(LogEventAdapterCtx_t *ctx,
+                                           EventReportService_t *service)
+{
+  if (ctx != NULL)
+  {
+    ctx->eventReportService = service;
   }
 }
 

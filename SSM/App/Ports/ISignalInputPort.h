@@ -16,21 +16,21 @@ typedef struct
   /* 1 = energised high (i.e. GPIO read active). The on-pin is active-low in
    * hardware; the adapter inverts so the domain sees the logical state.
    */
-  uint8_t aChannels[SIGNAL_OUTPUT_CHANNEL_COUNT];
-  uint8_t bCardId;                              /* 0..15 from ID0..ID3 */
-} tSSignalInputSnapshot;
+  uint8_t channels[SIGNAL_OUTPUT_CHANNEL_COUNT];
+  uint8_t cardId;                              /* 0..15 from ID0..ID3 */
+} SignalInputSnapshot_t;
 
 typedef struct ISignalInputPort
 {
-  void *pCtx;
+  void *ctx;
 
-  void (*Sample)(void *pCtx, tSSignalInputSnapshot *pOut);
+  void (*Sample)(void *ctx, SignalInputSnapshot_t *out);
 } ISignalInputPort_t;
 
-static inline void SignalInput_Sample(ISignalInputPort_t *pPort,
-                                      tSSignalInputSnapshot *pOut)
+static inline void SignalInput_Sample(ISignalInputPort_t *port,
+                                      SignalInputSnapshot_t *out)
 {
-  pPort->Sample(pPort->pCtx, pOut);
+  port->Sample(port->ctx, out);
 }
 
 #endif /* PORTS_ISIGNAL_INPUT_PORT_H */

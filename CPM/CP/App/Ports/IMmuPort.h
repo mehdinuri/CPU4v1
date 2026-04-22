@@ -23,6 +23,8 @@ typedef struct
 
   uint8_t (*SetForceAllRed)(void *ctx, uint8_t forceAllRed);
   uint8_t (*SetSafetyAction)(void *ctx, MmuControlAction_t action);
+  uint8_t (*SetConfigReady)(void *ctx, uint8_t configReady);
+  uint8_t (*SetRequiredSsmHealthy)(void *ctx, uint8_t requiredSsmHealthy);
   uint8_t (*FilterOutputImage)(void *ctx,
                                const OutputDriverImage_t *requested,
                                OutputDriverImage_t *approved);
@@ -47,6 +49,27 @@ static inline uint8_t MmuSetSafetyAction(IMmuPort_t *p,
   }
 
   return p->SetSafetyAction(p->ctx, action);
+}
+
+static inline uint8_t MmuSetConfigReady(IMmuPort_t *p, uint8_t configReady)
+{
+  if ((p == NULL) || (p->SetConfigReady == NULL))
+  {
+    return 1U;
+  }
+
+  return p->SetConfigReady(p->ctx, configReady);
+}
+
+static inline uint8_t MmuSetRequiredSsmHealthy(IMmuPort_t *p,
+                                               uint8_t requiredSsmHealthy)
+{
+  if ((p == NULL) || (p->SetRequiredSsmHealthy == NULL))
+  {
+    return 1U;
+  }
+
+  return p->SetRequiredSsmHealthy(p->ctx, requiredSsmHealthy);
 }
 
 static inline uint8_t MmuFilterOutputImage(IMmuPort_t *p,

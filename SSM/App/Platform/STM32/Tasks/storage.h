@@ -27,24 +27,24 @@ typedef enum
   STORAGE_REQ_FLASH_WRITE,
   STORAGE_REQ_FLASH_READ,
   STORAGE_REQ_LAST
-} tEStorageRequestType;
+} StorageRequestType_e;
 
-typedef struct _tSStorageReq
+typedef struct
 {
-  osThreadId_t SThreadId;
-  uint32_t lAddress;
-  void *pvData;
-  uint32_t lDataSize;
-  uint8_t bReqId;
-} tSStorageReq, *tpSStorageReq;
+  osThreadId_t threadId;
+  uint32_t address;
+  void *data;
+  uint32_t dataSize;
+  uint8_t reqId;
+} StorageReq_t;
 
 /* Public type values -------------------------------------------------------------*/
 
 /* Public function prototypes -----------------------------------------------*/
-extern uint8_t StorageRequest(uint8_t bReqId,
-                              uint32_t lAddress,
-                              void *pvData,
-                              uint32_t lDataSize);
+extern uint8_t StorageRequest(uint8_t reqId,
+                              uint32_t address,
+                              void *data,
+                              uint32_t dataSize);
 extern uint8_t StorageFaultLatched(void);
 
 #endif /* __STORAGE_H__ */

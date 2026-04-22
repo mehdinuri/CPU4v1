@@ -22,25 +22,25 @@
  * ---------------------------------------------------------------------------*/
 typedef struct
 {
-  uint32_t lClockFreqHz;        /* timer counter tick rate, e.g. 100000 */
-  uint32_t lCounterMax;          /* 32-bit wraparound boundary, e.g. 0xFFFFFFFF */
-  uint32_t lCaptureTimeoutMs;    /* no-edge timeout window (ms), e.g. 100 */
-  uint8_t  bTargetFreqHz;        /* expected grid frequency, e.g. 50 */
-  uint8_t  bFreqToleranceHz;     /* +/- band around target, e.g. 5 */
-  uint16_t sBadReadingsBeforeSleep; /* threshold to enter standby, e.g. 10 */
-} tSFrequencyCaptureFSMConfig;
+  uint32_t clockFreqHz;        /* timer counter tick rate, e.g. 100000 */
+  uint32_t counterMax;          /* 32-bit wraparound boundary, e.g. 0xFFFFFFFF */
+  uint32_t captureTimeoutMs;    /* no-edge timeout window (ms), e.g. 100 */
+  uint8_t targetFreqHz;         /* expected grid frequency, e.g. 50 */
+  uint8_t freqToleranceHz;      /* +/- band around target, e.g. 5 */
+  uint16_t badReadingsBeforeSleep; /* threshold to enter standby, e.g. 10 */
+} FrequencyCaptureFSMConfig_t;
 
 /* ---------------------------------------------------------------------------
  * Mutable state (written by OnEdge/Evaluate, read by platform wrapper)
  * ---------------------------------------------------------------------------*/
 typedef struct
 {
-  uint32_t lPrevCaptureValue;    /* last raw capture (for diff)           */
-  uint32_t lLastCaptureTimeMs;   /* tick at most recent edge              */
-  uint16_t sBadReadingsCount;    /* strike count toward sleep threshold   */
-  uint8_t  bMeasuredFreqHz;      /* last published frequency (0 on fail)  */
-  uint8_t  fPrimed;               /* 1 after first edge seen              */
-} tSFrequencyCaptureFSMState;
+  uint32_t prevCaptureValue;    /* last raw capture (for diff)           */
+  uint32_t lastCaptureTimeMs;   /* tick at most recent edge              */
+  uint16_t badReadingsCount;    /* strike count toward sleep threshold   */
+  uint8_t measuredFreqHz;       /* last published frequency (0 on fail)  */
+  uint8_t primed;                /* 1 after first edge seen              */
+} FrequencyCaptureFSMState_t;
 
 /* ---------------------------------------------------------------------------
  * Evaluate verdict
@@ -49,8 +49,10 @@ typedef enum
 {
   FREQ_FSM_VERDICT_OK           = 0,  /* freq in tolerance band            */
   FREQ_FSM_VERDICT_BAD          = 1,  /* out of band or no recent capture  */
-  FREQ_FSM_VERDICT_ENTER_SLEEP  = 2   /* strike count reached threshold    */
-} tEFrequencyCaptureFSMVerdict;
+  FREQ_FSM_VERDICT_ENTER_FLASH  = 2   /* strike threshold reached — driver */
+                                      /* should enter flash mode (NOT MCU  */
+                                      /* standby, which PSM does not do)   */
+} FrequencyCaptureFSMVerdict_e;
 
 /* ---------------------------------------------------------------------------
  * API
@@ -58,11 +60,11 @@ typedef enum
 
 /**
  * @brief Reset state to post-init (unprimed, zeroed counters).
- *        @p lNowMs seeds the last-capture timestamp so an Evaluate() called
+ *        @p nowMs seeds the last-capture timestamp so an Evaluate() called
  *        immediately after Init does not misfire a timeout.
  */
-void FrequencyCaptureFSM_Init(tSFrequencyCaptureFSMState *pState,
-                              uint32_t lNowMs);
+void FrequencyCaptureFSM_Init(FrequencyCaptureFSMState_t *state,
+                              uint32_t nowMs);
 
 /**
  * @brief Feed a fresh input-capture value.
@@ -70,27 +72,29 @@ void FrequencyCaptureFSM_Init(tSFrequencyCaptureFSMState *pState,
  * First edge after priming just stores the value and returns 0.
  * Every subsequent edge computes the wraparound-safe diff, derives frequency,
  * updates state, and returns 1 — signalling the caller to publish
- * @c pState->bMeasuredFreqHz.
+ * @c state->measuredFreqHz.
  *
  * @return 1 if a new frequency measurement was produced, 0 on first edge.
  */
-uint8_t FrequencyCaptureFSM_OnEdge(tSFrequencyCaptureFSMState *pState,
-                                   const tSFrequencyCaptureFSMConfig *pCfg,
-                                   uint32_t lCaptureValue,
-                                   uint32_t lNowMs);
+uint8_t FrequencyCaptureFSM_OnEdge(FrequencyCaptureFSMState_t *state,
+                                   const FrequencyCaptureFSMConfig_t *cfg,
+                                   uint32_t captureValue,
+                                   uint32_t nowMs);
 
 /**
  * @brief Periodic validation tick.
  *
  * Checks for capture timeout, resets frequency on timeout, applies tolerance
  * band, and maintains the bad-reading strike count.  Returns the verdict
- * the platform layer should act on — callers hand standby entry to hardware
- * when they see FREQ_FSM_VERDICT_ENTER_SLEEP.
+ * the platform layer should act on — callers force the driver into flash
+ * mode when they see FREQ_FSM_VERDICT_ENTER_FLASH.
  */
-tEFrequencyCaptureFSMVerdict FrequencyCaptureFSM_Evaluate(
-    tSFrequencyCaptureFSMState *pState,
-    const tSFrequencyCaptureFSMConfig *pCfg,
-    uint32_t lNowMs);
+FrequencyCaptureFSMVerdict_e FrequencyCaptureFSM_Evaluate(
+  FrequencyCaptureFSMState_t *state,
+  const
+  FrequencyCaptureFSMConfig_t
+  *cfg,
+  uint32_t nowMs);
 
 #endif /* DOMAIN_FREQUENCY_CAPTURE_FSM_H */
 

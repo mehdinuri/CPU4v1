@@ -8,23 +8,23 @@
 #include "Adapters/STM32/HalTickAdapter.h"
 #include "stm32g4xx_hal.h"
 
-static uint32_t AdapterNow_ms(void *pCtx)
+static uint32_t AdapterNow_ms(void *ctx)
 {
-  (void) pCtx;
+  (void) ctx;
 
   return HAL_GetTick();
 }
 
-void HalTickAdapter_Init(tSHalTickAdapterCtx *pCtx)
+void HalTickAdapter_Init(HalTickAdapterCtx_t *ctx)
 {
-  pCtx->bReserved = 0U;
+  ctx->reserved = 0U;
 }
 
-ITickPort_t HalTickAdapter_CreatePort(tSHalTickAdapterCtx *pCtx)
+ITickPort_t HalTickAdapter_CreatePort(HalTickAdapterCtx_t *ctx)
 {
   ITickPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Now_ms = AdapterNow_ms;
 
   return port;

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MP (Maestro Platform)** is embedded firmware for the **C0502-P251207-CPU4 Maestro Intersection Controlling System** — a traffic signal controller running on an STM32G473 (ARM Cortex-M4 @ 160 MHz, 1 MB Flash, 128 KB SRAM) with FreeRTOS and FDCAN communication.
 
-Current firmware version: **3.4.0.1B** (defined in `Core/Inc/data.h`).
+Current firmware version: **3.4.0.1B** (defined in `Core/Inc/MpVersion.h`).
 
 The sibling project `../CP` (Control Processor) is the peer device that communicates with MP over CAN FD. CP's `CLAUDE.md` documents the hexagonal architecture pattern that MP is being migrated toward.
 
@@ -56,10 +56,7 @@ docker compose -f Tools/Docker/compose.yml run build-test   # host tests + cover
 ### Directory Structure
 
 ```
-Core/          STM32CubeMX-generated HAL init + application data model
-  Inc/data.h   All domain type definitions and constants
-  Src/data.c   All domain state, helper functions, and business logic
-  Src/app_freertos.c  Task creation, queues, and memory pools
+Core/          STM32CubeMX-generated HAL init + low-level platform helpers
 Tasks/         Application task implementations (one .c per FreeRTOS task)
 Drivers/       STM32G4xx HAL + CMSIS (do not modify)
 Middlewares/   FreeRTOS v10 + CMSIS-RTOS V2 wrapper (do not modify)
@@ -68,27 +65,22 @@ cmake/         Toolchain and STM32CubeMX CMake wrappers
 
 ### FreeRTOS Task Structure
 
-All inter-task communication uses FreeRTOS queues and static memory pools defined in `app_freertos.c`.
+The active runtime uses the new platform task layer in `App/Platform/STM32/Tasks/Tasks.c`.
 
 | Task | File | Role |
 |---|---|---|
-| `APP_TASK_CAN_MSG_PARSER` | `Tasks/Src/CANRxTx.c` | Parses incoming CAN messages from CP |
-| `APP_TASK_CAN_MSG_SENDER` | `Tasks/Src/CANRxTx.c` | Transmits CAN responses to CP |
-| `APP_TASK_SIGNAL_OUTPUT_CATCH` | `Tasks/Src/signalOutputCatch.c` | Monitors SSM/PSM lamp output states |
-| `APP_TASK_SIGNAL_CHECK` | `Tasks/Src/signalCheck.c` | Checks lamp voltage/current; detects failures |
-| `APP_TASK_MAINTENANCE` | `Tasks/Src/maintenance.c` | Watchdog feed, device maintenance |
+| `MP_Malfunction` | `App/Platform/STM32/Tasks/Tasks.c` | Steps control-bus RX, field-bus RX, MMU monitoring, and CP↔MP service logic |
+| `MP_Maintenance` | `App/Platform/STM32/Tasks/Tasks.c` | Lightweight periodic maintenance hook |
 
-### Domain Model (Core/Inc/data.h, Core/Src/data.c)
+### Domain Model (App/Domain)
 
-All domain types and global state live here. Key structures:
+The MMU domain is now centered on the clean App-layer services and monitors:
 
-- **Signal Sets** (`SIGNAL_SETS_MAX = 3`): Independent logical signal groups, each with its own signaling mode.
-- **Signals** (`SIGNALS_MAX = 16`): User-defined signal programs composed of three subsignals (Red/Yellow/Green), each with a `sPeriod`.
-- **Signal Outputs** (`SIGNAL_OUTPUTS_MAX = 96`): Physical lamp outputs mapped to SSM/PSM devices.
-- **`tSMPProgramData`**: Full program configuration (sets, signals, outputs).
-- **`tSMPProgramRuntimes`**: Live runtime state across all sets.
-
-Signaling modes: `SIGNALING_MODE_NORMAL`, `SIGNALING_MODE_FLASH`, `SIGNALING_MODE_EMERGENCY_FLASH`, `SIGNALING_MODE_EMERGENCY_DARK`. The emergency flag bit is `0x08` — use `SIGNALING_MODE_EMERGENCY_FLAG` to test.
+- `MalfunctionEngine`: 10 ms MMU orchestrator for SSM/PSM health and channel-fault monitors
+- `FaultMonitorService`: structured NEMA/MMU fault surface and event trace
+- `SafetyDecisionService`: relay/safety action ownership
+- `CpMpLinkService`: CP↔MP configuration, heartbeat, fault status, and fault-event transport
+- `ConfigurationService`: applied MP config image and output mapping state
 
 ### STM32CubeMX Generated Code
 
@@ -109,7 +101,22 @@ typedef struct
 ## Coding Conventions
 
 - **C11** throughout — no C++
-- Naming: existing code uses `snake_case` with `t`/`tp` prefixes for typedefs (`tSSetRuntime`, `tpSSetRuntime`) and `SCREAMING_SNAKE` for constants
+- **Naming** — follow the system-wide rules in the root `CLAUDE.md` § "Naming Conventions (system-wide)":
+  `PascalCase_t` types, `PascalCase_e` enums, `camelCase` variables/fields/params, `SCREAMING_SNAKE_CASE` macros, `g_` / `s_` for scope, **no Hungarian prefixes** (`b` / `s` / `l` / `f` / `p` / `tS` / `tE` / `tp`).
+  MP is **not yet migrated**; legacy `tSSetRuntime` / `tpSSetRuntime` / `bFoo` / `sFoo` style is still present. New code follows the convention above; existing files can be renamed opportunistically when touched.
 - `common.h` provides bit manipulation macros (`GetBitValue`, `SetBitValue`, `ClearBitValue`) and byte-extraction macros (`mMsb`, `mLsb`, `mMsw`, `mLsw`) — use these instead of raw bit operations
 - All peripherals use STM32 HAL (not LL) except where already using LL
 - `__attribute__((packed))` is applied to all structs stored in EEPROM or sent over CAN
+
+## Vendor MIB Maintenance (1.3.6.1.4.1.59748)
+
+MP does not serve SNMP directly, but every field MP publishes over the CP/MP CAN FD link ends up exposed by the CP SNMP agent under the Teknotel enterprise arc `1.3.6.1.4.1.59748`. The canonical `.mib` (vendor "Teknotel Elektronik") lives at `../CP/Docs/TEKNOTEL-CPU4-MIB.mib`. OID arc shape: `teknotel .59748 → transportation .4 → devices .2 → cpu4 .1 → { unit .3, channel .8, cpMpLink .20, driverModule .21 }`.
+
+**Update that `.mib` in the same commit** whenever MP work changes:
+
+- The set of bits in `CpMpFaultGlobalFlags_t` or `CpMpFaultChannelFlags_t` (mirrored by `cpMpLinkGlobalFlags` and `channelFaultFlags`)
+- Enumerations `CpMpConfigState_t` or `CpMpSafetyAction_t` (mirrored by `cpMpLinkConfigState` and `cpMpLinkSafetyAction`)
+- The reason-code namespace reported via `cpMpLinkSafetyReasonCode`
+- Any bump of `CPMP_PROTOCOL_VERSION` (mirrored by `cpMpLinkProtocolVersion`)
+
+Do not add new OIDs under `59748` from MP-side work without a paired CP-side object registration in `CP/App/Domain/NTCIP/MibVendor59748/` (one file per functional group: `UnitObjects.c`, `ChannelFaultObjects.c`, `CpMpLinkObjects.c`, `DriverModuleObjects.c`).

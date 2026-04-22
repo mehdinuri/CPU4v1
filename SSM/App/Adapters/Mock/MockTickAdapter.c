@@ -7,28 +7,28 @@
 #include <string.h>
 #include "Adapters/Mock/MockTickAdapter.h"
 
-static uint32_t MockNow_ms(void *pCtx)
+static uint32_t MockNow_ms(void *ctx)
 {
-  tSMockTickAdapterCtx *pC = (tSMockTickAdapterCtx *) pCtx;
+  MockTickAdapterCtx_t *pC = (MockTickAdapterCtx_t *) ctx;
 
-  return pC->lNow_ms;
+  return pC->nowMs;
 }
 
-void MockTickAdapter_Init(tSMockTickAdapterCtx *pCtx)
+void MockTickAdapter_Init(MockTickAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
-void MockTickAdapter_SetNow(tSMockTickAdapterCtx *pCtx, uint32_t lNow_ms)
+void MockTickAdapter_SetNow(MockTickAdapterCtx_t *ctx, uint32_t nowMs)
 {
-  pCtx->lNow_ms = lNow_ms;
+  ctx->nowMs = nowMs;
 }
 
-ITickPort_t MockTickAdapter_CreatePort(tSMockTickAdapterCtx *pCtx)
+ITickPort_t MockTickAdapter_CreatePort(MockTickAdapterCtx_t *ctx)
 {
   ITickPort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Now_ms = MockNow_ms;
 
   return port;

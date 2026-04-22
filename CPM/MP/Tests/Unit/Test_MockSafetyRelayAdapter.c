@@ -35,7 +35,7 @@ void test_init_sets_relay_open(void)
                           SafetyRelayGetActualState(&g_port, &actual));
   TEST_ASSERT_EQUAL(SAFETY_RELAY_STATE_OPEN, commanded);
   TEST_ASSERT_EQUAL(SAFETY_RELAY_STATE_OPEN, actual);
-  TEST_ASSERT_EQUAL_UINT8(0U, g_ctx.lastRelayDrive);
+  TEST_ASSERT_EQUAL_UINT8(1U, g_ctx.lastRelayDrive);
   TEST_ASSERT_EQUAL_UINT8(1U, g_ctx.lastTriacDrive);
   TEST_ASSERT_EQUAL_UINT32(0U, g_ctx.transitionCount);
 }
@@ -50,7 +50,7 @@ void test_set_state_closes_relay(void)
   TEST_ASSERT_EQUAL_UINT8(1U,
                           SafetyRelayGetCommandedState(&g_port, &commanded));
   TEST_ASSERT_EQUAL(SAFETY_RELAY_STATE_CLOSED, commanded);
-  TEST_ASSERT_EQUAL_UINT8(1U, g_ctx.lastRelayDrive);
+  TEST_ASSERT_EQUAL_UINT8(0U, g_ctx.lastRelayDrive);
   TEST_ASSERT_EQUAL_UINT8(0U, g_ctx.lastTriacDrive);
   TEST_ASSERT_EQUAL_UINT32(1U, g_ctx.transitionCount);
 }
@@ -77,9 +77,6 @@ void test_set_state_counts_each_distinct_transition(void)
 void test_eco_topology_inverts_relay_drive_but_preserves_state_semantics(void)
 {
   SafetyRelayState_t actual;
-
-  MockSafetyRelayAdapterSetTopology(&g_ctx,
-                                    SAFETY_RELAY_TOPOLOGY_ECO_ACTIVE_HIGH_TRIP);
 
   TEST_ASSERT_EQUAL_UINT8(1U, g_ctx.lastRelayDrive);
   TEST_ASSERT_EQUAL_UINT8(1U, g_ctx.lastTriacDrive);

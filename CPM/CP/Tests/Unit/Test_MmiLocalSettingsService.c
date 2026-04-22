@@ -36,10 +36,8 @@ typedef struct
 typedef struct
 {
   UserAuthStoreRecord_t record;
-  uint16_t legacyAdminPin;
   uint8_t loadOk;
   uint8_t saveOk;
-  uint8_t legacyOk;
 } TestUserAuthStoreCtx_t;
 
 static uint8_t TestGetModemType(void *ctx)
@@ -172,19 +170,6 @@ static uint8_t TestSaveAuthRecord(void *ctx, const UserAuthStoreRecord_t *record
   return 1U;
 }
 
-static uint8_t TestLoadLegacyAdminPin(void *ctx, uint16_t *adminPin)
-{
-  TestUserAuthStoreCtx_t *store = (TestUserAuthStoreCtx_t *) ctx;
-
-  if ((store->legacyOk == 0U) || (adminPin == NULL))
-  {
-    return 0U;
-  }
-
-  *adminPin = store->legacyAdminPin;
-  return 1U;
-}
-
 typedef struct
 {
   RtcSnapshot_t snapshot;
@@ -308,7 +293,7 @@ void test_MmiLocalSettingsServiceReadGetsModemAndGps(void)
   TestGpsCtx_t gpsCtx = { 2U, 9U, 1U };
   TestUserSettingsCtx_t userSettingsCtx = { { 1U, 0U, 1U, 1U }, 1U, 1U };
   TestBrokenInputCtx_t brokenInputCtx = { { 1U, 0U }, 1U, 1U };
-  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 1234U, 0U, 1U, 1U };
+  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 0U, 1U };
   TestRtcCtx_t rtcCtx = { { 21U, 26U, 4U, 19U, 7U, 15U, 16U, 17U }, 1U, 1U, 0U };
   TestGpsTimeSyncCtx_t gpsSyncCtx = { 0U, 0U, 0U };
   IModemConfigPort_t modemPort;
@@ -364,7 +349,6 @@ void test_MmiLocalSettingsServiceReadGetsModemAndGps(void)
   authStorePort.ctx = &authStoreCtx;
   authStorePort.Load = TestLoadAuthRecord;
   authStorePort.Save = TestSaveAuthRecord;
-  authStorePort.LoadLegacyAdminPin = TestLoadLegacyAdminPin;
 
   UserAuthServiceInit(&authService);
   UserAuthServiceBind(&authService, &authStorePort);
@@ -472,7 +456,7 @@ void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
   TestGpsCtx_t gpsCtx = { 1U, 3U, 1U };
   TestUserSettingsCtx_t userSettingsCtx = { { 0U, 0U, 0U, 0U }, 1U, 1U };
   TestBrokenInputCtx_t brokenInputCtx = { { 1U, 1U }, 1U, 1U };
-  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 1234U, 0U, 1U, 1U };
+  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 0U, 1U };
   TestRtcCtx_t rtcCtx = { { 21U, 26U, 4U, 19U, 7U, 15U, 16U, 17U }, 1U, 1U, 0U };
   TestGpsTimeSyncCtx_t gpsSyncCtx = { 0U, 0U, 0U };
   IModemConfigPort_t modemPort;
@@ -492,7 +476,10 @@ void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
   MmiLocalGpsSettingsV2_t gpsSettings = { 2U, 9U, { 0U, 0U } };
   MmiLocalUserFlagsV2_t userFlags = { 1U, 1U, 0U, 1U };
   MmiLocalBrokenInputSettingsV2_t brokenInput = { 0U, 1U, { 0U, 0U } };
-  MmiLocalAdminPasswordChangeV2_t adminPasswordChange = { 1234U, 2468U };
+  MmiLocalAdminPasswordChangeV2_t adminPasswordChange = {
+    USER_AUTH_DEFAULT_ADMIN_PIN,
+    2468U
+  };
   MmiLocalClockSettingsV2_t clockSettings = { 50U, 59U, 18U, 21U, 4U, 26U, 21U, 2U };
 
   modemPort.ctx = &modemCtx;
@@ -526,7 +513,6 @@ void test_MmiLocalSettingsServiceWritePersistsValidatedSettings(void)
   authStorePort.ctx = &authStoreCtx;
   authStorePort.Load = TestLoadAuthRecord;
   authStorePort.Save = TestSaveAuthRecord;
-  authStorePort.LoadLegacyAdminPin = TestLoadLegacyAdminPin;
 
   UserAuthServiceInit(&authService);
   UserAuthServiceBind(&authService, &authStorePort);
@@ -621,7 +607,7 @@ void test_MmiLocalSettingsServiceRejectsInvalidValuesAndUnsupportedResources(voi
   TestGpsCtx_t gpsCtx = { 1U, 3U, 1U };
   TestUserSettingsCtx_t userSettingsCtx = { { 0U, 0U, 0U, 0U }, 1U, 1U };
   TestBrokenInputCtx_t brokenInputCtx = { { 1U, 1U }, 1U, 1U };
-  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 1234U, 0U, 1U, 1U };
+  TestUserAuthStoreCtx_t authStoreCtx = { { 0U }, 0U, 1U };
   TestRtcCtx_t rtcCtx = { { 21U, 26U, 4U, 19U, 7U, 15U, 16U, 17U }, 1U, 1U, 0U };
   TestGpsTimeSyncCtx_t gpsSyncCtx = { 1U, 1U, 0U };
   IModemConfigPort_t modemPort;
@@ -639,7 +625,10 @@ void test_MmiLocalSettingsServiceRejectsInvalidValuesAndUnsupportedResources(voi
   MmiLocalSettingsService_t service;
   MmiLocalModemSettingsV2_t modemSettings = { 99U, { 0U, 0U, 0U } };
   MmiLocalGpsSettingsV2_t gpsSettings = { 4U, 0U, { 0U, 0U } };
-  MmiLocalAdminPasswordChangeV2_t adminPasswordChange = { 1234U, 0U };
+  MmiLocalAdminPasswordChangeV2_t adminPasswordChange = {
+    USER_AUTH_DEFAULT_ADMIN_PIN,
+    0U
+  };
   MmiLocalClockSettingsV2_t invalidClockSettings = { 0U, 0U, 24U, 31U, 2U, 26U, 21U, 2U };
   MmiLocalClockSettingsV2_t gpsOwnedClockSettings = { 1U, 2U, 3U, 4U, 5U, 26U, 21U, 1U };
   uint8_t payload[8];
@@ -676,7 +665,6 @@ void test_MmiLocalSettingsServiceRejectsInvalidValuesAndUnsupportedResources(voi
   authStorePort.ctx = &authStoreCtx;
   authStorePort.Load = TestLoadAuthRecord;
   authStorePort.Save = TestSaveAuthRecord;
-  authStorePort.LoadLegacyAdminPin = TestLoadLegacyAdminPin;
 
   UserAuthServiceInit(&authService);
   UserAuthServiceBind(&authService, &authStorePort);

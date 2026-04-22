@@ -1,8 +1,7 @@
 /* App/Adapters/STM32/MmuAdapter.h
  *
- * Conservative MMU filter adapter. Until the dedicated MMU module-bus
- * contract is implemented, this adapter either passes the requested image
- * through unchanged or forces an all-red safe state.
+ * CP-side output enforcement adapter. MP decides the MMU safety action; CP
+ * applies that action to relay drive and approved output images.
  */
 #ifndef MMU_ADAPTER_H
 #define MMU_ADAPTER_H
@@ -25,6 +24,8 @@ typedef struct
   OutputDriverImage_t lastApprovedImage;
   IRelayPort_t *relayPort;
   uint8_t forceAllRed;
+  uint8_t configReady;
+  uint8_t requiredSsmHealthy;
   uint8_t permitOutputPower;
   uint8_t lastRelayDrive;
   MmuControlAction_t safetyAction;
@@ -39,6 +40,9 @@ void MmuAdapterBindRelayControlService(MmuAdapterCtx_t *ctx,
 void MmuAdapterSetRelayTopology(MmuAdapterCtx_t *ctx,
                                 MmuRelayTopology_t topology);
 void MmuAdapterSetForceAllRed(MmuAdapterCtx_t *ctx, uint8_t forceAllRed);
+void MmuAdapterSetConfigReady(MmuAdapterCtx_t *ctx, uint8_t configReady);
+void MmuAdapterSetRequiredSsmHealthy(MmuAdapterCtx_t *ctx,
+                                     uint8_t requiredSsmHealthy);
 void MmuAdapterSetSafetyAction(MmuAdapterCtx_t *ctx, MmuControlAction_t action);
 uint8_t MmuAdapterGetPermitOutputPower(const MmuAdapterCtx_t *ctx);
 uint8_t MmuAdapterGetLastRelayDrive(const MmuAdapterCtx_t *ctx);

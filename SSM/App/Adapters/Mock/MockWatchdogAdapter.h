@@ -13,11 +13,11 @@
 
 typedef struct
 {
-  uint32_t lRefreshCount;
-} tSMockWatchdogAdapterCtx;
+  uint32_t refreshCount;
+} MockWatchdogAdapterCtx_t;
 
-void MockWatchdogAdapter_Init(tSMockWatchdogAdapterCtx *pCtx);
-IWatchdogPort_t MockWatchdogAdapter_CreatePort(tSMockWatchdogAdapterCtx *pCtx);
+void MockWatchdogAdapter_Init(MockWatchdogAdapterCtx_t *ctx);
+IWatchdogPort_t MockWatchdogAdapter_CreatePort(MockWatchdogAdapterCtx_t *ctx);
 
 #endif /* ADAPTERS_MOCK_WATCHDOG_ADAPTER_H */
 

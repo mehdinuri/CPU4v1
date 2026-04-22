@@ -58,7 +58,7 @@ typedef StaticMemPool_t osStaticMemPoolDef_t;
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 osMemoryPoolId_t CANRxReqsMemPoolHandle;
-uint8_t CANRxReqsMemPoolBuf[32 * sizeof(tSFDCANRxMsg)];
+uint8_t CANRxReqsMemPoolBuf[32 * sizeof(FdcanRxMsg_t)];
 osStaticMemPoolDef_t CANRxReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t CANRxReqsMemPool_attributes = {
   .name = "CANRxReqsMemPool",
@@ -69,7 +69,7 @@ const osMemoryPoolAttr_t CANRxReqsMemPool_attributes = {
 };
 
 osMemoryPoolId_t CANTxReqsMemPoolHandle;
-uint8_t CANTxReqsMemPoolBuf[32 * sizeof(tSFDCANTxMsg)];
+uint8_t CANTxReqsMemPoolBuf[32 * sizeof(FdcanTxMsg_t)];
 osStaticMemPoolDef_t CANTxReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t CANTxReqsMemPool_attributes = {
   .name = "CANTxReqsMemPool",
@@ -80,7 +80,7 @@ const osMemoryPoolAttr_t CANTxReqsMemPool_attributes = {
 };
 
 osMemoryPoolId_t StorageReqsMemPoolHandle;
-uint8_t StorageReqsMemPoolBuf[16 * sizeof(tSStorageReq)];
+uint8_t StorageReqsMemPoolBuf[16 * sizeof(StorageReq_t)];
 osStaticMemPoolDef_t StorageReqsMemPoolCtrlBlk;
 const osMemoryPoolAttr_t StorageReqsMemPool_attributes = {
   .name = "StorageReqsMemPool",
@@ -152,7 +152,7 @@ const osThreadAttr_t StorageTask_attributes = {
 };
 /* Definitions for CANRxReqsQueue */
 osMessageQueueId_t CANRxReqsQueueHandle;
-uint8_t CANRxReqsQueueBuf[32 * sizeof(tpSFDCANRxMsg)];
+uint8_t CANRxReqsQueueBuf[32 * sizeof(FdcanRxMsg_t *)];
 osStaticMessageQDef_t CANRxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
   .name = "CANRxReqsQueue",
@@ -163,7 +163,7 @@ const osMessageQueueAttr_t CANRxReqsQueue_attributes = {
 };
 /* Definitions for CANTxReqsQueue */
 osMessageQueueId_t CANTxReqsQueueHandle;
-uint8_t CANTxReqsQueueBuf[32 * sizeof(tpSFDCANTxMsg)];
+uint8_t CANTxReqsQueueBuf[32 * sizeof(FdcanTxMsg_t *)];
 osStaticMessageQDef_t CANTxReqsQueueCtrlBlk;
 const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
   .name = "CANTxReqsQueue",
@@ -174,7 +174,7 @@ const osMessageQueueAttr_t CANTxReqsQueue_attributes = {
 };
 /* Definitions for StorageReqsQueue */
 osMessageQueueId_t StorageReqsQueueHandle;
-uint8_t StorageReqsQueueBuf[16 * sizeof(tpSStorageReq)];
+uint8_t StorageReqsQueueBuf[16 * sizeof(StorageReq_t *)];
 osStaticMessageQDef_t StorageReqsQueueCtrlBlk;
 const osMessageQueueAttr_t StorageReqsQueue_attributes = {
   .name = "StorageReqsQueue",
@@ -246,17 +246,17 @@ void MX_FREERTOS_Init(void)
   /* add memory pools, ... */
   /* creation of CANRxReqsMemPool */
   CANRxReqsMemPoolHandle = osMemoryPoolNew(32,
-                                           sizeof(tSFDCANRxMsg),
+                                           sizeof(FdcanRxMsg_t),
                                            &CANRxReqsMemPool_attributes);
 
   /* creation of CANTxReqsMemPool */
   CANTxReqsMemPoolHandle = osMemoryPoolNew(32,
-                                           sizeof(tSFDCANTxMsg),
+                                           sizeof(FdcanTxMsg_t),
                                            &CANTxReqsMemPool_attributes);
 
   /* creation of NewMeasurementsMemPool */
   StorageReqsMemPoolHandle = osMemoryPoolNew(16,
-                                             sizeof(tSStorageReq),
+                                             sizeof(StorageReq_t),
                                              &StorageReqsMemPool_attributes);
 
   if (CANRxReqsMemPoolHandle == NULL)
@@ -296,17 +296,17 @@ void MX_FREERTOS_Init(void)
   /* Create the queue(s) */
   /* creation of CANRxReqsQueue */
   CANRxReqsQueueHandle = osMessageQueueNew(32,
-                                           sizeof(tpSFDCANRxMsg),
+                                           sizeof(FdcanRxMsg_t *),
                                            &CANRxReqsQueue_attributes);
 
   /* creation of CANTxReqsQueue */
   CANTxReqsQueueHandle = osMessageQueueNew(32,
-                                           sizeof(tpSFDCANTxMsg),
+                                           sizeof(FdcanTxMsg_t *),
                                            &CANTxReqsQueue_attributes);
 
   /* creation of StorageReqsQueue */
   StorageReqsQueueHandle = osMessageQueueNew(16,
-                                             sizeof(tpSStorageReq),
+                                             sizeof(StorageReq_t *),
                                              &StorageReqsQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -413,8 +413,8 @@ void MaintenanceTaskFunc(void *argument)
    * cadence stays this task's responsibility (see Watchdog_Refresh below).
    */
   #ifndef DEBUG
-  uint32_t lActiveTaskFlags = 0;
-  uint8_t bTaskFailures = 0;
+  uint32_t activeTaskFlags = 0;
+  uint8_t taskFailures = 0;
   #endif
 
   /* Infinite loop */
@@ -423,33 +423,33 @@ void MaintenanceTaskFunc(void *argument)
     #ifndef DEBUG
     osEventFlagsClear(MaintenanceEventHandle,
                       EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL);
-    uint32_t lFlags = osEventFlagsWait(MaintenanceEventHandle,
+    uint32_t flags = osEventFlagsWait(MaintenanceEventHandle,
                                        EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL,
                                        osFlagsWaitAll,
                                        MAINTENANCE_TASK_MAX_TIMEOUT);
 
-    if ((lFlags & EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL)
+    if ((flags & EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL)
         != EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL)
     {
-      if (lActiveTaskFlags != lFlags)
+      if (activeTaskFlags != flags)
       {
-        lActiveTaskFlags = lFlags;
+        activeTaskFlags = flags;
       }
 
-      if (bTaskFailures++ > MAINTENANCE_MAX_TASK_FAILURES)
+      if (taskFailures++ > MAINTENANCE_MAX_TASK_FAILURES)
       {
-        bTaskFailures = 0;
+        taskFailures = 0;
 
         Error_Handler();
       }
     }
     else
     {
-      lActiveTaskFlags = lFlags;
-      bTaskFailures = 0;
+      activeTaskFlags = flags;
+      taskFailures = 0;
     }
 
-    Watchdog_Refresh(&g_WatchdogPort);
+    Watchdog_Refresh(&g_watchdogPort);
     #else  /* ifndef DEBUG */
     osDelay(10);
     #endif /* ifndef DEBUG */

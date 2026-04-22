@@ -1,33 +1,33 @@
 /**
  ******************************************************************************
  * @file    Domain/SignalOutputImageBuilder.c
- * @brief   Pure-computation builder for tSSignalOutputImage.
+ * @brief   Pure-computation builder for SignalOutputImage_t.
  ******************************************************************************
  */
 
 #include "Domain/SignalOutputImageBuilder.h"
 
-void SignalOutputImageBuilder_Build(const tSSignalOutputBuildInputs *pInputs,
-                                    tSSignalOutputImage *pImage)
+void SignalOutputImageBuilder_Build(const SignalOutputBuildInputs_t *inputs,
+                                    SignalOutputImage_t *image)
 {
   uint8_t i;
 
   for (i = 0U; i < SIGNAL_OUTPUT_CHANNEL_COUNT; i++)
   {
-    if (pInputs->bFlashActive != 0U)
+    if (inputs->flashActive != 0U)
     {
-      if (pInputs->bFlashSyncActive != 0U)
+      if (inputs->flashSyncActive != 0U)
       {
-        pImage->aChannels[i] = (pInputs->aFlashChannels[i] != 0U) ? 1U : 0U;
+        image->channels[i] = (inputs->flashChannels[i] != 0U) ? 1U : 0U;
       }
       else
       {
-        pImage->aChannels[i] = 0U;
+        image->channels[i] = 0U;
       }
     }
     else
     {
-      pImage->aChannels[i] = (pInputs->aRunChannels[i] != 0U) ? 1U : 0U;
+      image->channels[i] = (inputs->runChannels[i] != 0U) ? 1U : 0U;
     }
   }
 }

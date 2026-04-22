@@ -9,10 +9,11 @@
 #include "cmsis_os2.h"
 
 #include "Adapters/STM32/ControlBusAdapter.h"
-#include "Adapters/STM32/FieldOutputCanAdapter.h"
-#include "Adapters/STM32/FieldInputCanAdapter.h"
+#include "Adapters/STM32/FieldBusTxAdapter.h"
+#include "Adapters/STM32/FieldBusRxAdapter.h"
 #include "Adapters/STM32/MmiCanAdapter.h"
 #include "DomainServices.h"
+#include "HardwarePorts.h"
 
 #define INTERSECTION_CONTROL_TASK_PERIOD_MS 10U
 
@@ -28,15 +29,22 @@ void IntersectionControlTaskFunc(void *argument)
 
   for (;;)
   {
-    FieldInputCanAdapterStep();
+    FieldBusRxAdapterStep();
     ControlBusAdapterStep(MainApplicationGetControlBusAdapter());
     CpMpLinkServiceStep(&g_cpMpLinkService);
+    (void) MmuSetConfigReady(&g_mmuPort,
+                             ConfigurationServiceIsLoadedFromRepository(
+                               &g_configurationService));
     (void) IntersectionControllerStep(&g_intersectionController);
-    FieldOutputCanAdapterStep();
+    FieldBusTxAdapterStep();
     DetectorReportServiceStep(&g_detectorReportService);
     GlobalTimeManagementServiceStep(&g_globalTimeManagementService);
     (void) UiCommsIdentityServiceRefresh(&g_uiCommsIdentityService);
     (void) UiDoorServiceStep(&g_uiDoorService, wakeTick);
+    EventReportServiceUpdateCpMpLinkHealthy(
+      &g_eventReportService,
+      CpMpLinkServicePeerHealthy(&g_cpMpLinkService));
+    EventReportServiceStep(&g_eventReportService, wakeTick);
     (void) MmiSnapshotCacheRefresh(&g_mmiSnapshotCache);
     if (UiDoorServiceConsumeChanged(&g_uiDoorService) != 0U)
     {

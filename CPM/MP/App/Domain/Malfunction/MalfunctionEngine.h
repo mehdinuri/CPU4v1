@@ -3,8 +3,8 @@
  * 10 ms orchestrator for the TS2 MMU behaviour. Owns every monitor
  * context. Per tick: pulls a field-bus snapshot, derives commanded
  * and measured channel-state images, runs all monitors, and forwards
- * emitted faults into the event log, safety-decision service, fault-
- * monitor surface, and unit alarm service.
+ * emitted faults into the safety-decision service, fault-monitor
+ * surface, and unit alarm service.
  *
  * The engine has no HAL or RTOS dependencies; a platform task calls
  * MalfunctionEngineTick() on a 10 ms period.
@@ -29,15 +29,15 @@
 #include "Malfunction/RedFailMonitor.h"
 #include "Malfunction/SafetyDecisionService.h"
 #include "Malfunction/SignalSequenceMonitor.h"
-#include "Ports/IEventLogPort.h"
 #include "Ports/IFieldBusPort.h"
+#include "Ports/ISystemMonitorPort.h"
 
 typedef struct
 {
   /* Collaborators (not owned) */
   const ConfigurationService_t *config;
   IFieldBusPort_t *fieldBus;
-  IEventLogPort_t *eventLog;
+  ISystemMonitorPort_t *systemMonitor;
   SafetyDecisionService_t *safety;
   FaultMonitorService_t *faultMonitor;
   UnitAlarmService_t *unitAlarm;
@@ -58,12 +58,18 @@ typedef struct
   uint32_t tickCount;
   uint32_t faultsEmittedLastTick;
   uint32_t totalFaultsEmitted;
+  uint8_t batteryLowActive;
+  uint8_t temperatureHighActive;
+  uint8_t batteryLowSampleCount;
+  uint8_t batteryRecoverySampleCount;
+  uint8_t temperatureHighSampleCount;
+  uint8_t temperatureRecoverySampleCount;
 } MalfunctionEngine_t;
 
 void MalfunctionEngineInit(MalfunctionEngine_t *engine,
                            const ConfigurationService_t *config,
                            IFieldBusPort_t *fieldBus,
-                           IEventLogPort_t *eventLog,
+                           ISystemMonitorPort_t *systemMonitor,
                            SafetyDecisionService_t *safety,
                            FaultMonitorService_t *faultMonitor,
                            UnitAlarmService_t *unitAlarm);

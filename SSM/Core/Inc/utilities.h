@@ -34,12 +34,12 @@
 
 #define NUM_BITS_IN_BYTE 8
 
-#define GET_BIT_VALUE(x, i) ((x & (1 << i)) >> i)
-#define SET_BIT_VALUE(x, i) (x = (x | (1 << i)))
-#define CLEAR_BIT_VALUE(x, i) (x = ~((~x) | (1 << i)))
+#define GET_BIT_VALUE(x, i)   (((x) >> (i)) & 1U)
+#define SET_BIT_VALUE(x, i)   ((x) |=  (1UL << (i)))
+#define CLEAR_BIT_VALUE(x, i) ((x) &= ~(1UL << (i)))
 
-#define GET_MOST_SIG_BIT(x) ((unsigned char) ((x & 0xFF00) >> 8))
-#define GET_LEASTT_SIG_BIT(x) ((unsigned char) (x & 0x00FF))
+#define GET_MOST_SIG_BIT(x)  ((unsigned char) (((x) & 0xFF00U) >> 8))
+#define GET_LEAST_SIG_BIT(x) ((unsigned char)  ((x) & 0x00FFU))
 
 #define ONE_MILLI_SECOND 1
 #define ONE_DECI_SECOND 10
@@ -115,6 +115,12 @@
 #define EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT FLAG_BIT_19
 #define EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT FLAG_BIT_20
 #define EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT FLAG_BIT_21
+
+/* Raised when CAN Rx has silently dropped more than CAN_RX_OVERRUN_THRESHOLD
+ * consecutive frames because the Rx queue or memory pool was full. Sticky:
+ * surfaces prolonged backpressure even after the condition clears.
+ */
+#define EVENT_FLAGS_MAINTENANCE_CAN_RX_OVERRUN FLAG_BIT_22
 #define EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT FLAG_BIT_23
 
 #define EVENT_FLAGS_MAINTENANCE_HEARTBEAT_ALL ( \
@@ -130,6 +136,7 @@
         EVENT_FLAGS_MAINTENANCE_CAN_RX_FAULT | \
         EVENT_FLAGS_MAINTENANCE_CAN_TX_FAULT | \
         EVENT_FLAGS_MAINTENANCE_STORAGE_FAULT | \
+        EVENT_FLAGS_MAINTENANCE_CAN_RX_OVERRUN | \
         EVENT_FLAGS_MAINTENANCE_LAMP_OUT_FAULT)
 
 /* Public macros ------------------------------------------------------------*/
@@ -151,7 +158,7 @@ extern osMemoryPoolId_t StorageReqsMemPoolHandle;
 
 extern osEventFlagsId_t MaintenanceEventHandle;
 
-extern const uint32_t laUtilsBitValues[32];
+extern const uint32_t utilsBitValues[32];
 
 extern void MaintenanceTaskSignal(uint32_t ulSignal);
 extern uint32_t MaintenanceTaskFaultsGet(void);

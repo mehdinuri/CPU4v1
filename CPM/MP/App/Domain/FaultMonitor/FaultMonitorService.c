@@ -255,6 +255,52 @@ void FaultMonitorServiceReadAndAck(FaultMonitorService_t *service,
   FaultMonitorStatusClear(&service->statusSinceLastRead);
 }
 
+uint32_t FaultMonitorServiceGetTotalFaults(
+  const FaultMonitorService_t *service)
+{
+  return (service != NULL) ? service->totalFaults : 0U;
+}
+
+uint8_t FaultMonitorServiceGetEventBySequence(
+  const FaultMonitorService_t *service,
+  uint32_t sequence,
+  FaultEvent_t *outEvent)
+{
+  uint32_t traceSize;
+  uint32_t earliestSequence;
+  uint32_t reverseIndex;
+  const FaultEvent_t *event;
+
+  if ((service == NULL) || (outEvent == NULL) || (sequence == 0U)
+      || (sequence > service->totalFaults))
+  {
+    return 0U;
+  }
+
+  traceSize = FaultMonitorTraceSize(&service->trace);
+  if (traceSize == 0U)
+  {
+    return 0U;
+  }
+
+  earliestSequence = service->totalFaults - traceSize + 1U;
+  if (sequence < earliestSequence)
+  {
+    return 0U;
+  }
+
+  reverseIndex = service->totalFaults - sequence;
+  event = FaultMonitorTraceAt(&service->trace, reverseIndex);
+  if (event == NULL)
+  {
+    return 0U;
+  }
+
+  *outEvent = *event;
+
+  return 1U;
+}
+
 const FaultMonitorTrace_t *FaultMonitorServiceGetTrace(
   const FaultMonitorService_t *service)
 {

@@ -31,7 +31,7 @@ services:
         find . -name '*.gcda' -delete &&
         ctest --output-on-failure &&
         mkdir -p /workspace/build/coverage-report &&
-        gcovr --root /workspace --filter /workspace/App/Domain --html-details /workspace/build/coverage-report/index.html --xml /workspace/build/coverage-report/coverage.xml --print-summary .
+        gcovr --config /workspace/gcovr.cfg --gcov-ignore-parse-errors --root /workspace --html-details /workspace/build/coverage-report/index.html --xml /workspace/build/coverage-report/coverage.xml --print-summary .
       "
 
   # Interactive development shell with ARM toolchain

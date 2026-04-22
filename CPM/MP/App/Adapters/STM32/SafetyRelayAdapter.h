@@ -21,6 +21,7 @@ typedef struct
   uint8_t lastTriacDrive;
 } SafetyRelayAdapterCtx_t;
 
+/* Initialise the adapter in the physical safe state for the active-low relay. */
 void SafetyRelayAdapterInit(SafetyRelayAdapterCtx_t *ctx);
 void SafetyRelayAdapterSetTopology(SafetyRelayAdapterCtx_t *ctx,
                                    SafetyRelayTopology_t topology);

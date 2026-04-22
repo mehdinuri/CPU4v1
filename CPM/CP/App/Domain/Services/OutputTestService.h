@@ -9,7 +9,7 @@
 typedef struct
 {
   uint8_t enabled;
-  uint16_t forcedMask;
+  uint32_t forcedMask;
   OutputDriverAspect_t forcedAspects[INTERSECTION_CHANNEL_COUNT_MAX];
   uint32_t changeSequence;
 } OutputTestService_t;
@@ -26,7 +26,7 @@ uint8_t OutputTestServiceApply(const OutputTestService_t *service,
                                const OutputDriverImage_t *requested,
                                OutputDriverImage_t *target);
 uint8_t OutputTestServiceIsEnabled(const OutputTestService_t *service);
-uint16_t OutputTestServiceGetForcedMask(const OutputTestService_t *service);
+uint32_t OutputTestServiceGetForcedMask(const OutputTestService_t *service);
 uint8_t OutputTestServiceGetChannelAspect(const OutputTestService_t *service,
                                           uint8_t channelNumber,
                                           OutputDriverAspect_t *aspect);

@@ -82,18 +82,18 @@ static const uint32_t kCrc32Table[256] =
   0xB40BBE37U, 0xC30C8EA1U, 0x5A05DF1BU, 0x2D02EF8DU
 };
 
-uint32_t Crc32_Compute(const void *pData, uint16_t sLen)
+uint32_t Crc32_Compute(const void *data, uint16_t len)
 {
-  const uint8_t *pbData = (const uint8_t *) pData;
-  uint32_t lCrc = 0xFFFFFFFFU;
+  const uint8_t *bytes = (const uint8_t *) data;
+  uint32_t crc = 0xFFFFFFFFU;
   uint16_t i;
 
-  for (i = 0U; i < sLen; i++)
+  for (i = 0U; i < len; i++)
   {
-    lCrc = (lCrc >> 8) ^ kCrc32Table[(lCrc ^ pbData[i]) & 0xFFU];
+    crc = (crc >> 8) ^ kCrc32Table[(crc ^ bytes[i]) & 0xFFU];
   }
 
-  return lCrc ^ 0xFFFFFFFFU;
+  return crc ^ 0xFFFFFFFFU;
 }
 
 /************************ (C) COPYRIGHT TEKNOTEL ELEKTRONIK ****END OF FILE****/

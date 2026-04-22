@@ -118,6 +118,7 @@ static uint32_t BuildSessionKey(void)
   }
 
   hash = HashBytes(hash, &identity.version, 1U);
+  hash = HashBytes(hash, &identity.security_level, 1U);
   hash = HashBytes(hash,
                    (const uint8_t *) &identity.source_ip,
                    (uint16_t) sizeof(identity.source_ip));
@@ -131,6 +132,71 @@ static uint32_t BuildSessionKey(void)
   }
 
   return hash;
+}
+
+static uint8_t RequestAuthModelFromIdentity(const snmp_request_identity_t *identity)
+{
+  if (identity == NULL)
+  {
+    return (uint8_t) NTCIP_AUTH_MODEL_UNKNOWN;
+  }
+
+  switch (identity->version)
+  {
+    case SNMP_VERSION_1:
+      return (uint8_t) NTCIP_AUTH_MODEL_SNMP_V1;
+
+    case SNMP_VERSION_2c:
+      return (uint8_t) NTCIP_AUTH_MODEL_SNMP_V2C;
+
+    case SNMP_VERSION_3:
+      return (uint8_t) NTCIP_AUTH_MODEL_SNMP_V3;
+
+    default:
+      return (uint8_t) NTCIP_AUTH_MODEL_UNKNOWN;
+  }
+}
+
+static uint8_t RequestSecurityLevelFromIdentity(
+  const snmp_request_identity_t *identity)
+{
+  if (identity == NULL)
+  {
+    return (uint8_t) NTCIP_SECURITY_LEVEL_NONE;
+  }
+
+  switch (identity->security_level)
+  {
+    case 0x00U:
+      return (uint8_t) NTCIP_SECURITY_LEVEL_NOAUTH_NOPRIV;
+
+    case 0x01U:
+      return (uint8_t) NTCIP_SECURITY_LEVEL_AUTH_NOPRIV;
+
+    case 0x03U:
+      return (uint8_t) NTCIP_SECURITY_LEVEL_AUTH_PRIV;
+
+    default:
+      return (uint8_t) NTCIP_SECURITY_LEVEL_NONE;
+  }
+}
+
+static void PopulateRequestAuthContext(NtcipRequestContext_t *requestContext)
+{
+  snmp_request_identity_t identity;
+
+  if (requestContext == NULL)
+  {
+    return;
+  }
+
+  if (snmp_get_current_request_identity(&identity) == 0U)
+  {
+    return;
+  }
+
+  requestContext->authModel = RequestAuthModelFromIdentity(&identity);
+  requestContext->securityLevel = RequestSecurityLevelFromIdentity(&identity);
 }
 
 static uint8_t DefaultAsn1TypeForDescriptor(
@@ -170,6 +236,12 @@ static uint8_t DefaultAsn1TypeForDescriptor(
 
     case NTCIP_VALUE_TYPE_OCTET_STRING:
       return SNMP_ASN1_TYPE_OCTET_STRING;
+
+    case NTCIP_VALUE_TYPE_OPAQUE:
+      return SNMP_ASN1_TYPE_OPAQUE;
+
+    case NTCIP_VALUE_TYPE_IP_ADDRESS:
+      return SNMP_ASN1_TYPE_IPADDR;
 
     default:
       return 0U;
@@ -457,6 +529,7 @@ static s16_t ManagedGetValue(struct snmp_node_instance *instance, void *value)
   LWIPSNMPAdapterBuildRequestContext(spAdapterCtx,
                                      BuildSessionKey(),
                                      &requestContext);
+  PopulateRequestAuthContext(&requestContext);
 
   if (LWIPSNMPAdapterGet(spAdapterCtx,
                          oid,
@@ -514,6 +587,30 @@ static s16_t ManagedGetValue(struct snmp_node_instance *instance, void *value)
       length = (s16_t) managedValue.data.octetString.length;
       break;
 
+    case NTCIP_VALUE_TYPE_OPAQUE:
+      if (instance->asn1_type != SNMP_ASN1_TYPE_OPAQUE)
+      {
+        return -1;
+      }
+
+      MEMCPY(value,
+             managedValue.data.opaque.bytes,
+             managedValue.data.opaque.length);
+      length = (s16_t) managedValue.data.opaque.length;
+      break;
+
+    case NTCIP_VALUE_TYPE_IP_ADDRESS:
+      if (instance->asn1_type != SNMP_ASN1_TYPE_IPADDR)
+      {
+        return -1;
+      }
+
+      MEMCPY(value,
+             managedValue.data.ipAddress.bytes,
+             sizeof(managedValue.data.ipAddress.bytes));
+      length = (s16_t) sizeof(managedValue.data.ipAddress.bytes);
+      break;
+
     default:
       return -1;
   }
@@ -566,10 +663,25 @@ static uint8_t BuildSetValue(struct snmp_node_instance *instance,
                         == NTCIP_ERROR_OK);
 
     case SNMP_ASN1_TYPE_OCTET_STRING:
-    case SNMP_ASN1_TYPE_OPAQUE:
       return (uint8_t) (NtcipValueSetOctetString(managedValue,
                                                  (const uint8_t *) value,
                                                  valueLength)
+                        == NTCIP_ERROR_OK);
+
+    case SNMP_ASN1_TYPE_OPAQUE:
+      return (uint8_t) (NtcipValueSetOpaque(managedValue,
+                                            (const uint8_t *) value,
+                                            valueLength)
+                        == NTCIP_ERROR_OK);
+
+    case SNMP_ASN1_TYPE_IPADDR:
+      if (valueLength != 4U)
+      {
+        return 0U;
+      }
+
+      return (uint8_t) (NtcipValueSetIpAddress(managedValue,
+                                               (const uint8_t *) value)
                         == NTCIP_ERROR_OK);
 
     default:
@@ -600,6 +712,7 @@ static snmp_err_t ManagedSetCommon(struct snmp_node_instance *instance,
   LWIPSNMPAdapterBuildRequestContext(spAdapterCtx,
                                      BuildSessionKey(),
                                      &requestContext);
+  PopulateRequestAuthContext(&requestContext);
 
   if (descriptor->access != NTCIP_ACCESS_READ_WRITE)
   {

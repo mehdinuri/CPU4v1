@@ -22,8 +22,8 @@
 
 /* USER CODE BEGIN 0 */
 #include <string.h>
+#include "common.h"
 #include "gpio.h"
-#include "data.h"
 
 #define MAX_BATTERY_VOLTAGE_SAMPLES 100
 #define MAX_BATTERY_VOLTAGE_TOTAL_SAMPLES 10
@@ -368,71 +368,7 @@ tEBatteryChargingTrends ADCGetBatteryChargingTrend(void)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-	if(hadc->Instance == ADC1)
-	{
-		/*lTotVoltDuringSampling += HAL_ADC_GetValue(hadc);
-		bTotPinStateDuringSampling += GPIOBatteryChargingPinStateGet();
-		
-		if(++bVoltSampleCntr > MAX_BATTERY_VOLTAGE_SAMPLES)
-		{
-			baBatteryChargingTotalStates[bTotVoltSampleCntr] = bTotPinStateDuringSampling / MAX_BATTERY_VOLTAGE_SAMPLES;
-			laBatteryTotalVolts[bTotVoltSampleCntr] = lTotVoltDuringSampling / MAX_BATTERY_VOLTAGE_SAMPLES;
-			
-			bTotVoltSampleCntr++;
-			bVoltSampleCntr = 0;
-			lTotVoltDuringSampling = 0;
-			bTotPinStateDuringSampling = 0;
-			
-			if(bTotVoltSampleCntr >= MAX_BATTERY_VOLTAGE_TOTAL_SAMPLES)
-			{
-				if(!GPIOIsBatteryChargingEnabled())
-				{
-					GPIOEnableBatteryCharging();
-				}
-			
-				SBatteryRuntime.dVoltage = ADCCalculateBatteryVoltage();
-				laBatteryVoltTrends[bTrendSampleCntr] = SBatteryRuntime.dVoltage;
-				SBatteryRuntime.EChargingState = ADCEvaluateBatteryChargingState();
-				
-				bIsAlreadyDisabledFlagCntr++;
-				if(bIsAlreadyDisabledFlagCntr >= MAX_IS_ALREADY_DISABLED_FLAG_SAMPLES)
-				{
-					bIsAlreadyDisabledFlagCntr = 0;
-					ADCSetIsAlreadyDisabledFlag();
-				}
-				
-				bTrendSampleCntr++;
-				if(bTrendSampleCntr >= MAX_BATTERY_VOLTAGE_TREND_SAMPLES)
-				{
-					SBatteryRuntime.EChargingTrend = ADCEvaluteBatteryChargingTrend();
-					
-					bTrendSampleCntr = 0;
-					memset((void *)laBatteryVoltTrends, 0, sizeof(laBatteryVoltTrends));
-				}
-				
-				ADCSetBatteryCharging();
-				
-				tpSADCBatteryRuntime pSRuntime = osMemoryPoolAlloc(BatteryRuntimeMemPoolHandle, 0);
-				if (pSRuntime != 0)
-				{
-					memcpy(pSRuntime, &SBatteryRuntime, sizeof(SBatteryRuntime));
-					if (osMessageQueuePut(BatteryRuntimeQueueHandle, &pSRuntime, 0, 0) != osOK)
-					{
-						osMemoryPoolFree(BatteryRuntimeMemPoolHandle, pSRuntime);
-						Error_Handler();
-					}
-				}
-				else
-				{
-					Error_Handler();
-				}
-				
-				bTotVoltSampleCntr = 0;
-				memset((void *)baBatteryChargingTotalStates, 0, sizeof(baBatteryChargingTotalStates));
-				memset((void *)laBatteryTotalVolts, 0, sizeof(laBatteryTotalVolts));
-			}
-		}*/
-	}
+  UNUSED(hadc);
 }
 /* USER CODE END 1 */
 

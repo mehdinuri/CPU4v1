@@ -7,85 +7,85 @@
 #include <string.h>
 #include "Adapters/Mock/MockPersistenceAdapter.h"
 
-static tEPersistenceStatus MockRead(void *pCtx,
-                                    tEPersistenceKey eKey,
-                                    void *pOut,
-                                    uint16_t sSize)
+static PersistenceStatus_e MockRead(void *ctx,
+                                    PersistenceKey_e eKey,
+                                    void *out,
+                                    uint16_t size)
 {
-  tSMockPersistenceAdapterCtx *pC = (tSMockPersistenceAdapterCtx *) pCtx;
+  MockPersistenceAdapterCtx_t *pC = (MockPersistenceAdapterCtx_t *) ctx;
 
-  pC->lReadCount++;
+  pC->readCount++;
 
   if ((uint32_t) eKey >= (uint32_t) PERSIST_KEY__COUNT)
   {
     return PERSIST_FAIL;
   }
 
-  tSMockPersistenceSlot *pSlot = &pC->SaSlots[eKey];
+  MockPersistenceSlot_t *slot = &pC->slots[eKey];
 
-  if (pSlot->bForceReadFail != 0U)
+  if (slot->forceReadFail != 0U)
   {
     return PERSIST_FAIL;
   }
 
-  if (pSlot->sSize == 0U)
+  if (slot->size == 0U)
   {
     return PERSIST_FAIL;
   }
 
-  if (sSize > pSlot->sSize)
+  if (size > slot->size)
   {
     return PERSIST_FAIL;
   }
 
-  memcpy(pOut, pSlot->abBlob, sSize);
+  memcpy(out, slot->abBlob, size);
 
   return PERSIST_OK;
 }
 
-static tEPersistenceStatus MockWrite(void *pCtx,
-                                     tEPersistenceKey eKey,
-                                     const void *pIn,
-                                     uint16_t sSize)
+static PersistenceStatus_e MockWrite(void *ctx,
+                                     PersistenceKey_e eKey,
+                                     const void *in,
+                                     uint16_t size)
 {
-  tSMockPersistenceAdapterCtx *pC = (tSMockPersistenceAdapterCtx *) pCtx;
+  MockPersistenceAdapterCtx_t *pC = (MockPersistenceAdapterCtx_t *) ctx;
 
-  pC->lWriteCount++;
+  pC->writeCount++;
 
   if ((uint32_t) eKey >= (uint32_t) PERSIST_KEY__COUNT)
   {
     return PERSIST_FAIL;
   }
 
-  tSMockPersistenceSlot *pSlot = &pC->SaSlots[eKey];
+  MockPersistenceSlot_t *slot = &pC->slots[eKey];
 
-  if (pSlot->bForceWriteFail != 0U)
+  if (slot->forceWriteFail != 0U)
   {
     return PERSIST_FAIL;
   }
 
-  if (sSize > MOCK_PERSIST_MAX_BLOB_SIZE)
+  if (size > MOCK_PERSIST_MAX_BLOB_SIZE)
   {
     return PERSIST_FAIL;
   }
 
-  memcpy(pSlot->abBlob, pIn, sSize);
-  pSlot->sSize = sSize;
+  memcpy(slot->abBlob, in, size);
+  slot->size = size;
 
   return PERSIST_OK;
 }
 
-void MockPersistenceAdapter_Init(tSMockPersistenceAdapterCtx *pCtx)
+void MockPersistenceAdapter_Init(MockPersistenceAdapterCtx_t *ctx)
 {
-  memset(pCtx, 0, sizeof(*pCtx));
+  memset(ctx, 0, sizeof(*ctx));
 }
 
 IPersistencePort_t MockPersistenceAdapter_CreatePort(
-  tSMockPersistenceAdapterCtx *pCtx)
+  MockPersistenceAdapterCtx_t *ctx)
 {
   IPersistencePort_t port;
 
-  port.pCtx = pCtx;
+  port.ctx = ctx;
   port.Read = MockRead;
   port.Write = MockWrite;
 

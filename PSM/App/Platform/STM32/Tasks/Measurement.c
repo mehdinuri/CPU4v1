@@ -12,7 +12,6 @@
 #include "Measurement.h"
 #include "HardwarePorts.h"
 #include "Domain/MeasurementService.h"
-#include "Config/EepromMap.h"
 #include "utilities.h"
 #include "cmsis_os.h"
 #include "adc.h"
@@ -23,15 +22,15 @@ static MeasurementServiceCtx_t s_svc;
 
 typedef struct
 {
-  volatile uint8_t  bFlashStatePending;
-  volatile uint8_t  bFlashStateDirty;
-  volatile uint8_t  bPeriodPending;
-  volatile uint8_t  bPeriodDirty;
-  volatile uint8_t  bOffsetOpPending;
-  volatile uint8_t  bOffsetValPending;
-  volatile uint8_t  bOffsetDirty;
-  volatile uint8_t  bCommResetPending;
-  volatile uint16_t sCommChecksPending;
+  volatile uint8_t flashStatePending;
+  volatile uint8_t flashStateDirty;
+  volatile uint8_t periodPending;
+  volatile uint8_t periodDirty;
+  volatile uint8_t offsetOpPending;
+  volatile uint8_t offsetValPending;
+  volatile uint8_t offsetDirty;
+  volatile uint8_t commResetPending;
+  volatile uint16_t commChecksPending;
 } MeasurementPendingOps_t;
 
 static MeasurementPendingOps_t s_pendingOps;
@@ -66,7 +65,9 @@ static void RegulatorMeasurementsStart(void)
 static uint32_t MeasurementIrqLock(void)
 {
   uint32_t primask = __get_PRIMASK();
+
   __disable_irq();
+
   return primask;
 }
 
@@ -80,131 +81,123 @@ static void MeasurementIrqUnlock(uint32_t primask)
 
 static void MeasurementPendingApply(void)
 {
-  uint8_t bFlashStateDirty;
-  uint8_t bFlashStatePending;
-  uint8_t bPeriodDirty;
-  uint8_t bPeriodPending;
-  uint8_t bOffsetDirty;
-  uint8_t bOffsetOpPending;
-  uint8_t bOffsetValPending;
-  uint8_t bCommResetPending;
-  uint16_t sCommChecksPending;
+  uint8_t flashStateDirty;
+  uint8_t flashStatePending;
+  uint8_t periodDirty;
+  uint8_t periodPending;
+  uint8_t offsetDirty;
+  uint8_t offsetOpPending;
+  uint8_t offsetValPending;
+  uint8_t commResetPending;
+  uint16_t commChecksPending;
 
   uint32_t primask = MeasurementIrqLock();
 
-  bFlashStateDirty   = s_pendingOps.bFlashStateDirty;
-  bFlashStatePending = s_pendingOps.bFlashStatePending;
-  bPeriodDirty       = s_pendingOps.bPeriodDirty;
-  bPeriodPending     = s_pendingOps.bPeriodPending;
-  bOffsetDirty       = s_pendingOps.bOffsetDirty;
-  bOffsetOpPending   = s_pendingOps.bOffsetOpPending;
-  bOffsetValPending  = s_pendingOps.bOffsetValPending;
-  bCommResetPending  = s_pendingOps.bCommResetPending;
-  sCommChecksPending = s_pendingOps.sCommChecksPending;
+  flashStateDirty = s_pendingOps.flashStateDirty;
+  flashStatePending = s_pendingOps.flashStatePending;
+  periodDirty = s_pendingOps.periodDirty;
+  periodPending = s_pendingOps.periodPending;
+  offsetDirty = s_pendingOps.offsetDirty;
+  offsetOpPending = s_pendingOps.offsetOpPending;
+  offsetValPending = s_pendingOps.offsetValPending;
+  commResetPending = s_pendingOps.commResetPending;
+  commChecksPending = s_pendingOps.commChecksPending;
 
-  s_pendingOps.bFlashStateDirty  = 0U;
-  s_pendingOps.bPeriodDirty      = 0U;
-  s_pendingOps.bOffsetDirty      = 0U;
-  s_pendingOps.bCommResetPending = 0U;
-  s_pendingOps.sCommChecksPending = 0U;
+  s_pendingOps.flashStateDirty = 0U;
+  s_pendingOps.periodDirty = 0U;
+  s_pendingOps.offsetDirty = 0U;
+  s_pendingOps.commResetPending = 0U;
+  s_pendingOps.commChecksPending = 0U;
 
   MeasurementIrqUnlock(primask);
 
-  if (bFlashStateDirty != 0U)
+  if (flashStateDirty != 0U)
   {
-    MeasurementService_FlashStateSet(&s_svc, bFlashStatePending);
+    MeasurementService_FlashStateSet(&s_svc, flashStatePending);
   }
 
-  if (bPeriodDirty != 0U)
+  if (periodDirty != 0U)
   {
-    MeasurementService_PeriodApply(&s_svc, bPeriodPending);
+    MeasurementService_PeriodApply(&s_svc, periodPending);
   }
 
-  if (bOffsetDirty != 0U)
+  if (offsetDirty != 0U)
   {
-    MeasurementService_OffsetApply(&s_svc, bOffsetOpPending, bOffsetValPending);
+    MeasurementService_OffsetApply(&s_svc, offsetOpPending, offsetValPending);
   }
 
-  if (bCommResetPending != 0U)
+  if (commResetPending != 0U)
   {
     MeasurementService_CommCntrReset(&s_svc);
   }
 
-  while (sCommChecksPending > 0U)
+  while (commChecksPending > 0U)
   {
     MeasurementService_CommCheck(&s_svc);
-    sCommChecksPending--;
+    commChecksPending--;
   }
-}
+} /* MeasurementPendingApply */
 
 /* Public application code --------------------------------------------------*/
 
 /* Forwarders called from other tasks/ISRs.
  * The MeasurementTask remains the sole owner of s_svc; external callers only
  * persist settings if needed, then queue pending runtime changes here. */
-void MeasurementFlashStateSet(uint8_t fState)
+void MeasurementFlashStateSet(uint8_t state)
 {
   uint32_t primask = MeasurementIrqLock();
-  s_pendingOps.bFlashStatePending = fState;
-  s_pendingOps.bFlashStateDirty   = 1U;
+
+  s_pendingOps.flashStatePending = state;
+  s_pendingOps.flashStateDirty = 1U;
   MeasurementIrqUnlock(primask);
 }
 
-void MeasurementPeriodSet(uint8_t bPeriod)
+void MeasurementPeriodSet(uint8_t period)
 {
-  if (MeasurementService_PeriodIsValid(bPeriod) != 0U)
+  /* Delegate validation + EEPROM write to the shared persistence helper,
+   * then queue the runtime apply for MeasurementTask (the sole owner of
+   * s_svc).  This keeps the task layer free of duplicate validate/write
+   * logic — there is one persist implementation, shared with the domain. */
+  if (MeasurementService_PeriodPersist(&g_eepromPort, period) != 0U)
   {
-    uint32_t lRaw = (uint32_t) bPeriod;
+    uint32_t primask = MeasurementIrqLock();
 
-    if (Eeprom_Write(&g_eepromPort,
-                     EEPROM_ADDR_PERIOD,
-                     &lRaw,
-                     sizeof(lRaw)) != 0U)
-    {
-      uint32_t primask = MeasurementIrqLock();
-      s_pendingOps.bPeriodPending = bPeriod;
-      s_pendingOps.bPeriodDirty   = 1U;
-      MeasurementIrqUnlock(primask);
-    }
+    s_pendingOps.periodPending = period;
+    s_pendingOps.periodDirty = 1U;
+    MeasurementIrqUnlock(primask);
   }
 }
 
-void MeasurementOffsetSet(uint8_t bOp, uint8_t bVal)
+void MeasurementOffsetSet(uint8_t op, uint8_t val)
 {
-  if (MeasurementService_OffsetOpIsValid(bOp) != 0U)
+  if (MeasurementService_OffsetPersist(&g_eepromPort, op, val) != 0U)
   {
-    tSMeasurementOffset SOffset;
-    SOffset.eOperation = bOp;
-    SOffset.bValue     = bVal;
+    uint32_t primask = MeasurementIrqLock();
 
-    if (Eeprom_Write(&g_eepromPort,
-                     EEPROM_ADDR_OFFSET,
-                     &SOffset,
-                     sizeof(SOffset)) != 0U)
-    {
-      uint32_t primask = MeasurementIrqLock();
-      s_pendingOps.bOffsetOpPending  = bOp;
-      s_pendingOps.bOffsetValPending = bVal;
-      s_pendingOps.bOffsetDirty      = 1U;
-      MeasurementIrqUnlock(primask);
-    }
+    s_pendingOps.offsetOpPending = op;
+    s_pendingOps.offsetValPending = val;
+    s_pendingOps.offsetDirty = 1U;
+    MeasurementIrqUnlock(primask);
   }
 }
 
 void MeasurementCommCheck(void)
 {
   uint32_t primask = MeasurementIrqLock();
-  if (s_pendingOps.sCommChecksPending < 0xFFFFU)
+
+  if (s_pendingOps.commChecksPending < 0xFFFFU)
   {
-    s_pendingOps.sCommChecksPending++;
+    s_pendingOps.commChecksPending++;
   }
+
   MeasurementIrqUnlock(primask);
 }
 
 void MeasurementCommCntrReset(void)
 {
   uint32_t primask = MeasurementIrqLock();
-  s_pendingOps.bCommResetPending = 1U;
+
+  s_pendingOps.commResetPending = 1U;
   MeasurementIrqUnlock(primask);
 }
 
@@ -214,6 +207,7 @@ void MeasurementThreadFlagSet(void)
 }
 
 /* USER CODE BEGIN Header_vMeasurementTask */
+
 /**
  * @brief Function implementing the MeasurementTask thread.
  * @param argument: Not used
@@ -228,12 +222,12 @@ void MeasurementTaskFunc(void *argument)
   /* Initialise service using globally wired ports from MainApplication_Init().
    * Adapter contexts and port instances are owned by main_stm32.c. */
   MeasurementService_Init(&s_svc,
-                           &g_indicatorLEDPort,
-                           &g_signalInputPort,
-                           &g_canTxPort,
-                           &g_voltageSensorPort,
-                           &g_frequencySensorPort,
-                           &g_eepromPort);
+                          &g_indicatorLEDPort,
+                          &g_signalInputPort,
+                          &g_canTxPort,
+                          &g_voltageSensorPort,
+                          &g_frequencySensorPort,
+                          &g_eepromPort);
 
   /* Start hardware measurement pipelines */
   GridFreqMeasurementStart();

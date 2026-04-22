@@ -29,10 +29,22 @@ static CpMpMmuConfigImageV1_t MakeConfigImage(void)
   image.outputMapCount = 3U;
   image.startupFlashSeconds = 5U;
   image.startupFlashMode = 3U;
+  image.failureFlashPeriodDs = INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS;
   image.channelControlType[0] = INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
   image.channelControlSource[0] = 1U;
-  image.channelControlType[1] = INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
-  image.channelControlSource[1] = 2U;
+  image.channelFlashMask[0] = 0x04U;
+  image.channelControlType[1] = INTERSECTION_CHANNEL_CONTROL_TYPE_OVERLAP;
+  image.channelControlSource[1] = 1U;
+  image.channelControlType[2] = INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE;
+  image.channelControlSource[2] = 2U;
+  image.channelConflictMask[1] = (uint32_t) (1UL << 2U);
+  image.channelConflictMask[2] = (uint32_t) ((1UL << 0U) | (1UL << 1U));
+  image.channelMinYellowDs[0] = 30U;
+  image.channelRedClearDs[0] = 20U;
+  image.channelMinYellowDs[1] = 4U;
+  image.channelRedClearDs[1] = 6U;
+  image.channelMinYellowDs[2] = 30U;
+  image.channelRedClearDs[2] = 20U;
   image.phaseYellowChangeDs[0] = 30U;
   image.phaseRedClearDs[0] = 20U;
   image.phaseConcurrencyMask[0] = 0x04U;
@@ -49,13 +61,15 @@ static CpMpMmuConfigImageV1_t MakeConfigImage(void)
   return image;
 }
 
-static void InjectHeartbeat(uint16_t setId, uint32_t generation)
+static void InjectHeartbeat(uint16_t setId,
+                            uint32_t generation,
+                            uint8_t permitOutputPower)
 {
   ControlBusFrame_t frame;
 
   (void) memset(&frame, 0, sizeof(frame));
   frame.standardId = CPMP_FRAME_ID_CP_HEARTBEAT;
-  frame.length = 12U;
+  frame.length = 13U;
   frame.data[0] = CPMP_PROTOCOL_VERSION;
   frame.data[2] = (uint8_t) (setId & 0xFFU);
   frame.data[3] = (uint8_t) ((setId >> 8U) & 0xFFU);
@@ -63,6 +77,7 @@ static void InjectHeartbeat(uint16_t setId, uint32_t generation)
   frame.data[9] = (uint8_t) ((generation >> 8U) & 0xFFU);
   frame.data[10] = (uint8_t) ((generation >> 16U) & 0xFFU);
   frame.data[11] = (uint8_t) ((generation >> 24U) & 0xFFU);
+  frame.data[12] = (uint8_t) (permitOutputPower != 0U);
   MockControlBusAdapterInjectRxFrame(&s_controlBusCtx, &frame);
 }
 
@@ -156,7 +171,7 @@ void test_link_service_applies_cp_config_and_reports_normal_when_matching(void)
   CpMpMmuConfigImageV1_t image = MakeConfigImage();
   const IntersectionConfig_t *config;
 
-  InjectHeartbeat(3U, 9U);
+  InjectHeartbeat(3U, 9U, 0U);
   InjectConfigImage(3U, 9U, &image);
 
   CpMpLinkServiceStep(&s_service);
@@ -171,6 +186,23 @@ void test_link_service_applies_cp_config_and_reports_normal_when_matching(void)
   TEST_ASSERT_EQUAL_UINT8(INTERSECTION_CHANNEL_CONTROL_TYPE_PHASE_VEHICLE,
                           config->channels[0].controlType);
   TEST_ASSERT_EQUAL_UINT8(1U, config->channels[0].controlSource);
+  TEST_ASSERT_EQUAL_UINT8(0x04U, config->channels[0].flashMask);
+  TEST_ASSERT_EQUAL_UINT8(4U,
+                          ConfigurationServiceGetChannelMinYellowDs(
+                            &s_configurationService,
+                            1U));
+  TEST_ASSERT_EQUAL_UINT8(6U,
+                          ConfigurationServiceGetChannelRedClearDs(
+                            &s_configurationService,
+                            1U));
+  TEST_ASSERT_TRUE(ConfigurationServiceChannelsConflict(&s_configurationService,
+                                                        1U,
+                                                        2U));
+  TEST_ASSERT_FALSE(ConfigurationServiceChannelsConflict(&s_configurationService,
+                                                         0U,
+                                                         1U));
+  TEST_ASSERT_EQUAL_UINT8(INTERSECTION_UNIT_FAILURE_FLASH_PERIOD_2000MS_DS,
+                          config->unit.failureFlashPeriodDs);
 
   TEST_ASSERT_TRUE(s_controlBusCtx.txCount >= 4U);
   TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_MP_HEARTBEAT,
@@ -191,6 +223,25 @@ void test_link_service_reports_flash_until_cp_config_is_applied(void)
                           s_controlBusCtx.txBuffer[0].data[2]);
 }
 
+void test_link_service_exports_local_relay_permit_and_tracks_cp_vote(void)
+{
+  CpMpMmuConfigImageV1_t image = MakeConfigImage();
+
+  SafetyDecisionServiceSetRequiredSsmHealthy(&s_safetyService, 1U);
+  InjectHeartbeat(2U, 11U, 1U);
+  InjectConfigImage(2U, 11U, &image);
+
+  CpMpLinkServiceStep(&s_service);
+
+  TEST_ASSERT_EQUAL_UINT8(1U,
+                          SafetyDecisionServiceGetLocalPermitOutputPower(
+                            &s_safetyService));
+  TEST_ASSERT_EQUAL_UINT8(1U, s_service.lastCpPermitOutputPower);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_MP_HEARTBEAT,
+                           s_controlBusCtx.txBuffer[0].standardId);
+  TEST_ASSERT_EQUAL_UINT8(1U, s_controlBusCtx.txBuffer[0].data[3]);
+}
+
 void test_link_service_projects_fault_monitor_status_into_fault_frame(void)
 {
   CpMpMmuConfigImageV1_t image = MakeConfigImage();
@@ -198,7 +249,7 @@ void test_link_service_projects_fault_monitor_status_into_fault_frame(void)
     FAULT_CODE_CONFLICT_GREEN_GREEN, FAULT_SEVERITY_CRITICAL, 0U, 9U, 0U
   };
 
-  InjectHeartbeat(1U, 5U);
+  InjectHeartbeat(1U, 5U, 0U);
   InjectConfigImage(1U, 5U, &image);
   FaultMonitorServiceOnFault(&s_faultMonitorService, &event);
   SafetyDecisionServiceOnFault(&s_safetyService, &event);
@@ -219,15 +270,54 @@ void test_link_service_projects_fault_monitor_status_into_fault_frame(void)
                            | ((uint32_t) s_controlBusCtx.txBuffer[3].data[6] << 8U)
                            | ((uint32_t) s_controlBusCtx.txBuffer[3].data[7] << 16U)
                            | ((uint32_t) s_controlBusCtx.txBuffer[3].data[8] << 24U));
-  TEST_ASSERT_EQUAL_UINT16(CPMP_FAULT_CHANNEL_FLAG_CONFLICT,
-                           (uint16_t) s_controlBusCtx.txBuffer[3].data[9]
-                           | ((uint16_t) s_controlBusCtx.txBuffer[3].data[10] << 8U));
+  TEST_ASSERT_EQUAL_UINT32(0x00000001UL,
+                           (uint32_t) s_controlBusCtx.txBuffer[3].data[9]
+                           | ((uint32_t) s_controlBusCtx.txBuffer[3].data[10] << 8U)
+                           | ((uint32_t) s_controlBusCtx.txBuffer[3].data[11] << 16U)
+                           | ((uint32_t) s_controlBusCtx.txBuffer[3].data[12] << 24U));
   TEST_ASSERT_EQUAL_UINT8(CPMP_SAFETY_ACTION_DARK,
-                          s_controlBusCtx.txBuffer[3].data[41]);
+                          s_controlBusCtx.txBuffer[3].data[45]);
   TEST_ASSERT_EQUAL_UINT8((uint8_t) FAULT_CODE_CONFLICT_GREEN_GREEN,
-                          s_controlBusCtx.txBuffer[3].data[42]);
+                          s_controlBusCtx.txBuffer[3].data[46]);
   TEST_ASSERT_EQUAL_UINT8(CPMP_CONFIG_STATE_APPLIED,
-                          s_controlBusCtx.txBuffer[3].data[43]);
+                          s_controlBusCtx.txBuffer[3].data[47]);
+}
+
+void test_link_service_streams_fault_events_until_cp_acks(void)
+{
+  CpMpMmuConfigImageV1_t image = MakeConfigImage();
+  FaultEvent_t event = {
+    FAULT_CODE_CONFLICT_GREEN_GREEN, FAULT_SEVERITY_CRITICAL, 0x1234U, 9U, 0xAABBCCDDUL
+  };
+  ControlBusFrame_t ackFrame;
+
+  InjectHeartbeat(1U, 5U, 0U);
+  InjectConfigImage(1U, 5U, &image);
+  FaultMonitorServiceOnFault(&s_faultMonitorService, &event);
+
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_MP_EVENT,
+                           s_controlBusCtx.txBuffer[4].standardId);
+  TEST_ASSERT_EQUAL_UINT32(1U,
+                           (uint32_t) s_controlBusCtx.txBuffer[4].data[1]
+                           | ((uint32_t) s_controlBusCtx.txBuffer[4].data[2] << 8U)
+                           | ((uint32_t) s_controlBusCtx.txBuffer[4].data[3] << 16U)
+                           | ((uint32_t) s_controlBusCtx.txBuffer[4].data[4] << 24U));
+
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_MP_EVENT,
+                           s_controlBusCtx.txBuffer[9].standardId);
+
+  (void) memset(&ackFrame, 0, sizeof(ackFrame));
+  ackFrame.standardId = CPMP_FRAME_ID_CP_EVENT_ACK;
+  ackFrame.length = 5U;
+  ackFrame.data[0] = CPMP_PROTOCOL_VERSION;
+  ackFrame.data[1] = 1U;
+  MockControlBusAdapterInjectRxFrame(&s_controlBusCtx, &ackFrame);
+
+  CpMpLinkServiceStep(&s_service);
+  TEST_ASSERT_EQUAL_UINT16(CPMP_FRAME_ID_MP_FAULTS,
+                           s_controlBusCtx.txBuffer[13].standardId);
 }
 
 int main(void)
@@ -235,6 +325,8 @@ int main(void)
   UNITY_BEGIN();
   RUN_TEST(test_link_service_applies_cp_config_and_reports_normal_when_matching);
   RUN_TEST(test_link_service_reports_flash_until_cp_config_is_applied);
+  RUN_TEST(test_link_service_exports_local_relay_permit_and_tracks_cp_vote);
   RUN_TEST(test_link_service_projects_fault_monitor_status_into_fault_frame);
+  RUN_TEST(test_link_service_streams_fault_events_until_cp_acks);
   return UNITY_END();
 }

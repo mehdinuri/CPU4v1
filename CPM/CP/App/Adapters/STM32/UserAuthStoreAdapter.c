@@ -37,36 +37,6 @@ static uint8_t SaveRecord(void *ctx, const UserAuthStoreRecord_t *record)
                           sizeof(*record));
 }
 
-static uint8_t LoadLegacyAdminPin(void *ctx, uint16_t *adminPin)
-{
-  UserAuthStoreAdapterCtx_t *adapter = (UserAuthStoreAdapterCtx_t *) ctx;
-  uint16_t legacyPin = 0U;
-
-  if ((adapter == NULL) || (adapter->persistencePort == NULL)
-      || (adminPin == NULL))
-  {
-    return 0U;
-  }
-
-  if (PersistenceRead(adapter->persistencePort,
-                      PERSIST_OBJECT_ADMIN_PASSWORD,
-                      0U,
-                      &legacyPin,
-                      sizeof(legacyPin))
-      == 0U)
-  {
-    return 0U;
-  }
-
-  if (legacyPin > 9999U)
-  {
-    return 0U;
-  }
-
-  *adminPin = legacyPin;
-  return 1U;
-}
-
 void UserAuthStoreAdapterInit(UserAuthStoreAdapterCtx_t *ctx,
                               IPersistencePort_t *persistencePort)
 {
@@ -85,6 +55,5 @@ IUserAuthStorePort_t UserAuthStoreAdapterCreatePort(
   port.ctx = ctx;
   port.Load = LoadRecord;
   port.Save = SaveRecord;
-  port.LoadLegacyAdminPin = LoadLegacyAdminPin;
   return port;
 }

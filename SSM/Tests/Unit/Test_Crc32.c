@@ -56,10 +56,10 @@ void test_single_bit_flip_changes_crc(void)
   uint8_t a[4] = { 0x01U, 0x02U, 0x03U, 0x04U };
   uint8_t b[4] = { 0x01U, 0x02U, 0x03U, 0x05U };
 
-  uint32_t lCrcA = Crc32_Compute(a, 4U);
-  uint32_t lCrcB = Crc32_Compute(b, 4U);
+  uint32_t crcA = Crc32_Compute(a, 4U);
+  uint32_t crcB = Crc32_Compute(b, 4U);
 
-  TEST_ASSERT_NOT_EQUAL(lCrcA, lCrcB);
+  TEST_ASSERT_NOT_EQUAL(crcA, crcB);
 }
 
 int main(void)

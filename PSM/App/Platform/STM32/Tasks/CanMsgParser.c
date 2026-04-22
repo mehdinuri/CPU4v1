@@ -35,13 +35,13 @@ void CANMsgParserInit(void)
 {
 }
 
-void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
+void CANMsgParse(FdcanRxMsg_t *rxMsg)
 {
-  switch (pSRxMsg->SRxHeader.IdType)
+  switch (rxMsg->rxHeader.IdType)
   {
       case FDCAN_STANDARD_ID:
       {
-        switch (pSRxMsg->SRxHeader.Identifier)
+        switch (rxMsg->rxHeader.Identifier)
         {
             case FDCAN_CP_DATE_TIME_STD_ID:
             {
@@ -53,9 +53,9 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
             case FDCAN_CP_FLASH_SIGNALS_1_STD_ID:
             {
               /* Period value lives at byte index 6 — frame must carry ≥ 7 bytes. */
-              if (CAN_RX_LENGTH_BYTES(pSRxMsg->SRxHeader.DataLength) >= 7U)
+              if (CAN_RX_LENGTH_BYTES(rxMsg->rxHeader.DataLength) >= 7U)
               {
-                MeasurementPeriodSet(pSRxMsg->baData[6]);
+                MeasurementPeriodSet(rxMsg->data[6]);
               }
 
               break;
@@ -65,9 +65,9 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
             case FDCAN_CP_OFFSET_2_STD_ID:
             {
               /* Op at byte 0, value at byte 1 — frame must carry ≥ 2 bytes. */
-              if (CAN_RX_LENGTH_BYTES(pSRxMsg->SRxHeader.DataLength) >= 2U)
+              if (CAN_RX_LENGTH_BYTES(rxMsg->rxHeader.DataLength) >= 2U)
               {
-                MeasurementOffsetSet(pSRxMsg->baData[0], pSRxMsg->baData[1]);
+                MeasurementOffsetSet(rxMsg->data[0], rxMsg->data[1]);
               }
 
               break;
@@ -88,8 +88,8 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
         /* Extended-ID or reserved frame types — ignore */
         break;
       }
-  }
-}
+  } /* switch */
+} /* CANMsgParse */
 
 /* USER CODE BEGIN Header_vCANMsgParserTask */
 
@@ -101,18 +101,18 @@ void CANMsgParse(tpSFDCANRxMsg pSRxMsg)
 /* USER CODE END Header_vCANMsgParserTask */
 
 /* Public application code --------------------------------------------------*/
-void CANRxRequest(tpSFDCANRxMsg pSRxMsg)
+void CANRxRequest(FdcanRxMsg_t *rxMsg)
 {
-  tpSFDCANRxMsg pSReq =
-    (tpSFDCANRxMsg) osMemoryPoolAlloc(CANRxReqsMemPoolHandle,
-                                      0);
+  FdcanRxMsg_t *req =
+    (FdcanRxMsg_t *) osMemoryPoolAlloc(CANRxReqsMemPoolHandle,
+                                       0);
 
-  if (pSReq != NULL)
+  if (req != NULL)
   {
-    memcpy(pSReq, pSRxMsg, sizeof(tSFDCANRxMsg));
-    if (osMessageQueuePut(CANRxReqsQueueHandle, &pSReq, 0, 0) != osOK)
+    memcpy(req, rxMsg, sizeof(FdcanRxMsg_t));
+    if (osMessageQueuePut(CANRxReqsQueueHandle, &req, 0, 0) != osOK)
     {
-      osMemoryPoolFree(CANRxReqsMemPoolHandle, pSReq);
+      osMemoryPoolFree(CANRxReqsMemPoolHandle, req);
     }
   }
 }
@@ -122,7 +122,7 @@ void CANMsgParserTaskFunc(void *argument)
   /* USER CODE BEGIN vCANMsgParserTask */
   UNUSED(argument);
 
-  tpSFDCANRxMsg pSRxMsg = NULL;
+  FdcanRxMsg_t *rxMsg = NULL;
 
   CANMsgParserInit();
 
@@ -134,12 +134,12 @@ void CANMsgParserTaskFunc(void *argument)
     /* Wait up to one maintenance cycle for a new CAN frame; then signal
      * maintenance regardless so the watchdog knows this task is alive. */
     if (osMessageQueueGet(CANRxReqsQueueHandle,
-                          &pSRxMsg,
+                          &rxMsg,
                           NULL,
                           MAINTENANCE_TASK_TIMEOUT_MS) == osOK)
     {
-      CANMsgParse(pSRxMsg);
-      osMemoryPoolFree(CANRxReqsMemPoolHandle, pSRxMsg);
+      CANMsgParse(rxMsg);
+      osMemoryPoolFree(CANRxReqsMemPoolHandle, rxMsg);
     }
 
     MaintenanceTaskSignal(EVENT_FLAGS_MAINTENANCE_CAN_PARSER_TASK_ACTIVE);

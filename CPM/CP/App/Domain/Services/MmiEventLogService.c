@@ -3,24 +3,6 @@
 
 #include <string.h>
 
-typedef struct
-{
-  uint8_t bSeconds;
-  uint8_t bMinutes;
-  uint8_t bHours;
-  uint8_t bMonthDay;
-  uint8_t bMonth;
-  uint16_t sYear;
-
-  struct
-  {
-    uint8_t bEvent;
-    uint8_t bParam;
-    uint16_t sParam;
-    uint32_t lParam;
-  } SEvent;
-} __attribute__((packed)) MmiEventLogStorageRecord_t;
-
 static uint8_t IsBufferFull(uint16_t count, uint16_t writeIndex)
 {
   return (uint8_t) ((count > 0U) && (writeIndex < count));
@@ -41,10 +23,13 @@ static uint16_t ComputeLatestIndex(uint16_t count, uint16_t writeIndex)
   return (uint16_t) (count - 1U);
 }
 
-static void EncodeRecord(uint16_t index,
-                         const MmiEventLogStorageRecord_t *source,
+static void EncodeRecord(const MmiEventLogService_t *service,
+                         uint16_t index,
+                         const EventReportLogRecord_t *source,
                          MmiEventRecordV2_t *target)
 {
+  uint8_t eventNumber = 0U;
+
   if ((source == NULL) || (target == NULL))
   {
     return;
@@ -52,16 +37,24 @@ static void EncodeRecord(uint16_t index,
 
   (void) memset(target, 0, sizeof(*target));
   target->logIndex = index;
-  target->second = source->bSeconds;
-  target->minute = source->bMinutes;
-  target->hour = source->bHours;
-  target->day = source->bMonthDay;
-  target->month = source->bMonth;
-  target->year = source->sYear;
-  target->eventCode = source->SEvent.bEvent;
-  target->eventParam = source->SEvent.bParam;
-  target->eventShortParam = source->SEvent.sParam;
-  target->eventLongParam = source->SEvent.lParam;
+  target->eventClass = source->eventLogClass;
+  if ((service != NULL) && (service->eventReportService != NULL))
+  {
+    (void) EventReportServiceGetEventNumberForIndex(service->eventReportService,
+                                                    index,
+                                                    &eventNumber);
+  }
+  target->eventNumber = eventNumber;
+  target->eventId = source->eventLogID;
+  target->eventTime = source->eventLogTime;
+  target->eventTimeMilliseconds = source->eventLogTimeMilliseconds;
+  target->valueLength = source->eventLogValueLength;
+  if (source->eventLogValueLength > 0U)
+  {
+    (void) memcpy(&target->value[0],
+                  &source->eventLogValue[0],
+                  source->eventLogValueLength);
+  }
 }
 
 uint8_t MmiEventLogServiceGetLatestIndex(const MmiEventLogService_t *service,
@@ -70,22 +63,33 @@ uint8_t MmiEventLogServiceGetLatestIndex(const MmiEventLogService_t *service,
   uint16_t count;
   uint16_t writeIndex;
 
-  if ((service == NULL) || (service->logRepositoryPort == NULL)
+  if ((service == NULL) || (service->eventReportService == NULL)
       || (latestIndex == NULL))
   {
     return 0U;
   }
 
   *latestIndex = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
-  if (LogRepositoryExists(service->logRepositoryPort) == 0U)
+  if (service->eventReportService->count == 0U)
   {
     return 1U;
   }
 
-  count = LogRepositoryGetCount(service->logRepositoryPort);
-  writeIndex = LogRepositoryGetWriteIndex(service->logRepositoryPort);
+  count = service->eventReportService->count;
+  writeIndex = service->eventReportService->writeIndex;
   *latestIndex = ComputeLatestIndex(count, writeIndex);
   return 1U;
+}
+
+uint8_t MmiEventLogServiceIsIndexValid(const MmiEventLogService_t *service,
+                                       uint16_t index)
+{
+  if ((service == NULL) || (service->eventReportService == NULL))
+  {
+    return 0U;
+  }
+
+  return EventReportServiceCanReadLogIndex(service->eventReportService, index);
 }
 
 uint8_t MmiEventLogServiceCanReadFromIndex(const MmiEventLogService_t *service,
@@ -93,18 +97,12 @@ uint8_t MmiEventLogServiceCanReadFromIndex(const MmiEventLogService_t *service,
 {
   uint16_t writeIndex;
 
-  if ((service == NULL) || (service->logRepositoryPort == NULL))
+  if (MmiEventLogServiceIsIndexValid(service, index) == 0U)
   {
     return 0U;
   }
 
-  if ((LogRepositoryExists(service->logRepositoryPort) == 0U)
-      || (LogRepositoryIsIndexValid(service->logRepositoryPort, index) == 0U))
-  {
-    return 0U;
-  }
-
-  writeIndex = LogRepositoryGetWriteIndex(service->logRepositoryPort);
+  writeIndex = service->eventReportService->writeIndex;
   return (uint8_t) (writeIndex != index);
 }
 
@@ -112,73 +110,39 @@ uint8_t MmiEventLogServiceReadRecord(const MmiEventLogService_t *service,
                                      uint16_t index,
                                      MmiEventRecordV2_t *record)
 {
-  MmiEventLogStorageRecord_t storageRecord;
+  EventReportLogRecord_t storageRecord;
 
-  if ((service == NULL) || (service->logRepositoryPort == NULL)
+  if ((service == NULL) || (service->eventReportService == NULL)
       || (record == NULL))
   {
     return 0U;
   }
 
-  if (LogRepositoryRead(service->logRepositoryPort,
-                        index,
-                        &storageRecord,
-                        sizeof(storageRecord)) == 0U)
+  if (EventReportServiceReadLogRecord(service->eventReportService,
+                                      index,
+                                      &storageRecord) == 0U)
   {
     return 0U;
   }
 
-  EncodeRecord(index, &storageRecord, record);
+  EncodeRecord(service, index, &storageRecord, record);
   return 1U;
 }
 
-uint8_t MmiEventLogServiceFindLatestByEventCode(
+uint8_t MmiEventLogServiceFindLatestByEventId(
   const MmiEventLogService_t *service,
-  uint8_t eventCode,
+  uint16_t eventId,
   uint16_t *index)
 {
-  uint16_t latestIndex;
-  uint16_t count;
-  uint16_t examined = 0U;
-  MmiEventRecordV2_t record;
-
-  if ((service == NULL) || (service->logRepositoryPort == NULL)
+  if ((service == NULL) || (service->eventReportService == NULL)
       || (index == NULL))
   {
     return 0U;
   }
 
-  *index = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
-  if (MmiEventLogServiceGetLatestIndex(service, &latestIndex) == 0U)
-  {
-    return 0U;
-  }
-
-  if (latestIndex == MMI_PROTOCOL_V2_EVENT_CURSOR_NONE)
-  {
-    return 1U;
-  }
-
-  count = LogRepositoryGetCount(service->logRepositoryPort);
-  while (examined < count)
-  {
-    if (MmiEventLogServiceReadRecord(service, latestIndex, &record) == 0U)
-    {
-      return 0U;
-    }
-
-    if (record.eventCode == eventCode)
-    {
-      *index = latestIndex;
-      return 1U;
-    }
-
-    latestIndex = (latestIndex == 0U) ? (uint16_t) (count - 1U)
-                  : (uint16_t) (latestIndex - 1U);
-    examined++;
-  }
-
-  return 1U;
+  return EventReportServiceFindLatestEventId(service->eventReportService,
+                                             eventId,
+                                             index);
 }
 
 static MmiProtocolStatus_t ReadCursor(
@@ -189,7 +153,7 @@ static MmiProtocolStatus_t ReadCursor(
 {
   uint16_t cursor = MMI_PROTOCOL_V2_EVENT_CURSOR_NONE;
 
-  if ((service == NULL) || (service->logRepositoryPort == NULL)
+  if ((service == NULL) || (service->eventReportService == NULL)
       || (responsePayload == NULL) || (responsePayloadLength == NULL)
       || (responsePayloadCapacity < sizeof(cursor)))
   {
@@ -224,7 +188,7 @@ static MmiProtocolStatus_t ReadPage(
   uint8_t recordCount;
   uint8_t fullBuffer;
 
-  if ((service == NULL) || (service->logRepositoryPort == NULL)
+  if ((service == NULL) || (service->eventReportService == NULL)
       || (requestPayload == NULL) || (responsePayload == NULL)
       || (responsePayloadLength == NULL))
   {
@@ -253,19 +217,16 @@ static MmiProtocolStatus_t ReadPage(
   {
     return MMI_PROTOCOL_V2_STATUS_INTERNAL_ERROR;
   }
+  if (maxRecordsInBuffer > MMI_PROTOCOL_V2_EVENT_PAGE_MAX_RECORDS)
+  {
+    maxRecordsInBuffer = MMI_PROTOCOL_V2_EVENT_PAGE_MAX_RECORDS;
+  }
 
   (void) memset(&header, 0, sizeof(header));
   header.startIndex = request.startIndex;
 
-  if (LogRepositoryExists(service->logRepositoryPort) == 0U)
-  {
-    (void) memcpy(responsePayload, &header, sizeof(header));
-    *responsePayloadLength = (uint16_t) sizeof(header);
-    return MMI_PROTOCOL_V2_STATUS_OK;
-  }
-
-  count = LogRepositoryGetCount(service->logRepositoryPort);
-  writeIndex = LogRepositoryGetWriteIndex(service->logRepositoryPort);
+  count = service->eventReportService->count;
+  writeIndex = service->eventReportService->writeIndex;
   if (count == 0U)
   {
     (void) memcpy(responsePayload, &header, sizeof(header));
@@ -290,18 +251,17 @@ static MmiProtocolStatus_t ReadPage(
   header.count = 0U;
   while (header.count < recordCount)
   {
-    MmiEventLogStorageRecord_t storageRecord;
+    EventReportLogRecord_t storageRecord;
     MmiEventRecordV2_t encodedRecord;
 
-    if (LogRepositoryRead(service->logRepositoryPort,
-                          currentIndex,
-                          &storageRecord,
-                          sizeof(storageRecord)) == 0U)
+    if (EventReportServiceReadLogRecord(service->eventReportService,
+                                        currentIndex,
+                                        &storageRecord) == 0U)
     {
       break;
     }
 
-    EncodeRecord(currentIndex, &storageRecord, &encodedRecord);
+    EncodeRecord(service, currentIndex, &storageRecord, &encodedRecord);
     (void) memcpy(&responsePayload[recordOffset],
                   &encodedRecord,
                   sizeof(encodedRecord));
@@ -345,16 +305,16 @@ void MmiEventLogServiceInit(MmiEventLogService_t *service)
 {
   if (service != NULL)
   {
-    service->logRepositoryPort = NULL;
+    service->eventReportService = NULL;
   }
 }
 
 void MmiEventLogServiceBind(MmiEventLogService_t *service,
-                            ILogRepositoryPort_t *logRepositoryPort)
+                            EventReportService_t *eventReportService)
 {
   if (service != NULL)
   {
-    service->logRepositoryPort = logRepositoryPort;
+    service->eventReportService = eventReportService;
   }
 }
 

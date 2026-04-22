@@ -1,13 +1,8 @@
 /* App/Ports/ISafetyRelayPort.h
  *
- * Port interface for the SSM power safety relay. Drives the physical
- * contactor that gates AC power to all Signal Switching Modules, so
- * that a domain-level safety decision can force the intersection dark
- * independent of CP.
- *
- * The adapter owns the actual GPIO (STM32 PA10) and any auxiliary
- * triac; the domain only ever sees SafetyRelayState_t and acts
- * through this vtable.
+ * Port interface for MP's local vote on the shared SSM power relay. CP and MP
+ * each drive their own active-low permit output; hardware ANDs those votes.
+ * The domain sees only open/closed contactor state through this vtable.
  */
 #ifndef I_SAFETY_RELAY_PORT_H
 #define I_SAFETY_RELAY_PORT_H

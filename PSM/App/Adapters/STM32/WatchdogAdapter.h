@@ -13,7 +13,7 @@
 
 typedef struct
 {
-  uint8_t bInitialised;
+  uint8_t initialised;
 } WatchdogAdapterCtx_t;
 
 void            WatchdogAdapterInit(WatchdogAdapterCtx_t *ctx);

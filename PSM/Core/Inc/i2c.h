@@ -35,8 +35,11 @@ extern "C" {
 extern I2C_HandleTypeDef hi2c3;
 
 /* USER CODE BEGIN Private defines */
-#define I2C_E2PROM_ADD_PERIOD	(uint32_t)(0x0004)
-#define I2C_E2PROM_ADD_OFFSET	(uint32_t)(I2C_E2PROM_ADD_PERIOD + sizeof(uint32_t))
+/* Legacy mirror of the EEPROM layout — keep in sync with
+ * App/Config/EepromMap.h (authoritative).  Each record starts with an
+ * 8-bit alreadySet sentinel matching CP's convention. */
+#define I2C_E2PROM_ADD_PERIOD	(uint32_t)(0x0004)  /* sentinel + raw wire (2 B) */
+#define I2C_E2PROM_ADD_OFFSET	(uint32_t)(0x0006)  /* sentinel + offset (3 B)   */
 
 
 /* USER CODE END Private defines */
@@ -45,8 +48,8 @@ void MX_I2C3_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 extern void I2CDeInit(I2C_HandleTypeDef* i2chandle);
-extern uint8_t I2CEEPROMWrite(uint32_t lAddress, const void * pvData, uint32_t lDataSize);
-extern uint8_t I2CEEPROMRead(uint32_t lAddress, void * pvData, uint32_t lDataSize);
+extern uint8_t I2CEEPROMWrite(uint32_t address, const void * data, uint32_t dataSize);
+extern uint8_t I2CEEPROMRead(uint32_t address, void * data, uint32_t dataSize);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

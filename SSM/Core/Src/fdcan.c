@@ -32,7 +32,7 @@ FDCAN_HandleTypeDef hfdcan2;
 /* FDCAN1 init function */
 void MX_FDCAN1_Init(void)
 {
-  FDCAN_FilterTypeDef SFilterConfig;
+  FDCAN_FilterTypeDef filterConfig;
 
   /* USER CODE BEGIN FDCAN1_Init 0 */
 
@@ -64,30 +64,30 @@ void MX_FDCAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN1_Init 2 */
-  SFilterConfig.IdType = FDCAN_STANDARD_ID;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  filterConfig.IdType = FDCAN_STANDARD_ID;
+  filterConfig.FilterType = FDCAN_FILTER_RANGE;
+  filterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
 
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterID1 = FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID;
-  SFilterConfig.FilterID2 = FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  filterConfig.FilterIndex = 0;
+  filterConfig.FilterID1 = FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID;
+  filterConfig.FilterID2 = FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
 
-  SFilterConfig.FilterIndex = 1;
-  SFilterConfig.FilterID1 = FDCAN_PSM_FLASH_SYNC_1_STD_ID;
-  SFilterConfig.FilterID2 = FDCAN_PSM_FLASH_SYNC_2_STD_ID;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  filterConfig.FilterIndex = 1;
+  filterConfig.FilterID1 = FDCAN_PSM_FLASH_SYNC_1_STD_ID;
+  filterConfig.FilterID2 = FDCAN_PSM_FLASH_SYNC_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
 
-  SFilterConfig.FilterIndex = 2;
-  SFilterConfig.FilterID1 = FDCAN_CP_FLASH_SIGNALS_1_STD_ID;
-  SFilterConfig.FilterID2 = FDCAN_CP_FLASH_SIGNALS_2_STD_ID;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &SFilterConfig) != HAL_OK)
+  filterConfig.FilterIndex = 2;
+  filterConfig.FilterID1 = FDCAN_CP_FLASH_SIGNALS_1_STD_ID;
+  filterConfig.FilterID2 = FDCAN_CP_FLASH_SIGNALS_2_STD_ID;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -107,7 +107,7 @@ void MX_FDCAN2_Init(void)
 {
 
   /* USER CODE BEGIN FDCAN2_Init 0 */
-	FDCAN_FilterTypeDef SFilterConfig;
+	FDCAN_FilterTypeDef filterConfig;
   /* USER CODE END FDCAN2_Init 0 */
 
   /* USER CODE BEGIN FDCAN2_Init 1 */
@@ -136,13 +136,13 @@ void MX_FDCAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN FDCAN2_Init 2 */
-	SFilterConfig.IdType = FDCAN_STANDARD_ID;
-  SFilterConfig.FilterIndex = 0;
-  SFilterConfig.FilterType = FDCAN_FILTER_RANGE;
-  SFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-  SFilterConfig.FilterID1 = 0;
-  SFilterConfig.FilterID2 = 0x7FF;
-  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &SFilterConfig) != HAL_OK)
+	filterConfig.IdType = FDCAN_STANDARD_ID;
+  filterConfig.FilterIndex = 0;
+  filterConfig.FilterType = FDCAN_FILTER_RANGE;
+  filterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+  filterConfig.FilterID1 = 0;
+  filterConfig.FilterID2 = 0x7FF;
+  if (HAL_FDCAN_ConfigFilter(&hfdcan2, &filterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -304,44 +304,44 @@ void HAL_FDCAN_MspDeInit(FDCAN_HandleTypeDef* fdcanHandle)
 }
 
 /* USER CODE BEGIN 1 */
-uint8_t CANGetRxDataLength(uint32_t lCode)
+uint8_t CANGetRxDataLength(uint32_t lenCode)
 {
-	if (lCode <= FDCAN_DLC_BYTES_8)
+	if (lenCode <= FDCAN_DLC_BYTES_8)
 	{
-		return (FDCAN_DLC_BYTES_0 | lCode);
+		return (FDCAN_DLC_BYTES_0 | lenCode);
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_12)
+	if (lenCode <= FDCAN_DLC_BYTES_12)
 	{
 		return 12;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_16)
+	if (lenCode <= FDCAN_DLC_BYTES_16)
 	{
 		return 16;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_20)
+	if (lenCode <= FDCAN_DLC_BYTES_20)
 	{
 		return 20;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_24)
+	if (lenCode <= FDCAN_DLC_BYTES_24)
 	{
 		return 24;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_32)
+	if (lenCode <= FDCAN_DLC_BYTES_32)
 	{
 		return 32;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_48)
+	if (lenCode <= FDCAN_DLC_BYTES_48)
 	{
 		return 48;
 	}
 
-	if (lCode <= FDCAN_DLC_BYTES_64)
+	if (lenCode <= FDCAN_DLC_BYTES_64)
 	{
 		return 64;
 	}
@@ -349,44 +349,44 @@ uint8_t CANGetRxDataLength(uint32_t lCode)
 	return FDCAN_DLC_BYTES_0;
 }
 
-uint32_t CANGetTxDataLengthCode(uint8_t bLen)
+uint32_t CANGetTxDataLengthCode(uint8_t len)
 {
-	if (bLen <= 8)
+	if (len <= 8)
 	{
-		return (FDCAN_DLC_BYTES_0 | bLen);
+		return (FDCAN_DLC_BYTES_0 | len);
 	}
 
-	if (bLen <= 12)
+	if (len <= 12)
 	{
 		return FDCAN_DLC_BYTES_12;
 	}
 
-	if (bLen <= 16)
+	if (len <= 16)
 	{
 		return FDCAN_DLC_BYTES_16;
 	}
 
-	if (bLen <= 20)
+	if (len <= 20)
 	{
 		return FDCAN_DLC_BYTES_20;
 	}
 
-	if (bLen <= 24)
+	if (len <= 24)
 	{
 		return FDCAN_DLC_BYTES_24;
 	}
 
-	if (bLen <= 32)
+	if (len <= 32)
 	{
 		return FDCAN_DLC_BYTES_32;
 	}
 
-	if (bLen <= 48)
+	if (len <= 48)
 	{
 		return FDCAN_DLC_BYTES_48;
 	}
 
-	if (bLen <= 64)
+	if (len <= 64)
 	{
 		return FDCAN_DLC_BYTES_64;
 	}
@@ -420,16 +420,16 @@ void CANDeInit(FDCAN_HandleTypeDef* hfdcan)
   HAL_FDCAN_DeInit(hfdcan);
 }
 
-uint8_t CANSendMessage(tpSFDCANTxMsg pSMsg)
+uint8_t CANSendMessage(FdcanTxMsg_t * msg)
 {
-  if (pSMsg == NULL)
+  if (msg == NULL)
   {
     return 0U;
   }
 
-  if (HAL_FDCAN_AddMessageToTxFifoQ(pSMsg->hfdcan,
-                                    &pSMsg->STxHeader,
-                                    pSMsg->baData) != HAL_OK)
+  if (HAL_FDCAN_AddMessageToTxFifoQ(msg->hfdcan,
+                                    &msg->txHeader,
+                                    msg->data) != HAL_OK)
   {
     return 0U;
   }
@@ -438,21 +438,21 @@ uint8_t CANSendMessage(tpSFDCANTxMsg pSMsg)
 }
 
 uint8_t CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan,
-                          uint32_t lTxBufferIndex,
-                          uint32_t lTimeout_ms)
+                          uint32_t txBufferIndex,
+                          uint32_t timeoutMs)
 {
-  uint32_t lStart = HAL_GetTick();
+  uint32_t start = HAL_GetTick();
 
-  if ((hfdcan == NULL) || (lTxBufferIndex == 0U))
+  if ((hfdcan == NULL) || (txBufferIndex == 0U))
   {
     return 0U;
   }
 
-  while (HAL_FDCAN_IsTxBufferMessagePending(hfdcan, lTxBufferIndex) != 0U)
+  while (HAL_FDCAN_IsTxBufferMessagePending(hfdcan, txBufferIndex) != 0U)
   {
-    if ((HAL_GetTick() - lStart) >= lTimeout_ms)
+    if ((HAL_GetTick() - start) >= timeoutMs)
     {
-      (void) HAL_FDCAN_AbortTxRequest(hfdcan, lTxBufferIndex);
+      (void) HAL_FDCAN_AbortTxRequest(hfdcan, txBufferIndex);
       return 0U;
     }
 
@@ -462,16 +462,16 @@ uint8_t CANWaitTxComplete(FDCAN_HandleTypeDef* hfdcan,
   return 1U;
 }
 
-static uint8_t CANRxFrameShouldQueue(const tSFDCANRxMsg *pSRxMsg)
+static uint8_t CANRxFrameShouldQueue(const FdcanRxMsg_t *rxMsg)
 {
-  if ((pSRxMsg->SRxHeader.IdType != FDCAN_STANDARD_ID)
-      || (pSRxMsg->SRxHeader.RxFrameType != FDCAN_DATA_FRAME)
-      || (pSRxMsg->SRxHeader.DataLength != FDCAN_MAX_DATA_LEN))
+  if ((rxMsg->rxHeader.IdType != FDCAN_STANDARD_ID)
+      || (rxMsg->rxHeader.RxFrameType != FDCAN_DATA_FRAME)
+      || (rxMsg->rxHeader.DataLength != FDCAN_MAX_DATA_LEN))
   {
     return 0U;
   }
 
-  switch (pSRxMsg->SRxHeader.Identifier)
+  switch (rxMsg->rxHeader.Identifier)
   {
       case FDCAN_CP_SIGNAL_OUTPUTS_1_STD_ID:
       case FDCAN_CP_SIGNAL_OUTPUTS_2_STD_ID:
@@ -496,22 +496,22 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef* hfdcan, uint32_t RxFifo0ITs)
 
   if (hfdcan->Instance == FDCAN1)
   {
-		tSFDCANRxMsg SRxMsg;
-    memset(&SRxMsg, 0, sizeof(SRxMsg));
+		FdcanRxMsg_t rxMsg;
+    memset(&rxMsg, 0, sizeof(rxMsg));
 
-    SRxMsg.hfdcan = hfdcan;
+    rxMsg.hfdcan = hfdcan;
 
-    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &SRxMsg.SRxHeader, SRxMsg.baData) != HAL_OK)
+    if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &rxMsg.rxHeader, rxMsg.data) != HAL_OK)
     {
       CANRxFaultRecord();
       return;
     }
 
-    SRxMsg.SRxHeader.DataLength = CANGetRxDataLength(SRxMsg.SRxHeader.DataLength);
+    rxMsg.rxHeader.DataLength = CANGetRxDataLength(rxMsg.rxHeader.DataLength);
 
-    if (CANRxFrameShouldQueue(&SRxMsg) != 0U)
+    if (CANRxFrameShouldQueue(&rxMsg) != 0U)
     {
-		  CANRxRequest(&SRxMsg);
+		  CANRxRequest(&rxMsg);
     }
     else
     {
